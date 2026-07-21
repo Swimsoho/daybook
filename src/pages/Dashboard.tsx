@@ -41,10 +41,10 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   const [briefOpen, setBriefOpen] = useState(true)
 
   const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
-  // to-call tasks always surface today, even with no due date/priority bump — a call
-  // that's just "sitting there" is exactly the kind of thing that shouldn't go quiet
+  // to-call tasks surface today by default (a call with no due date shouldn't go quiet),
+  // but a call you've deliberately scheduled for later still respects that due date
   const todays = open
-    .filter(t => t.priority === 'P0' || t.type === 'call' || (t.due && daysSince(t.due) >= 0))
+    .filter(t => t.priority === 'P0' || (t.type === 'call' && !t.due) || (t.due && daysSince(t.due) >= 0))
     .sort((a, b) => a.priority.localeCompare(b.priority) || (a.due ?? '9999').localeCompare(b.due ?? '9999'))
   const attention = open.filter(t =>
     (isOverdue(t) && !todays.slice(0, 8).includes(t)) ||
@@ -282,6 +282,9 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
             {state.areas.filter(a => a.active).map(a => {
               const projs = state.projects.filter(p => p.areaId === a.id && p.status !== 'archived' && p.status !== 'done')
               const areaOpen = open.filter(t => t.areaId === a.id)
+              // tasks filed straight under the area with no project — these were never rendered
+              // anywhere below, even though they're counted in the "X open" total above
+              const looseAreaTasks = areaOpen.filter(t => !t.projectId)
               return (
                 <div key={a.id} className="border-b border-border/60 last:border-0 px-4 py-2.5">
                   <div className="flex items-center gap-2.5 mb-1">
@@ -326,6 +329,11 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
                       )
                     })}
                     {projs.length === 0 && <span className="text-[12px] text-muted-foreground italic">no live projects</span>}
+                    {looseAreaTasks.length > 0 && (
+                      <div className="grid gap-0.5 mt-1">
+                        {looseAreaTasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} />)}
+                      </div>
+                    )}
                     <QuickAdd areaId={a.id} />
                   </div>
                 </div>
