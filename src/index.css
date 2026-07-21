@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/fraunces.woff2') format('woff2-variations');
+}
+@font-face {
+  font-family: 'Public Sans';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/public-sans.woff2') format('woff2-variations');
+}
+@font-face {
+  font-family: 'Public Sans';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/public-sans-italic.woff2') format('woff2-variations');
+}
+
+@layer base {
+  :root {
+    --background: 42 44% 94%;
+    --foreground: 96 10% 13%;
+    --card: 45 50% 97%;
+    --card-foreground: 96 10% 13%;
+    --popover: 45 50% 97%;
+    --popover-foreground: 96 10% 13%;
+    --primary: 152 22% 23%;
+    --primary-foreground: 45 50% 96%;
+    --secondary: 42 30% 88%;
+    --secondary-foreground: 96 10% 13%;
+    --muted: 42 28% 89%;
+    --muted-foreground: 75 6% 40%;
+    --accent: 42 30% 87%;
+    --accent-foreground: 96 10% 13%;
+    --destructive: 8 60% 41%;
+    --destructive-foreground: 45 50% 96%;
+    --border: 42 22% 81%;
+    --input: 42 22% 78%;
+    --ring: 152 22% 23%;
+    --radius: 0.375rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    font-family: 'Public Sans', system-ui, sans-serif;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    background-image: radial-gradient(hsl(42 30% 88% / 0.7) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+  ::selection {
+    background: hsl(17 63% 47% / 0.25);
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Fraunces', Georgia, serif;
+    font-variation-settings: 'opsz' 40, 'SOFT' 0, 'WONK' 0;
+  }
+  .font-display-soft {
+    font-family: 'Fraunces', Georgia, serif;
+    font-variation-settings: 'opsz' 40, 'SOFT' 60, 'WONK' 1;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(42 15% 70%) transparent;
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.rise-in {
+  animation: rise-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
