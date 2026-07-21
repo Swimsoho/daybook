@@ -34,12 +34,13 @@ export interface Store {
   updateProject: (id: string, patch: Partial<AppState['projects'][0]>) => void
   inviteUser: (u: { name: string; email: string; role: AdminUser['role']; hasSample: boolean; hasReal: boolean }) => void
   updateAdminUser: (id: string, patch: Partial<AdminUser>, auditLabel?: string) => void
+  removeAdminUser: (id: string, auditLabel?: string) => void
   logSuperAdmin: (action: string, detail: string) => void
 }
 
 const Ctx = createContext<Store | null>(null)
 
-function auditEvent(action: string, entity: string, entityId: string, detail: string, user = 'Craig'): AuditEvent {
+function baseAuditEvent(action: string, entity: string, entityId: string, detail: string, user = 'Craig'): AuditEvent {
   return { id: uid('au'), ts: new Date().toISOString().slice(0, 16).replace('T', 'T'), user, action, entity, entityId, detail }
 }
 
@@ -117,7 +118,7 @@ export function routeCapture(text: string, state: AppState): RoutingProposal {
   }
 }
 
-export function StoreProvider({ children, initial, onChange }: { children: React.ReactNode; initial?: () => AppState; onChange?: (s: AppState) => void }) {
+export function StoreProvider({ children, initial, onChange, userName }: { children: React.ReactNode; initial?: () => AppState; onChange?: (s: AppState) => void; userName?: string }) {
   const [state, setState] = useState<AppState>(initial ?? seedState)
   const first = React.useRef(true)
   const onChangeRef = React.useRef(onChange)
@@ -129,6 +130,10 @@ export function StoreProvider({ children, initial, onChange }: { children: React
 
   const store = useMemo<Store>(() => {
     const apply = (fn: Updater) => setState(s => fn(s))
+    // Attributes an action to whoever is actually signed in, instead of a hardcoded name —
+    // explicit callers (e.g. 'Super-admin', 'AI router') still override this.
+    const auditEvent = (action: string, entity: string, entityId: string, detail: string, user?: string) =>
+      baseAuditEvent(action, entity, entityId, detail, user ?? userName ?? 'Craig')
     const withAudit = (fn: Updater, ev: AuditEvent) => apply(s => {
       const next = fn(s)
       return { ...next, audit: [ev, ...next.audit] }
@@ -308,11 +313,18 @@ export function StoreProvider({ children, initial, onChange }: { children: React
           auditEvent('updated', 'user', id, auditLabel ?? Object.keys(patch).join(', ') + ' changed', 'Super-admin'),
         )
       },
+      removeAdminUser(id, auditLabel) {
+        const target = state.adminUsers.find(u => u.id === id)
+        withAudit(
+          s => ({ ...s, adminUsers: s.adminUsers.filter(u => u.id !== id) }),
+          auditEvent('deleted', 'user', id, auditLabel ?? `${target?.name ?? 'user'} removed`, 'Super-admin'),
+        )
+      },
       logSuperAdmin(action, detail) {
         apply(s => ({ ...s, audit: [auditEvent(action, 'super-admin', 'sa', detail, 'Super-admin'), ...s.audit] }))
       },
     }
-  }, [state])
+  }, [state, userName])
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>
 }

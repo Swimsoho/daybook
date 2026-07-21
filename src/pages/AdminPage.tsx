@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Cloud } from '@/lib/cloud'
 import { toast } from 'sonner'
-import { Eye, KeyRound, ShieldCheck, UserPlus } from 'lucide-react'
+import { Eye, KeyRound, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -13,9 +13,11 @@ import { useStore } from '@/lib/store'
 import { KpiTile, SectionTitle } from '@/components/bits'
 
 export default function AdminPage({ onViewPortal, cloud }: { onViewPortal: (user: AdminUser, mode: 'sample' | 'real') => void; cloud?: Cloud }) {
-  const { state, inviteUser, updateAdminUser } = useStore()
+  const { state, inviteUser, updateAdminUser, removeAdminUser } = useStore()
   const [inviteOpen, setInviteOpen] = useState(false)
   const [liveUsers, setLiveUsers] = useState<AdminUser[] | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
+  const [resendTarget, setResendTarget] = useState<AdminUser | null>(null)
 
   const reload = React.useCallback(() => {
     if (cloud) cloud.admin.listUsers().then(setLiveUsers)
@@ -47,6 +49,29 @@ export default function AdminPage({ onViewPortal, cloud }: { onViewPortal: (user
     if (cloud) { await cloud.admin.setStatus(u.id, next); reload() }
     else updateAdminUser(u.id, { status: next }, next)
     toast(next === 'suspended' ? `${u.name} suspended — data preserved, sign-in blocked` : `${u.name} reactivated`)
+  }
+  const doDelete = async (u: AdminUser) => {
+    if (cloud) {
+      const err = await cloud.admin.deleteUser(u.id)
+      if (err) { toast.error(`Couldn't delete: ${err}`); return }
+      reload()
+    } else {
+      removeAdminUser(u.id)
+    }
+    toast.success(`${u.name} removed — account and data deleted permanently`)
+    setDeleteTarget(null)
+  }
+  const doResend = async (u: AdminUser, corrected: { name: string; email: string; role: Role }) => {
+    if (cloud) {
+      const err = await cloud.admin.resendInvite(u.id, corrected)
+      if (err) { toast.error(err); return }
+      reload()
+      toast.success(`Invite re-sent to ${corrected.email}`)
+    } else {
+      updateAdminUser(u.id, corrected, 're-invited with corrected details')
+      toast.success(`Invite re-sent to ${corrected.email} (simulated)`)
+    }
+    setResendTarget(null)
   }
 
   return (
@@ -136,11 +161,15 @@ export default function AdminPage({ onViewPortal, cloud }: { onViewPortal: (user
                         <KeyRound className="h-3 w-3" />
                       </Button>
                       {u.status === 'invited' && (
-                        <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => toast.success(`Invite re-sent to ${u.email} (simulated)`)}>Re-send</Button>
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px]" onClick={() => setResendTarget(u)}>Edit &amp; re-send</Button>
                       )}
                       <Button size="sm" variant="ghost" className={cn('h-7 px-2 text-[11px]', u.status !== 'suspended' && 'text-[hsl(8_60%_41%)]')}
                         onClick={() => doStatus(u)}>
                         {u.status === 'suspended' ? 'Reactivate' : 'Suspend'}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-[11px] text-[hsl(8_60%_41%)]" title="Delete permanently"
+                        onClick={() => setDeleteTarget(u)}>
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   )}
@@ -159,7 +188,79 @@ export default function AdminPage({ onViewPortal, cloud }: { onViewPortal: (user
       </p>
 
       <InviteDialog open={inviteOpen} onClose={() => setInviteOpen(false)} onInvite={doInvite} />
+      <DeleteUserDialog user={deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={doDelete} />
+      <ResendInviteDialog user={resendTarget} onClose={() => setResendTarget(null)} onConfirm={doResend} />
     </div>
+  )
+}
+
+function DeleteUserDialog({ user, onClose, onConfirm }: {
+  user: AdminUser | null
+  onClose: () => void
+  onConfirm: (u: AdminUser) => void
+}) {
+  return (
+    <Dialog open={!!user} onOpenChange={o => !o && onClose()}>
+      <DialogContent className="sm:max-w-[440px]">
+        <DialogHeader><DialogTitle className="font-display text-lg">Delete {user?.name}?</DialogTitle></DialogHeader>
+        <p className="text-[13px] leading-relaxed">
+          This permanently deletes <b>{user?.email}</b>'s account and everything in it — every task, contact, project
+          and tracker entry, in both their real and sample workspaces. This cannot be undone.
+        </p>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button className="bg-[hsl(8_60%_41%)] hover:bg-[hsl(8_60%_36%)] text-white" onClick={() => user && onConfirm(user)}>Delete permanently</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ResendInviteDialog({ user, onClose, onConfirm }: {
+  user: AdminUser | null
+  onClose: () => void
+  onConfirm: (u: AdminUser, corrected: { name: string; email: string; role: Role }) => void
+}) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState<Role>('member')
+
+  useEffect(() => {
+    if (user) { setName(user.name); setEmail(user.email); setRole(user.role) }
+  }, [user])
+
+  return (
+    <Dialog open={!!user} onOpenChange={o => !o && onClose()}>
+      <DialogContent className="sm:max-w-[420px]">
+        <DialogHeader><DialogTitle className="font-display text-lg">Edit &amp; re-send invite</DialogTitle></DialogHeader>
+        <p className="text-[12.5px] text-muted-foreground -mt-1">
+          Fix the name, email, or role below — this cancels the old pending invite and sends a fresh one.
+          Only available while they haven't yet signed in.
+        </p>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5"><Label className="text-xs">Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
+          <div className="grid gap-1.5"><Label className="text-xs">Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
+          <div className="grid gap-1.5">
+            <Label className="text-xs">Role</Label>
+            <Select value={role} onValueChange={v => setRole(v as Role)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="owner">Owner</SelectItem>
+                <SelectItem value="member">Member</SelectItem>
+                <SelectItem value="view-only">View-only</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => {
+            if (!name.trim() || !email.includes('@')) { toast.error('Name and a valid email are needed'); return }
+            if (user) onConfirm(user, { name, email, role })
+          }}>Re-send invite</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

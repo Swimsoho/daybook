@@ -14,8 +14,15 @@ import { EmptyNote, KpiTile, SectionTitle, TierBadge } from '@/components/bits'
 import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { LogCallDialog, PersonDetail } from '@/components/people'
 
-export default function Dashboard({ mode, goTo, projectFilter }: { mode: 'today' | 'overall'; goTo: (page: string) => void; projectFilter?: string | null }) {
-  return mode === 'today' ? <TodayDash goTo={goTo} projectFilter={projectFilter} /> : <OverallDash goTo={goTo} projectFilter={projectFilter} />
+export default function Dashboard({ mode, goTo, projectFilter, viewerName }: { mode: 'today' | 'overall'; goTo: (page: string) => void; projectFilter?: string | null; viewerName?: string }) {
+  return mode === 'today' ? <TodayDash goTo={goTo} projectFilter={projectFilter} viewerName={viewerName} /> : <OverallDash goTo={goTo} projectFilter={projectFilter} />
+}
+
+function greeting(): string {
+  const h = new Date().getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 18) return 'Good afternoon'
+  return 'Good evening'
 }
 
 function matchesProject(t: Task, projectFilter?: string | null): boolean {
@@ -25,7 +32,7 @@ function matchesProject(t: Task, projectFilter?: string | null): boolean {
 
 // ================= TODAY =================
 
-function TodayDash({ goTo, projectFilter }: { goTo: (p: string) => void; projectFilter?: string | null }) {
+function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => void; projectFilter?: string | null; viewerName?: string }) {
   const { state } = useStore()
   const [openTask, setOpenTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
@@ -69,7 +76,7 @@ function TodayDash({ goTo, projectFilter }: { goTo: (p: string) => void; project
             </button>
             {briefOpen && (
               <div className="px-4 py-3.5 text-[13.5px] leading-relaxed">
-                <p className="font-display-soft text-[15px] mb-2">Good morning, Craig. A 30-second read:</p>
+                <p className="font-display-soft text-[15px] mb-2">{greeting()}{viewerName ? `, ${viewerName}` : ''}. A 30-second read:</p>
                 <div className="grid gap-2.5">
                   <div>
                     <span className="text-[10.5px] uppercase tracking-wide text-muted-foreground">Top three today</span>

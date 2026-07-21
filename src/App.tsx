@@ -52,6 +52,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
   const [projectFilter, setProjectFilter] = useState<string | null>(null)
   const [navW, setNavW] = useState(200)
   const compactNav = navW < 168
+  const viewerFirstName = (impersonation ? impersonation.user.name : cloud ? (cloud.profile.name || cloud.profile.email) : 'Craig').split(' ')[0]
 
   function startNavResize(e: React.PointerEvent) {
     e.preventDefault()
@@ -238,7 +239,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
         )}
 
         <main className="flex-1 px-6 py-5 max-w-[1240px] w-full mx-auto">
-          {page === 'today' && <Dashboard mode="today" goTo={p => setPage(p as Page)} projectFilter={projectFilter} />}
+          {page === 'today' && <Dashboard mode="today" goTo={p => setPage(p as Page)} projectFilter={projectFilter} viewerName={viewerFirstName} />}
           {page === 'overall' && <Dashboard mode="overall" goTo={p => setPage(p as Page)} projectFilter={projectFilter} />}
           {page === 'inbox' && <InboxPage />}
           {page === 'tasks' && <TasksPage projectFilter={projectFilter} onClearProject={() => setProjectFilter(null)} />}
@@ -277,7 +278,7 @@ function Root({ cloud }: { cloud: Cloud | null }) {
       ? () => imp.handle!.initial
       : imp.mode === 'sample' ? seedState : () => emptyState(imp.user.name)
     return (
-      <StoreProvider key={imp.user.id + imp.mode} initial={initial} onChange={imp.handle?.save}>
+      <StoreProvider key={imp.user.id + imp.mode} initial={initial} onChange={imp.handle?.save} userName={imp.user.name}>
         <Shell
           cloud={cloud}
           impersonation={{
@@ -308,6 +309,7 @@ export default function App() {
           key={cloud ? cloud.saveKey : 'demo'}
           initial={cloud ? () => cloud.state : undefined}
           onChange={cloud ? cloud.save : undefined}
+          userName={cloud ? (cloud.profile.name || cloud.profile.email) : undefined}
         >
           <Root cloud={cloud} />
         </StoreProvider>

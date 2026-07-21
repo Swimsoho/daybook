@@ -35,6 +35,8 @@ export interface Cloud {
     setRole: (userId: string, role: Role) => Promise<void>
     setStatus: (userId: string, status: 'active' | 'suspended') => Promise<void>
     openPortal: (userId: string, mode: 'real' | 'sample') => Promise<PortalHandle | null>
+    deleteUser: (userId: string) => Promise<string | null>
+    resendInvite: (userId: string, u: { name: string; email: string; role: Role }) => Promise<string | null>
   }
 }
 
@@ -259,6 +261,18 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
         const { data: prof } = await supabase!.from('profiles').select('name,email').eq('id', uid).maybeSingle()
         const initial = await loadOrSeedState(ws, prof?.name ?? '')
         return { initial, save: s => debouncedSave(ws.id, s) }
+      },
+      async deleteUser(userId) {
+        const { data, error } = await supabase!.functions.invoke('manage-user', { body: { action: 'delete', userId } })
+        if (error) return error.message
+        if (data?.error) return String(data.error)
+        return null
+      },
+      async resendInvite(userId, u) {
+        const { data, error } = await supabase!.functions.invoke('manage-user', { body: { action: 'resend', userId, ...u } })
+        if (error) return error.message
+        if (data?.error) return String(data.error)
+        return null
       },
     },
   }
