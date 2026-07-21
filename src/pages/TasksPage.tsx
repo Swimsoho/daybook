@@ -58,7 +58,9 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
 
     switch (view) {
       case 'today':
-        return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && (t.priority === 'P0' || (t.due && daysSince(t.due) >= 0)))
+        // to-call tasks always surface today, even with no due date/priority bump — a call
+        // that's just "sitting there" is exactly the kind of thing that shouldn't go quiet
+        return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && (t.priority === 'P0' || t.type === 'call' || (t.due && daysSince(t.due) >= 0)))
       case 'week':
         return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && (['P0', 'P1'].includes(t.priority) || (t.due && daysSince(t.due) >= -7)))
       case 'waiting':

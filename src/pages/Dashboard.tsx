@@ -41,8 +41,10 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   const [briefOpen, setBriefOpen] = useState(true)
 
   const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
+  // to-call tasks always surface today, even with no due date/priority bump — a call
+  // that's just "sitting there" is exactly the kind of thing that shouldn't go quiet
   const todays = open
-    .filter(t => t.priority === 'P0' || (t.due && daysSince(t.due) >= 0))
+    .filter(t => t.priority === 'P0' || t.type === 'call' || (t.due && daysSince(t.due) >= 0))
     .sort((a, b) => a.priority.localeCompare(b.priority) || (a.due ?? '9999').localeCompare(b.due ?? '9999'))
   const attention = open.filter(t =>
     (isOverdue(t) && !todays.slice(0, 8).includes(t)) ||
