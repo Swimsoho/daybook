@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Download, Plus } from 'lucide-react'
+import { Download, FileUp, Plus } from 'lucide-react'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -34,6 +35,8 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   const [openTask, setOpenTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [adding, setAdding] = useState(false)
+  const [addDefaults, setAddDefaults] = useState<Partial<Task> | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
   const [expandAll, setExpandAll] = useState(false)
   const [dragCat, setDragCat] = useState<string | null>(null)
   const scheme = state.settings.priorityScheme
@@ -118,6 +121,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
         <div className="ml-auto flex gap-2">
           <Button variant="outline" size="sm" className="h-8" onClick={() => setExpandAll(v => !v)}>{expandAll ? 'Collapse all' : 'Expand all'}</Button>
           <Button variant="outline" size="sm" className="h-8" onClick={exportCsv}><Download className="h-3.5 w-3.5 mr-1.5" />Export</Button>
+          <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}><FileUp className="h-3.5 w-3.5 mr-1.5" />Import</Button>
           <Button size="sm" className="h-8" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Add task</Button>
         </div>
       </div>
@@ -211,8 +215,12 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
                 <span className="font-display text-[14.5px] font-semibold">{area.name}</span>
                 <span className="text-[10.5px] text-muted-foreground italic">drop a task here to move it</span>
                 <span className="text-[11px] text-muted-foreground tabular ml-auto">{tasks.length} open</span>
+                <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={() => { setAddDefaults({ areaId: area.id }); setAdding(true) }}>
+                  <Plus className="h-3 w-3 mr-1" />Task
+                </Button>
               </div>
-              {tasks.length === 0 && <EmptyNote>Nothing open here — drag a task in.</EmptyNote>}
+              <QuickAddRow areaId={area.id} />
+              {tasks.length === 0 && <EmptyNote>Nothing open here — type above or drag a task in.</EmptyNote>}
               {tasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} expandAll={expandAll} />)}
             </section>
           ))}
@@ -238,7 +246,230 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       )}
 
       <TaskDetail task={openTask} onClose={() => setOpenTask(null)} onEdit={t => setEditTask(t)} />
-      <TaskDialog open={!!editTask || adding} onClose={() => { setEditTask(null); setAdding(false) }} task={editTask} />
+      <TaskDialog open={!!editTask || adding} onClose={() => { setEditTask(null); setAdding(false); setAddDefaults(null) }} task={editTask} defaults={addDefaults ?? undefined} />
+      <ImportTasksDialog open={importOpen} onClose={() => setImportOpen(false)} />
+    </div>
+  )
+}
+
+// ================== Bulk import: template + preview + commit ==================
+
+const TEMPLATE_COLUMNS = [
+  'Title', 'Type', 'Area', 'Project', 'Priority', 'Status', 'Due date', 'Follow-up date',
+  'Category', 'Person', 'Vendor', 'Call about', 'Waiting on', 'Notes',
+] as const
+
+function downloadTemplate(state: ReturnType<typeof useStore>['state']) {
+  const areaNames = state.areas.filter(a => a.active).map(a => a.name).join(' | ')
+  const rows = [
+    [...TEMPLATE_COLUMNS],
+    ['Book the hall', 'todo', state.areas[0]?.name ?? 'Family / Home', '', 'P1', 'next', '2026-08-01', '', 'Events', '', '', '', '', 'Any notes you like'],
+    ['Call the plumber re boiler quote', 'call', state.areas[0]?.name ?? 'Family / Home', '', 'P2', 'next', '', '', '', 'Mick Doyle', 'Mick Doyle Plumbing', 'Quote for new boiler', '', ''],
+    ['Chase the caterer', 'followup', '', '', 'P1', 'waiting', '', '2026-08-05', 'Follow-up', '', '', '', 'Caterer', 'They owe us final menu'],
+    ['— DELETE THIS ROW — allowed values → Type: todo | call | followup · Priority: P0 P1 P2 P3 (or High/Medium/Low/1-4) · Status: next | in-progress | waiting · Dates: YYYY-MM-DD · Areas: ' + areaNames, '', '', '', '', '', '', '', '', '', '', '', '', ''],
+  ]
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url; a.download = 'daybook-tasks-template.csv'; a.click()
+  URL.revokeObjectURL(url)
+  toast.success('Template downloaded — fill it in Excel or Sheets, save as CSV, then import')
+}
+
+// small CSV parser that handles quoted fields, commas and newlines
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = [], cur = '', inQ = false
+  const src = text.replace(/^﻿/, '')
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]
+    if (inQ) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') { cur += '"'; i++ } else inQ = false
+      } else cur += ch
+    } else if (ch === '"') inQ = true
+    else if (ch === ',') { row.push(cur); cur = '' }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && src[i + 1] === '\n') i++
+      row.push(cur); cur = ''
+      if (row.some(c => c.trim() !== '')) rows.push(row)
+      row = []
+    } else cur += ch
+  }
+  row.push(cur)
+  if (row.some(c => c.trim() !== '')) rows.push(row)
+  return rows
+}
+
+interface ParsedRow {
+  task: Partial<Task> & { title: string }
+  warnings: string[]
+}
+
+function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { state, addTask } = useStore()
+  const [parsed, setParsed] = useState<ParsedRow[] | null>(null)
+  const [fileName, setFileName] = useState('')
+
+  const byName = <T extends { name: string }>(list: T[], name: string): T | undefined =>
+    name ? list.find(x => x.name.trim().toLowerCase() === name.trim().toLowerCase()) : undefined
+
+  function handleFile(f: File) {
+    setFileName(f.name)
+    f.text().then(text => {
+      const rows = parseCsv(text)
+      if (rows.length < 2) { toast.error('No data rows found — is this the filled template?'); return }
+      const header = rows[0].map(h => h.trim().toLowerCase())
+      const col = (name: string) => header.indexOf(name.toLowerCase())
+      const iTitle = col('title')
+      if (iTitle === -1) { toast.error('Missing "Title" column — start from the downloaded template'); return }
+      const get = (r: string[], name: string) => { const i = col(name); return i === -1 ? '' : (r[i] ?? '').trim() }
+
+      const out: ParsedRow[] = []
+      for (const r of rows.slice(1)) {
+        const title = (r[iTitle] ?? '').trim()
+        if (!title || title.startsWith('— DELETE THIS ROW')) continue
+        const warnings: string[] = []
+        const typeRaw = get(r, 'type').toLowerCase()
+        const type = (['todo', 'call', 'followup', 'follow-up'].includes(typeRaw) ? typeRaw.replace('follow-up', 'followup') : 'todo') as Task['type']
+        if (typeRaw && type !== typeRaw && typeRaw !== 'follow-up') warnings.push(`type “${typeRaw}” → to-do`)
+        const prRaw = get(r, 'priority').toLowerCase()
+        const prMap: Record<string, Priority> = { 'p0': 'P0', 'p1': 'P1', 'p2': 'P2', 'p3': 'P3', 'urgent': 'P0', 'high': 'P1', 'medium': 'P2', 'low': 'P3', '1': 'P0', '2': 'P1', '3': 'P2', '4': 'P3' }
+        const priority = prMap[prRaw] ?? 'P2'
+        if (prRaw && !prMap[prRaw]) warnings.push(`priority “${prRaw}” → P2`)
+        const stRaw = get(r, 'status').toLowerCase()
+        const stMap: Record<string, Task['status']> = { 'next': 'next', 'in-progress': 'in-progress', 'in progress': 'in-progress', 'waiting': 'waiting', 'inbox': 'inbox' }
+        const status = stMap[stRaw] ?? 'next'
+        if (stRaw && !stMap[stRaw]) warnings.push(`status “${stRaw}” → next`)
+        const area = byName(state.areas.filter(a => a.active), get(r, 'area'))
+        if (get(r, 'area') && !area) warnings.push(`area “${get(r, 'area')}” not found — left loose`)
+        const project = byName(state.projects, get(r, 'project'))
+        if (get(r, 'project') && !project) warnings.push(`project “${get(r, 'project')}” not found`)
+        const category = byName(state.categories.filter(c => c.active), get(r, 'category'))
+        if (get(r, 'category') && !category) warnings.push(`category “${get(r, 'category')}” not found`)
+        const person = byName(state.people, get(r, 'person'))
+        if (get(r, 'person') && !person) warnings.push(`person “${get(r, 'person')}” not found`)
+        const vendor = byName(state.vendors, get(r, 'vendor'))
+        if (get(r, 'vendor') && !vendor) warnings.push(`vendor “${get(r, 'vendor')}” not found`)
+        const dateOk = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d)
+        const due = get(r, 'due date')
+        if (due && !dateOk(due)) warnings.push(`due “${due}” not YYYY-MM-DD — skipped`)
+        const fu = get(r, 'follow-up date')
+        if (fu && !dateOk(fu)) warnings.push(`follow-up “${fu}” not YYYY-MM-DD — skipped`)
+
+        out.push({
+          warnings,
+          task: {
+            title, type, priority, status,
+            areaId: project ? project.areaId : area?.id,
+            projectId: project?.id,
+            categoryIds: category ? [category.id] : [],
+            personId: person?.id, vendorId: vendor?.id,
+            due: dateOk(due) ? due : undefined,
+            followUp: dateOk(fu) ? fu : undefined,
+            callAbout: get(r, 'call about') || undefined,
+            waitingOn: get(r, 'waiting on') || undefined,
+            notes: get(r, 'notes') || undefined,
+            source: 'manual',
+          },
+        })
+      }
+      if (!out.length) { toast.error('No importable rows found'); return }
+      setParsed(out)
+    })
+  }
+
+  function commit() {
+    if (!parsed) return
+    for (const p of parsed) addTask(p.task)
+    toast.success(`Imported ${parsed.length} tasks — each one is in the audit trail`)
+    setParsed(null); setFileName(''); onClose()
+  }
+
+  const warnCount = parsed?.filter(p => p.warnings.length).length ?? 0
+
+  return (
+    <Dialog open={open} onOpenChange={o => { if (!o) { setParsed(null); setFileName(''); onClose() } }}>
+      <DialogContent className="sm:max-w-[640px] max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-display text-lg">Bulk import tasks</DialogTitle>
+        </DialogHeader>
+        {!parsed ? (
+          <div className="grid gap-3">
+            <div className="flex items-start gap-3 text-[13px]">
+              <span className="font-display font-semibold text-muted-foreground">1</span>
+              <div>
+                Download the template — it has every field, example rows, and the allowed values.
+                <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={() => downloadTemplate(state)}><Download className="h-3 w-3 mr-1.5" />Download template (.csv)</Button></div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3 text-[13px]">
+              <span className="font-display font-semibold text-muted-foreground">2</span>
+              <span>Fill it in Excel or Google Sheets — one task per row, only <b>Title</b> is required. Save/export as CSV.</span>
+            </div>
+            <div className="flex items-start gap-3 text-[13px]">
+              <span className="font-display font-semibold text-muted-foreground">3</span>
+              <div className="flex-1">
+                Upload it — you'll get a preview before anything is created.
+                <label className="mt-1.5 border border-dashed border-input rounded-sm p-5 text-center text-[13px] text-muted-foreground cursor-pointer hover:bg-accent/50 block">
+                  {fileName || 'Click to choose your filled CSV'}
+                  <input type="file" accept=".csv,text/csv" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                </label>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-2.5">
+            <p className="text-[13px]">
+              <b>{parsed.length}</b> tasks ready from <span className="text-muted-foreground">{fileName}</span>
+              {warnCount > 0 && <span className="text-[hsl(28_60%_32%)]"> · {warnCount} with notes (imported anyway, minus the flagged bits)</span>}
+            </p>
+            <div className="border border-border max-h-[320px] overflow-y-auto">
+              {parsed.map((p, i) => (
+                <div key={i} className="px-3 py-1.5 border-b border-border/60 last:border-0 text-[12.5px]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium truncate">{p.task.title}</span>
+                    <span className="text-muted-foreground text-[11px] shrink-0">
+                      {state.areas.find(a => a.id === p.task.areaId)?.name ?? 'no area'} · {p.task.priority} · {p.task.type}{p.task.due ? ` · due ${p.task.due}` : ''}
+                    </span>
+                  </div>
+                  {p.warnings.length > 0 && <div className="text-[11px] text-[hsl(28_60%_32%)]">{p.warnings.join(' · ')}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => { setParsed(null); setFileName(''); onClose() }}>Cancel</Button>
+          {parsed && <Button variant="outline" onClick={() => { setParsed(null); setFileName('') }}>Choose a different file</Button>}
+          {parsed && <Button onClick={commit}>Import {parsed.length} tasks</Button>}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// Always-ready inline add: type, press Enter — filed straight into the area.
+function QuickAddRow({ areaId }: { areaId: string }) {
+  const { state, addTask } = useStore()
+  const [text, setText] = useState('')
+  const area = state.areas.find(a => a.id === areaId)
+  function add() {
+    if (!text.trim()) return
+    addTask({ title: text.trim(), areaId, priority: 'P2', status: 'next', type: 'todo', source: 'manual' })
+    toast.success(`Added to ${area?.name}`)
+    setText('')
+  }
+  return (
+    <div className="flex items-center gap-2 px-4 py-1 border-b border-dashed border-border/70 bg-background/40 focus-within:bg-background">
+      <Plus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      <input
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && add()}
+        placeholder={`Quick add to ${area?.name} — type and press Enter`}
+        className="flex-1 h-8 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/50"
+      />
     </div>
   )
 }

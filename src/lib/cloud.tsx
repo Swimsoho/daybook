@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
+import { Toaster, toast } from 'sonner'
 import { supabase } from './supabase'
 import { AdminUser, AppState, Role } from './model'
 import { emptyState, seedState } from './seed'
@@ -103,18 +103,21 @@ function LoginScreen() {
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
   const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
   async function go() {
     if (!supabase) return
     setBusy(true)
+    setMsg(null)
     try {
       if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({ email, password: pw, options: { data: { name } } })
-        if (error) toast.error(error.message)
-        else toast.success('Account created — check your email if confirmation is required, then sign in')
+        const { data, error } = await supabase.auth.signUp({ email, password: pw, options: { data: { name } } })
+        if (error) setMsg({ kind: 'err', text: error.message })
+        else if (data.session) setMsg({ kind: 'ok', text: 'Account created — taking you in…' })
+        else setMsg({ kind: 'ok', text: 'Account created. Check your email for the confirmation link, click it, then sign in here.' })
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password: pw })
-        if (error) toast.error(error.message)
+        if (error) setMsg({ kind: 'err', text: error.message === 'Invalid login credentials' ? 'Invalid login credentials — check the password, or use “Forgot password”. If you just signed up, confirm your email first.' : error.message })
       }
     } finally {
       setBusy(false)
@@ -122,10 +125,10 @@ function LoginScreen() {
   }
 
   async function forgot() {
-    if (!supabase || !email) { toast('Enter your email first'); return }
+    if (!supabase || !email) { setMsg({ kind: 'err', text: 'Enter your email above first' }); return }
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin })
-    if (error) toast.error(error.message)
-    else toast.success('Reset link sent — check your inbox')
+    if (error) setMsg({ kind: 'err', text: error.message })
+    else setMsg({ kind: 'ok', text: 'Reset link sent — check your inbox' })
   }
 
   return (
@@ -147,8 +150,15 @@ function LoginScreen() {
             className="h-10 border border-input bg-background px-3 text-sm rounded-sm outline-none focus:border-primary" />
           <button onClick={go} disabled={busy}
             className="h-10 bg-primary text-primary-foreground rounded-sm text-sm font-medium hover:opacity-90 disabled:opacity-50">
-            {busy ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
+            {busy ? 'Working…' : mode === 'login' ? 'Sign in' : 'Create account'}
           </button>
+          {msg && (
+            <p className={`text-[12.5px] leading-snug border rounded-sm px-3 py-2 ${msg.kind === 'ok'
+              ? 'border-[hsl(152_20%_60%)] bg-[hsl(152_25%_38%_/_0.08)] text-[hsl(152_25%_25%)]'
+              : 'border-[hsl(8_40%_65%)] bg-[hsl(8_60%_45%_/_0.07)] text-[hsl(8_60%_35%)]'}`}>
+              {msg.text}
+            </p>
+          )}
           <div className="flex justify-between text-[12px] text-muted-foreground">
             <button className="hover:text-foreground" onClick={() => setMode(m => m === 'login' ? 'signup' : 'login')}>
               {mode === 'login' ? 'New here? Create an account' : 'Have an account? Sign in'}
@@ -160,6 +170,7 @@ function LoginScreen() {
           Invited by email? Open the invite link, then set your password from the sidebar once you're in.
         </p>
       </div>
+      <Toaster position="top-center" />
     </div>
   )
 }

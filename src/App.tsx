@@ -50,6 +50,19 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
   const [page, setPage] = useState<Page>('today')
   const [quick, setQuick] = useState('')
   const [projectFilter, setProjectFilter] = useState<string | null>(null)
+  const [navW, setNavW] = useState(200)
+  const compactNav = navW < 168
+
+  function startNavResize(e: React.PointerEvent) {
+    e.preventDefault()
+    const move = (ev: PointerEvent) => setNavW(Math.min(340, Math.max(120, ev.clientX)))
+    const up = () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+  }
   const speech = useSpeech(text => {
     const cap = capture(text, 'voice')
     toast.success('Voice note captured & transcribed', { description: cap.proposal.explanation })
@@ -112,10 +125,10 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
       )}
       <div className="flex-1 flex min-h-0">
       {/* Sidebar */}
-      <aside className="w-[200px] shrink-0 flex flex-col border-r border-[hsl(152_18%_16%)] text-[hsl(45_40%_90%)]" style={{ background: 'linear-gradient(178deg, hsl(152 20% 17%), hsl(152 24% 12%))' }}>
+      <aside className="relative shrink-0 flex flex-col border-r border-[hsl(152_18%_16%)] text-[hsl(45_40%_90%)]" style={{ width: navW, background: 'linear-gradient(178deg, hsl(152 20% 17%), hsl(152 24% 12%))' }}>
         <div className="px-4 pt-5 pb-4">
-          <div className="font-display-soft text-[22px] leading-none tracking-tight">Daybook</div>
-          <div className="text-[9.5px] uppercase tracking-[0.22em] opacity-50 mt-1.5">Run your life from it</div>
+          <div className="font-display-soft text-[22px] leading-none tracking-tight">{compactNav ? 'Db' : 'Daybook'}</div>
+          {!compactNav && <div className="text-[9.5px] uppercase tracking-[0.22em] opacity-50 mt-1.5">Run your life from it</div>}
         </div>
         <nav className="flex-1 px-2 grid gap-0.5 content-start">
           {nav.map(n => (
@@ -128,9 +141,10 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
                   ? 'bg-[hsl(45_50%_96%_/_0.13)] text-[hsl(45_50%_97%)]'
                   : 'opacity-70 hover:opacity-100 hover:bg-[hsl(45_50%_96%_/_0.06)]',
               )}
+              title={n.label}
             >
               {n.icon}
-              <span className="flex-1">{n.label}</span>
+              {!compactNav && <span className="flex-1">{n.label}</span>}
               {!!n.badge && <span className="text-[10px] tabular bg-[hsl(17_63%_47%)] text-white rounded-full px-1.5 py-px">{n.badge}</span>}
             </button>
           ))}
@@ -164,6 +178,12 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
           {impersonation ? <>{impersonation.user.name} · {impersonation.mode} account<br />viewed by super-admin</> : cloud ? <>{cloud.profile.name || cloud.profile.email}{cloud.profile.isSuperAdmin && ' · super-admin'}<br />{cloud.mode === 'sample' ? 'Sample world — explore freely' : 'AI proposes, you dispose.'}</> : <>Craig · super-admin<br />AI proposes, you dispose.</>}<br />
           Archive, never delete.
         </div>
+        {/* drag to resize the navigation pane */}
+        <div
+          onPointerDown={startNavResize}
+          title="Drag to resize"
+          className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[hsl(45_50%_96%_/_0.2)] active:bg-[hsl(17_63%_47%_/_0.6)] transition-colors"
+        />
       </aside>
 
       {/* Main */}
