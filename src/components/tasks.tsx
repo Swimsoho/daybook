@@ -29,6 +29,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
   // so a task never has to be filed "blind" and re-sorted later.
   const [pickedAreaId, setPickedAreaId] = useState('')
   const [pickedProjectId, setPickedProjectId] = useState('')
+  const [pickedCategoryId, setPickedCategoryId] = useState('')
   const areaId = fixedAreaId ?? (pickedAreaId || undefined)
   const area = state.areas.find(a => a.id === areaId)
   const projectsInArea = areaId ? state.projects.filter(p => p.areaId === areaId && (p.status === 'active' || p.status === 'on-hold')) : []
@@ -36,12 +37,16 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
 
   function add() {
     if (!text.trim()) return
-    addTask({ title: text.trim(), areaId, projectId, due, priority: due === today() ? 'P1' : 'P2', status: 'next', type: 'todo', source: 'manual' })
+    addTask({
+      title: text.trim(), areaId, projectId, due, priority: due === today() ? 'P1' : 'P2', status: 'next', type: 'todo', source: 'manual',
+      categoryIds: pickedCategoryId ? [pickedCategoryId] : [],
+    })
     const project = state.projects.find(p => p.id === projectId)
     toast.success(project ? `Added to ${project.name}` : area ? `Added to ${area.name}` : due === today() ? 'Added to today' : 'Task added')
     setText('')
     if (!fixedAreaId) setPickedAreaId('')
     if (!fixedProjectId) setPickedProjectId('')
+    setPickedCategoryId('')
   }
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-4 py-1.5 border-b border-dashed border-border/70 bg-background/40 focus-within:bg-background">
@@ -71,6 +76,13 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
           </SelectContent>
         </Select>
       )}
+      <Select value={pickedCategoryId || '__none__'} onValueChange={v => setPickedCategoryId(v === '__none__' ? '' : v)}>
+        <SelectTrigger className="h-7 w-[112px] text-[11.5px] bg-card shrink-0"><SelectValue placeholder="Category" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">No category</SelectItem>
+          {state.categories.filter(c => c.active).map(c => <SelectItem key={c.id} value={c.id}>{c.level > 0 ? '› ' : ''}{c.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
       <button onClick={add} className="h-7 px-2.5 text-[11.5px] border border-input rounded-sm bg-card hover:bg-accent shrink-0">Add</button>
     </div>
   )
@@ -244,6 +256,23 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll }:
                         </DropdownMenuItem>
                       )
                     })}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
+              {qa.reassign && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>Reassign category</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
+                    <DropdownMenuItem onClick={() => { updateTask(task.id, { categoryIds: [] }, 'category cleared'); toast('Category cleared') }}>
+                      <span className="text-muted-foreground">No category</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {state.categories.filter(c => c.active).map(c => (
+                      <DropdownMenuItem key={c.id} onClick={() => { updateTask(task.id, { categoryIds: [c.id] }, `re-categorized as ${c.name}`); toast.success(`Re-categorized as ${c.name}`) }}>
+                        {c.color && <span className="h-2 w-2 rounded-full mr-2 shrink-0" style={{ background: c.color }} />}
+                        <span className="truncate">{c.level > 0 ? '› ' : ''}{c.name}</span>
+                      </DropdownMenuItem>
+                    ))}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               )}
@@ -534,6 +563,17 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
                   </SelectContent>
                 </Select>
               )}
+              <Select value={task.categoryIds[0] ?? '__none__'} onValueChange={v => {
+                const c = state.categories.find(x => x.id === v)
+                updateTask(task.id, { categoryIds: v === '__none__' ? [] : [v] }, c ? `re-categorized as ${c.name}` : 'category cleared')
+                toast(c ? `Re-categorized as ${c.name}` : 'Category cleared')
+              }}>
+                <SelectTrigger className="h-7 w-[130px] text-[11.5px] bg-card"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No category</SelectItem>
+                  {state.categories.filter(c => c.active).map(c => <SelectItem key={c.id} value={c.id}>{c.level > 0 ? '› ' : ''}{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         )}
