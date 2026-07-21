@@ -31,6 +31,15 @@ export interface Project {
   lastActivity: string // ISO date, for stall detection
 }
 
+export interface TaskAttachment {
+  id: string
+  name: string
+  path: string // storage object path: {ownerId}/{workspaceId}/{taskId}/{fileId}-{filename}
+  size: number
+  type: string // MIME type
+  uploadedAt: string
+}
+
 export interface Task {
   id: string
   title: string
@@ -50,6 +59,7 @@ export interface Task {
   callAbout?: string
   waitingOn?: string
   waitingSince?: string
+  attachments?: TaskAttachment[]
   created: string
   completedAt?: string
   droppedReason?: string

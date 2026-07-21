@@ -1,15 +1,29 @@
 import React, { useState } from 'react'
 import { toast } from 'sonner'
-import { Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { PriorityScheme, Tier, TIER_LABELS } from '@/lib/model'
+import { ColumnType, PriorityScheme, Tier, TIER_LABELS, Tracker, TrackerColumn } from '@/lib/model'
 import { categoryUsage, useStore } from '@/lib/store'
 import { Cloud } from '@/lib/cloud'
+
+const COLUMN_TYPE_LABELS: Record<ColumnType, string> = {
+  text: 'Text', longtext: 'Long text', number: 'Number', currency: 'Currency (£)', date: 'Date',
+  select: 'Single choice', multiselect: 'Multiple choice', checkbox: 'Checkbox (yes/no)',
+  rating: 'Rating (1–5)', url: 'Link (URL)', status: 'Status (also drives the board view)',
+}
+const OPTIONS_TYPES: ColumnType[] = ['select', 'multiselect', 'status']
+
+function slugKey(name: string, existing: string[]): string {
+  const base = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'field'
+  let key = base, i = 2
+  while (existing.includes(key)) { key = `${base}_${i}`; i++ }
+  return key
+}
 
 function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
@@ -23,13 +37,151 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
   )
 }
 
+function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
+  tracker: Tracker
+  expanded: boolean
+  onToggle: () => void
+  onUpdate: (patch: Partial<Tracker>) => void
+}) {
+  const columns = tracker.columns
+  const setColumns = (next: TrackerColumn[]) => onUpdate({ columns: next })
+  const updateColumn = (key: string, patch: Partial<TrackerColumn>) => setColumns(columns.map(c => c.key === key ? { ...c, ...patch } : c))
+
+  function addColumn() {
+    const name = `Field ${columns.length + 1}`
+    setColumns([...columns, { key: slugKey(name, columns.map(c => c.key)), name, type: 'text' }])
+  }
+  function removeColumn(key: string) {
+    if (columns.length <= 1) { toast.error('A tracker needs at least one field'); return }
+    const wasTitle = columns.find(c => c.key === key)?.isTitle
+    let next = columns.filter(c => c.key !== key)
+    if (wasTitle && next.length) next = next.map((c, i) => i === 0 ? { ...c, isTitle: true } : c)
+    setColumns(next)
+  }
+  const setTitle = (key: string) => setColumns(columns.map(c => ({ ...c, isTitle: c.key === key })))
+
+  // a column can only be a conditional-visibility target if it has options to be conditional on
+  const optionColumns = columns.filter(c => (c.type === 'select' || c.type === 'status') && (c.options?.length ?? 0) > 0)
+
+  return (
+    <div className={cn('border border-border rounded-sm bg-background', !tracker.active && 'opacity-60')}>
+      <div className="flex items-center gap-2 px-2 py-1.5">
+        <button onClick={onToggle} className="text-muted-foreground hover:text-foreground shrink-0">
+          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+        </button>
+        <Input value={tracker.name} onChange={e => onUpdate({ name: e.target.value })} className="h-7 flex-1 text-[12.5px]" />
+        <Select value={tracker.defaultView} onValueChange={v => onUpdate({ defaultView: v as Tracker['defaultView'] })}>
+          <SelectTrigger className="h-7 w-[92px] text-[11px] shrink-0"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="table">Table</SelectItem>
+            <SelectItem value="board">Board</SelectItem>
+            <SelectItem value="gallery">Gallery</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          variant="outline" size="sm" className="h-7 text-[11px] px-2 shrink-0"
+          onClick={() => { onUpdate({ active: !tracker.active }); toast(tracker.active ? `${tracker.name} archived` : `${tracker.name} restored`) }}
+        >
+          {tracker.active ? 'Archive' : 'Restore'}
+        </Button>
+        <button onClick={onToggle} className="text-[11px] text-muted-foreground shrink-0 underline underline-offset-2 hover:text-foreground">
+          {columns.length} field{columns.length === 1 ? '' : 's'}
+        </button>
+      </div>
+      {expanded && (
+        <div className="border-t border-border p-2 grid gap-2">
+          {columns.map(c => (
+            <div key={c.key} className="grid gap-1.5 border border-border/70 rounded-sm p-2 bg-accent/20">
+              <div className="flex items-center gap-1.5">
+                <Input value={c.name} onChange={e => updateColumn(c.key, { name: e.target.value })} className="h-7 flex-1 text-[12px]" />
+                <Select
+                  value={c.type}
+                  onValueChange={v => updateColumn(c.key, {
+                    type: v as ColumnType,
+                    options: OPTIONS_TYPES.includes(v as ColumnType) ? (c.options ?? []) : undefined,
+                  })}
+                >
+                  <SelectTrigger className="h-7 w-[168px] text-[11px] shrink-0"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(COLUMN_TYPE_LABELS) as ColumnType[]).map(t => <SelectItem key={t} value={t}>{COLUMN_TYPE_LABELS[t]}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <button title="Remove field" className="text-muted-foreground hover:text-[hsl(8_60%_41%)] shrink-0" onClick={() => removeColumn(c.key)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              {OPTIONS_TYPES.includes(c.type) && (
+                <Input
+                  placeholder="Options, comma-separated (e.g. To watch, Watching, Watched)"
+                  value={(c.options ?? []).join(', ')}
+                  onChange={e => updateColumn(c.key, { options: e.target.value.split(',').map(o => o.trim()).filter(Boolean) })}
+                  className="h-7 text-[11.5px]"
+                />
+              )}
+              <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name={`title-${tracker.id}`} checked={!!c.isTitle} onChange={() => setTitle(c.key)} className="accent-[hsl(152_22%_23%)]" />
+                  Title field
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={!!c.required} onChange={e => updateColumn(c.key, { required: e.target.checked })} className="accent-[hsl(152_22%_23%)]" />
+                  Required
+                </label>
+              </div>
+              {optionColumns.some(oc => oc.key !== c.key) && (
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span className="text-muted-foreground">Only show when</span>
+                  <Select
+                    value={c.showWhen?.columnKey ?? 'none'}
+                    onValueChange={v => {
+                      if (v === 'none') { updateColumn(c.key, { showWhen: undefined }); return }
+                      const depCol = columns.find(oc => oc.key === v)
+                      updateColumn(c.key, { showWhen: { columnKey: v, equals: depCol?.options?.[0] ?? '' } })
+                    }}
+                  >
+                    <SelectTrigger className="h-6 w-[110px] text-[10.5px]"><SelectValue placeholder="none" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">— none —</SelectItem>
+                      {optionColumns.filter(oc => oc.key !== c.key).map(oc => <SelectItem key={oc.key} value={oc.key}>{oc.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {c.showWhen && (
+                    <>
+                      <span className="text-muted-foreground">=</span>
+                      <Select value={c.showWhen.equals} onValueChange={v => updateColumn(c.key, { showWhen: { columnKey: c.showWhen!.columnKey, equals: v } })}>
+                        <SelectTrigger className="h-6 w-[100px] text-[10.5px]"><SelectValue placeholder="value" /></SelectTrigger>
+                        <SelectContent>
+                          {(columns.find(oc => oc.key === c.showWhen!.columnKey)?.options ?? []).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+          <Button variant="outline" size="sm" className="h-7 text-[11px] self-start" onClick={addColumn}>
+            <Plus className="h-3.5 w-3.5 mr-1" />Field
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
-  const { state, updateSettings, updateFeatures, updateArea, addArea, addCategory, updateCategory, deleteCategory } = useStore()
+  const {
+    state, updateSettings, updateFeatures, updateArea, addArea, addCategory, updateCategory, deleteCategory,
+    addCollection, updateCollection, addTracker, updateTracker,
+  } = useStore()
   const s = state.settings
   const [newArea, setNewArea] = useState('')
   const [newCat, setNewCat] = useState('')
   const [newCatParent, setNewCatParent] = useState('none')
   const [phone, setPhoneInput] = useState(cloud?.profile.phone ?? '')
+  const [newCollection, setNewCollection] = useState('')
+  const [newTracker, setNewTracker] = useState<Record<string, string>>({}) // per-collection draft name
+  const [expandedTracker, setExpandedTracker] = useState<string | null>(null)
 
   // group categories under their top-level parent so sub/secondary levels sit right below it
   const rootIndex = (c: typeof state.categories[number]): number => {
@@ -233,6 +385,77 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
             </label>
           ))}
         </Section>
+
+        {s.features.collections && (
+          <Section title="Notes & Collections — set up your own trackers" sub="Build whatever custom lists you want — movies, subscriptions, vendors to compare — with your own fields on each. Every field you add here shows up automatically in that tracker's table/board/gallery views and its Excel import/export template.">
+            <div className="grid gap-3">
+              {state.collections.map(col => (
+                <div key={col.id} className="border border-border rounded-sm">
+                  <div className="flex items-center gap-2 px-2.5 py-2 bg-accent/30">
+                    <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: col.color }} />
+                    <Input
+                      value={col.name}
+                      onChange={e => updateCollection(col.id, { name: e.target.value })}
+                      className={cn('h-7 flex-1 text-[12.5px] bg-background', !col.active && 'opacity-50')}
+                    />
+                    <Button
+                      variant="outline" size="sm" className="h-7 text-[11px] px-2 shrink-0"
+                      onClick={() => { updateCollection(col.id, { active: !col.active }); toast(col.active ? `${col.name} archived — history preserved` : `${col.name} restored`) }}
+                    >
+                      {col.active ? 'Archive' : 'Restore'}
+                    </Button>
+                  </div>
+                  <div className="grid gap-1.5 p-2">
+                    {state.trackers.filter(t => t.collectionId === col.id).map(trk => (
+                      <TrackerSetupRow
+                        key={trk.id}
+                        tracker={trk}
+                        expanded={expandedTracker === trk.id}
+                        onToggle={() => setExpandedTracker(x => x === trk.id ? null : trk.id)}
+                        onUpdate={patch => updateTracker(trk.id, patch)}
+                      />
+                    ))}
+                    <div className="flex gap-2 mt-0.5">
+                      <Input
+                        placeholder="New tracker…"
+                        value={newTracker[col.id] ?? ''}
+                        onChange={e => setNewTracker(m => ({ ...m, [col.id]: e.target.value }))}
+                        className="h-8 text-[12.5px]"
+                      />
+                      <Button
+                        size="sm" className="h-8 shrink-0"
+                        onClick={() => {
+                          const name = (newTracker[col.id] ?? '').trim()
+                          if (!name) return
+                          const trk = addTracker({ name, collectionId: col.id })
+                          setNewTracker(m => ({ ...m, [col.id]: '' }))
+                          setExpandedTracker(trk.id)
+                          toast.success(`${name} added — set up its fields below`)
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />Tracker
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input placeholder="New collection…" value={newCollection} onChange={e => setNewCollection(e.target.value)} className="h-8" />
+              <Button
+                size="sm" className="h-8"
+                onClick={() => {
+                  if (!newCollection.trim()) return
+                  addCollection({ name: newCollection.trim() })
+                  setNewCollection('')
+                  toast.success('Collection added — add a tracker inside it next')
+                }}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1" />Collection
+              </Button>
+            </div>
+          </Section>
+        )}
 
         <Section title="Text-in capture number" sub="Register your own phone number — a text or WhatsApp message sent from it is matched to your account and filed straight into your Inbox.">
           {cloud ? (

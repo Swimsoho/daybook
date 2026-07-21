@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { AdminUser, fmtDateLong, today } from '@/lib/model'
 import { StoreProvider, useStore } from '@/lib/store'
 import { emptyState, seedState } from '@/lib/seed'
-import { AuthGate, Cloud, PortalHandle } from '@/lib/cloud'
+import { AuthGate, Cloud, CloudProvider, PortalHandle } from '@/lib/cloud'
 import { useSpeech } from '@/hooks/useSpeech'
 import { ProjectFilterBar } from '@/components/ProjectFilter'
 import Dashboard from '@/pages/Dashboard'
@@ -357,14 +357,16 @@ export default function App() {
   return (
     <AuthGate>
       {cloud => (
-        <StoreProvider
-          key={cloud ? cloud.saveKey : 'demo'}
-          initial={cloud ? () => cloud.state : undefined}
-          onChange={cloud ? cloud.save : undefined}
-          userName={cloud ? (cloud.profile.name || cloud.profile.email) : undefined}
-        >
-          <Root cloud={cloud} />
-        </StoreProvider>
+        <CloudProvider cloud={cloud}>
+          <StoreProvider
+            key={cloud ? cloud.saveKey : 'demo'}
+            initial={cloud ? () => cloud.state : undefined}
+            onChange={cloud ? cloud.save : undefined}
+            userName={cloud ? (cloud.profile.name || cloud.profile.email) : undefined}
+          >
+            <Root cloud={cloud} />
+          </StoreProvider>
+        </CloudProvider>
       )}
     </AuthGate>
   )

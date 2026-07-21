@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useMemo, useState } from 'react'
 import {
-  AdminUser, AppState, AuditEvent, Capture, Category, Entry, Interaction, Person, Priority,
-  RoutingProposal, Settings, Task, TaskStatus, addDays, personOverdueBy,
+  AdminUser, AppState, AuditEvent, Capture, Category, Collection, Entry, Interaction, Person, Priority,
+  RoutingProposal, Settings, Task, TaskAttachment, TaskStatus, Tracker, addDays, personOverdueBy,
   daysSince, today, uid,
 } from './model'
 import { seedState } from './seed'
@@ -56,6 +56,12 @@ export interface Store {
   addArea: (name: string) => void
   addProject: (p: Partial<AppState['projects'][0]> & { name: string; areaId: string }) => void
   updateProject: (id: string, patch: Partial<AppState['projects'][0]>) => void
+  addAttachment: (taskId: string, attachment: TaskAttachment) => void
+  removeAttachment: (taskId: string, attachmentId: string) => void
+  addCollection: (c: Partial<Collection> & { name: string }) => Collection
+  updateCollection: (id: string, patch: Partial<Collection>) => void
+  addTracker: (t: Partial<Tracker> & { name: string; collectionId: string }) => Tracker
+  updateTracker: (id: string, patch: Partial<Tracker>) => void
   inviteUser: (u: { name: string; email: string; role: AdminUser['role']; hasSample: boolean; hasReal: boolean }) => void
   updateAdminUser: (id: string, patch: Partial<AdminUser>, auditLabel?: string) => void
   removeAdminUser: (id: string, auditLabel?: string) => void
@@ -364,6 +370,41 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
       },
       updateProject(id, patch) {
         withAudit(s => ({ ...s, projects: s.projects.map(pr => pr.id === id ? { ...pr, ...patch, lastActivity: today() } : pr) }), auditEvent('updated', 'project', id, Object.keys(patch).join(', ') + ' changed'))
+      },
+      addAttachment(taskId, attachment) {
+        const t = state.tasks.find(x => x.id === taskId)
+        withAudit(
+          s => ({ ...s, tasks: s.tasks.map(x => x.id === taskId ? { ...x, attachments: [...(x.attachments ?? []), attachment] } : x) }),
+          auditEvent('attached', 'task', taskId, `${attachment.name} attached${t ? ` to “${t.title}”` : ''}`),
+        )
+      },
+      removeAttachment(taskId, attachmentId) {
+        const t = state.tasks.find(x => x.id === taskId)
+        const att = t?.attachments?.find(a => a.id === attachmentId)
+        withAudit(
+          s => ({ ...s, tasks: s.tasks.map(x => x.id === taskId ? { ...x, attachments: (x.attachments ?? []).filter(a => a.id !== attachmentId) } : x) }),
+          auditEvent('removed attachment', 'task', taskId, `${att?.name ?? 'file'} removed${t ? ` from “${t.title}”` : ''}`),
+        )
+      },
+      addCollection(c) {
+        const col: Collection = { id: uid('col'), name: c.name, description: c.description ?? '', color: c.color ?? 'hsl(200 30% 40%)', active: true }
+        withAudit(s => ({ ...s, collections: [...s.collections, col] }), auditEvent('created', 'collection', col.id, col.name))
+        return col
+      },
+      updateCollection(id, patch) {
+        withAudit(s => ({ ...s, collections: s.collections.map(c => c.id === id ? { ...c, ...patch } : c) }), auditEvent('updated', 'collection', id, Object.keys(patch).join(', ') + ' changed'))
+      },
+      addTracker(t) {
+        const trk: Tracker = {
+          id: uid('trk'), collectionId: t.collectionId, name: t.name, description: t.description ?? '',
+          columns: t.columns ?? [{ key: 'name', name: 'Name', type: 'text', isTitle: true, required: true }],
+          defaultView: t.defaultView ?? 'table', active: true,
+        }
+        withAudit(s => ({ ...s, trackers: [...s.trackers, trk] }), auditEvent('created', 'tracker', trk.id, trk.name))
+        return trk
+      },
+      updateTracker(id, patch) {
+        withAudit(s => ({ ...s, trackers: s.trackers.map(t => t.id === id ? { ...t, ...patch } : t) }), auditEvent('updated', 'tracker', id, Object.keys(patch).join(', ') + ' changed'))
       },
       inviteUser(u) {
         const nu: AdminUser = { id: uid('u'), name: u.name, email: u.email, role: u.role, status: 'invited', hasSample: u.hasSample, hasReal: u.hasReal }

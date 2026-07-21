@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, ChevronDown, ChevronRight, Clock, MoreHorizontal, Phone, User } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Clock, Loader2, MoreHorizontal, Paperclip, Phone, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -18,6 +18,8 @@ import {
   Priority, PRIORITY_DESC, PRIORITY_LABELS, STATUS_LABELS, Task, TaskStatus, TaskType, TYPE_LABELS, fmtDate, today, addDays, daysSince,
 } from '@/lib/model'
 import { categoriesForArea, rollup, subtasksOf, useStore } from '@/lib/store'
+import { useCloud } from '@/lib/cloud'
+import { attachmentsAvailable, deleteAttachmentFile, fmtBytes, getAttachmentUrl, uploadAttachment } from '@/lib/attachments'
 import { AreaDot, DueChip, PriorityChip } from './bits'
 
 // ---------- Quick add — one line, Enter, done. Usable on any screen ----------
@@ -456,6 +458,81 @@ export function TaskDialog({ open, onClose, task, defaults }: {
   )
 }
 
+// ---------- File attachments on a task ----------
+
+function TaskAttachments({ task }: { task: Task }) {
+  const cloud = useCloud()
+  const { addAttachment, removeAttachment } = useStore()
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const attachments = task.attachments ?? []
+
+  async function handleFiles(files: FileList) {
+    if (!cloud) return
+    setUploading(true)
+    for (const file of Array.from(files)) {
+      const { attachment, error } = await uploadAttachment(cloud.profile.id, cloud.saveKey, task.id, file)
+      if (error) toast.error(error)
+      else if (attachment) { addAttachment(task.id, attachment); toast.success(`${file.name} attached`) }
+    }
+    setUploading(false)
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  async function openAttachment(path: string, name: string) {
+    const url = await getAttachmentUrl(path)
+    if (!url) { toast.error('Couldn’t open that file — try again in a moment'); return }
+    window.open(url, '_blank', 'noopener')
+    void name
+  }
+
+  async function remove(id: string, path: string, name: string) {
+    const err = await deleteAttachmentFile(path)
+    if (err) { toast.error(err); return }
+    removeAttachment(task.id, id)
+    toast(`${name} removed`)
+  }
+
+  return (
+    <div className="text-[13px]">
+      <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
+        <Paperclip className="h-3 w-3" />Attachments{attachments.length > 0 && ` (${attachments.length})`}
+      </div>
+      {attachments.length > 0 && (
+        <div className="grid gap-1 mb-1.5">
+          {attachments.map(a => (
+            <div key={a.id} className="flex items-center gap-2 border border-border bg-accent/30 rounded-sm px-2 py-1.5">
+              <button className="min-w-0 flex-1 text-left truncate hover:underline" title="Open" onClick={() => openAttachment(a.path, a.name)}>
+                {a.name}
+              </button>
+              <span className="text-[11px] text-muted-foreground shrink-0">{fmtBytes(a.size)}</span>
+              <button className="shrink-0 text-muted-foreground hover:text-[hsl(8_60%_41%)]" title="Remove" onClick={() => remove(a.id, a.path, a.name)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {attachmentsAvailable() && cloud ? (
+        <>
+          <button
+            className="inline-flex items-center gap-1.5 text-[12px] border border-dashed border-input rounded-sm px-2 py-1 text-muted-foreground hover:bg-accent disabled:opacity-50"
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+            {uploading ? 'Uploading…' : 'Attach a file'}
+          </button>
+          <input ref={fileRef} type="file" multiple className="hidden" onChange={e => e.target.files && handleFiles(e.target.files)} />
+          <p className="text-[10.5px] text-muted-foreground mt-1">Up to 25MB per file. Only you (and a super-admin, for support) can see them.</p>
+        </>
+      ) : (
+        attachments.length === 0 && <p className="text-[12px] text-muted-foreground italic">Sign in to a real account to attach files.</p>
+      )}
+    </div>
+  )
+}
+
 // ---------- Task detail sheet (with per-item history) ----------
 
 export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClose: () => void; onEdit: (t: Task) => void }) {
@@ -594,6 +671,7 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
           {task.waitingOn && <div className="text-[13px] text-[hsl(28_60%_32%)]">Waiting on {task.waitingOn} since {fmtDate(task.waitingSince)} — auto-nudge active</div>}
           {task.notes && <p className="text-[13px] text-foreground/80 border-l-2 border-border pl-3">{task.notes}</p>}
           {task.droppedReason && <p className="text-[13px] text-muted-foreground italic">Dropped: {task.droppedReason}</p>}
+          <TaskAttachments task={task} />
           {kids.length > 0 && (
             <div className="text-[13px]">
               <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground mb-1">Subtasks</div>

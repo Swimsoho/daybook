@@ -296,3 +296,17 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
 
   return <>{children(cloud)}</>
 }
+
+// ---------- Cloud context ----------
+// AuthGate hands `cloud` to the app via a render-prop (see App.tsx), which is fine at the
+// root but would mean prop-drilling `cloud` through every page and dialog that needs it —
+// e.g. task attachments, which need cloud.profile.id + the active workspace id to build a
+// storage path, but render deep inside TasksPage/Dashboard/ProjectsPage. This context lets
+// any component reach it directly with `useCloud()` instead.
+const CloudContext = React.createContext<Cloud | null>(null)
+export function CloudProvider({ cloud, children }: { cloud: Cloud | null; children: React.ReactNode }) {
+  return <CloudContext.Provider value={cloud}>{children}</CloudContext.Provider>
+}
+export function useCloud(): Cloud | null {
+  return React.useContext(CloudContext)
+}
