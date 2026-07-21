@@ -132,6 +132,7 @@ export default function ReportsPage() {
           </section>
           <section className="border border-border bg-card shadow-sm p-4 sm:col-span-2">
             <SectionTitle>Vendors — open items and history</SectionTitle>
+            <div className="overflow-x-auto">
             <table className="w-full text-[12.5px]">
               <thead>
                 <tr className="text-left text-[10.5px] uppercase tracking-wide text-muted-foreground border-b border-border">
@@ -150,6 +151,7 @@ export default function ReportsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </section>
           <section className="border border-border bg-card shadow-sm p-4 sm:col-span-2">
             <SectionTitle>Collections — total monthly cost of active subscriptions</SectionTitle>
