@@ -70,6 +70,9 @@ export default function ProjectsPage() {
       </div>
       {state.areas.filter(a => a.active).map((a, i) => {
         const projs = state.projects.filter(p => p.areaId === a.id && p.status !== 'archived')
+        // tasks filed straight under the area, no project attached — the empty-state copy below
+        // promises these "live directly under the area" but nothing ever rendered them
+        const looseAreaTasks = open.filter(t => t.areaId === a.id && !t.projectId)
         return (
           <section key={a.id} className="border border-border bg-card shadow-sm rise-in" style={{ animationDelay: `${i * 60}ms` }}>
             <div className="px-4 py-3 border-b border-border flex items-center gap-2.5">
@@ -111,10 +114,17 @@ export default function ProjectsPage() {
               })}
               {projs.length === 0 && <div className="bg-card px-4 py-3 text-[12.5px] text-muted-foreground italic">No projects — loose tasks live directly under the area.</div>}
             </div>
+            {looseAreaTasks.length > 0 && (
+              <div className="border-t border-border">
+                {looseAreaTasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} />)}
+              </div>
+            )}
           </section>
         )
       })}
       <NewProjectDialog open={addingProject} onClose={() => setAddingProject(false)} onAdd={(name, areaId, outcome) => { addProject({ name, areaId, outcome }); toast.success('Project created') }} />
+      <TaskDetail task={openTask} onClose={() => setOpenTask(null)} onEdit={t => setEditTask(t)} />
+      <TaskDialog open={!!editTask} onClose={() => setEditTask(null)} task={editTask} />
     </div>
   )
 }
