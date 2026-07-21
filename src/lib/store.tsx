@@ -21,11 +21,12 @@ export interface Store {
   updatePerson: (id: string, patch: Partial<Person>, auditLabel?: string) => void
   logInteraction: (i: Omit<Interaction, 'id'>, opts?: { followUpTitle?: string }) => void
   capture: (text: string, source: Capture['source']) => Capture
-  acceptCapture: (id: string) => void
+  acceptCapture: (id: string, overrides?: { areaId?: string; projectId?: string; categoryIds?: string[] }) => void
   dismissCapture: (id: string) => void
   addEntry: (trackerId: string, values: Entry['values']) => void
   updateEntry: (id: string, values: Entry['values']) => void
   addCategory: (c: Partial<Category> & { name: string }) => void
+  updateCategory: (id: string, patch: Partial<Category>) => void
   updateSettings: (patch: Partial<Settings>) => void
   updateFeatures: (patch: Partial<Settings['features']>) => void
   updateArea: (id: string, patch: Partial<AppState['areas'][0]>) => void
@@ -101,6 +102,29 @@ export function routeCapture(text: string, state: AppState): RoutingProposal {
   const project = state.projects.find(p => p.status === 'active' && p.name.toLowerCase().split(' ').some(w => w.length > 4 && lower.includes(w.toLowerCase())))
   if (project) { projectId = project.id; areaId = project.areaId; reasons.push(`matched project “${project.name}”`) }
 
+  // category match — subcategories checked before their parent, so "insurance" lands on
+  // Money › Insurance rather than the broader Money bucket
+  let categoryIds: string[] | undefined
+  const categoryKeywords: { id: string; kws: string[] }[] = [
+    { id: 'c_money_ins', kws: ['insurance', 'policy'] },
+    { id: 'c_money_bills', kws: ['bill', 'late fee', 'invoice'] },
+    { id: 'c_chesed_hosp', kws: ['hospital'] },
+    { id: 'c_call', kws: ['call', 'phone', 'ring'] },
+    { id: 'c_errand', kws: ['errand', 'pick up', 'pickup', 'buy', 'shop', 'shopping', 'drop off'] },
+    { id: 'c_followup', kws: ['follow up', 'follow-up', 'circle back', 'chase'] },
+    { id: 'c_admin', kws: ['admin', 'paperwork', 'proposal', 'vat', 'form'] },
+    { id: 'c_home', kws: ['boiler', 'garden', 'plumber', 'repair', 'maintenance', 'house'] },
+    { id: 'c_events', kws: ['dinner', 'party', 'event', 'invitation', 'rsvp', 'seating'] },
+    { id: 'c_chesed', kws: ['chesed', 'visit'] },
+    { id: 'c_money', kws: ['money', 'payment', 'expense', 'pay '] },
+  ]
+  for (const { id, kws } of categoryKeywords) {
+    const cat = state.categories.find(c => c.id === id && c.active)
+    if (!cat) continue
+    const hit = kws.find(k => lower.includes(k))
+    if (hit) { categoryIds = [cat.id]; reasons.push(`“${hit}” → ${cat.level > 0 ? cat.name : cat.name} category`); break }
+  }
+
   // date extraction
   let due: string | undefined
   let priority: Priority = 'P2'
@@ -113,7 +137,7 @@ export function routeCapture(text: string, state: AppState): RoutingProposal {
   const title = body.charAt(0).toUpperCase() + body.slice(1)
   return {
     kind, taskType: isCall ? 'call' : kind === 'idea' ? 'todo' : 'todo',
-    areaId, projectId, personId: person?.id, priority, due, title,
+    areaId, projectId, personId: person?.id, categoryIds, priority, due, title,
     explanation: reasons.length ? reasons.join(' · ') : 'No strong match — left in the inbox for a quick confirm',
   }
 }
@@ -232,10 +256,13 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         withAudit(s => ({ ...s, captures: [cap, ...s.captures] }), auditEvent('captured', 'inbox', cap.id, `${source}: “${text}”`, source === 'manual' ? 'Craig' : 'AI router'))
         return cap
       },
-      acceptCapture(id) {
+      acceptCapture(id, overrides) {
         const cap = state.captures.find(c => c.id === id)
         if (!cap) return
         const p = cap.proposal
+        const areaId = overrides?.areaId ?? p.areaId
+        const projectId = overrides?.projectId ?? p.projectId
+        const categoryIds = overrides?.categoryIds ?? p.categoryIds ?? []
         if (p.kind === 'entry' && p.trackerId) {
           const trk = state.trackers.find(t => t.id === p.trackerId)
           const titleCol = trk?.columns.find(c => c.isTitle)?.key ?? 'name'
@@ -248,13 +275,13 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
           return
         }
         const task: Task = {
-          id: uid('t'), title: p.title, type: p.taskType, areaId: p.areaId, projectId: p.projectId,
-          personId: p.personId, categoryIds: [], priority: p.priority, status: 'next', due: p.due,
+          id: uid('t'), title: p.title, type: p.taskType, areaId, projectId,
+          personId: p.personId, categoryIds, priority: p.priority, status: 'next', due: p.due,
           source: cap.source, created: today(),
         }
         withAudit(
           s => ({ ...s, tasks: [...s.tasks, task], captures: s.captures.map(c => c.id === id ? { ...c, status: 'accepted' as const } : c) }),
-          auditEvent('filed', 'task', task.id, `${p.title} → ${state.areas.find(a => a.id === p.areaId)?.name ?? 'no area'}`, 'AI router'),
+          auditEvent('filed', 'task', task.id, `${p.title} → ${state.areas.find(a => a.id === areaId)?.name ?? 'no area'}`, 'AI router'),
         )
       },
       dismissCapture(id) {
@@ -276,6 +303,12 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
       addCategory(c) {
         const cat: Category = { id: uid('c'), name: c.name, parentId: c.parentId, level: (c.level ?? 0) as 0 | 1 | 2, active: true, color: c.color }
         withAudit(s => ({ ...s, categories: [...s.categories, cat] }), auditEvent('created', 'category', cat.id, cat.name))
+      },
+      updateCategory(id, patch) {
+        withAudit(
+          s => ({ ...s, categories: s.categories.map(c => c.id === id ? { ...c, ...patch } : c) }),
+          auditEvent('updated', 'category', id, Object.keys(patch).join(', ') + ' changed'),
+        )
       },
       updateSettings(patch) {
         withAudit(s => ({ ...s, settings: { ...s.settings, ...patch } }), auditEvent('settings', 'settings', 'settings', Object.keys(patch).join(', ') + ' changed'))

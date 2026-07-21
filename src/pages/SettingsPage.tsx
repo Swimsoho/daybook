@@ -23,11 +23,31 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
 }
 
 export default function SettingsPage() {
-  const { state, updateSettings, updateFeatures, updateArea, addArea, addCategory } = useStore()
+  const { state, updateSettings, updateFeatures, updateArea, addArea, addCategory, updateCategory } = useStore()
   const s = state.settings
   const [newArea, setNewArea] = useState('')
   const [newCat, setNewCat] = useState('')
   const [newCatParent, setNewCatParent] = useState('none')
+
+  // group categories under their top-level parent so sub/secondary levels sit right below it
+  const rootIndex = (c: typeof state.categories[number]): number => {
+    let cur = c
+    while (cur.parentId) {
+      const parent = state.categories.find(p => p.id === cur.parentId)
+      if (!parent) break
+      cur = parent
+    }
+    return state.categories.indexOf(cur)
+  }
+  const sortedCategories = state.categories
+    .map((c, i) => ({ c, i }))
+    .sort((x, y) => {
+      const rx = rootIndex(x.c), ry = rootIndex(y.c)
+      if (rx !== ry) return rx - ry
+      if (x.c.level !== y.c.level) return x.c.level - y.c.level
+      return x.i - y.i
+    })
+    .map(x => x.c)
 
   const features: { key: keyof typeof s.features; label: string; sub: string }[] = [
     { key: 'whatsapp', label: 'WhatsApp', sub: 'Capture + brief + nudges (Business API / Twilio)' },
@@ -84,14 +104,24 @@ export default function SettingsPage() {
           </label>
         </Section>
 
-        <Section title="Categories — main / sub / secondary" sub="Cross-cutting labels used on tasks, contacts and vendors; every one is reportable.">
-          <div className="flex flex-wrap gap-1.5">
-            {state.categories.filter(c => c.active).map(c => (
-              <span key={c.id} className="border border-border bg-background rounded-sm px-2 py-0.5 text-[11.5px] inline-flex items-center gap-1.5">
-                {c.color && <span className="h-1.5 w-1.5 rounded-full" style={{ background: c.color }} />}
-                {c.parentId && <span className="text-muted-foreground">{state.categories.find(x => x.id === c.parentId)?.name} ›</span>}
-                {c.name}
-              </span>
+        <Section title="Categories — main / sub / secondary" sub="Rename, retire, or bring back — archiving preserves all history. Cross-cutting labels used on tasks, contacts and vendors; every one is reportable.">
+          <div className="grid gap-1.5">
+            {sortedCategories.map(c => (
+              <div key={c.id} className={cn('flex items-center gap-2', c.parentId && 'pl-5')}>
+                {c.parentId && <span className="text-muted-foreground text-[11px] shrink-0">›</span>}
+                {c.color && <span className="h-2 w-2 rounded-full shrink-0" style={{ background: c.color }} />}
+                <Input
+                  value={c.name}
+                  onChange={e => updateCategory(c.id, { name: e.target.value })}
+                  className={cn('h-8 flex-1 text-[12.5px]', !c.active && 'opacity-50')}
+                />
+                <Button
+                  variant="outline" size="sm" className="h-8 text-[11px] px-2 shrink-0"
+                  onClick={() => { updateCategory(c.id, { active: !c.active }); toast(c.active ? `${c.name} archived — history preserved` : `${c.name} restored`) }}
+                >
+                  {c.active ? 'Archive' : 'Restore'}
+                </Button>
+              </div>
             ))}
           </div>
           <div className="flex gap-2">
@@ -100,7 +130,7 @@ export default function SettingsPage() {
               <SelectTrigger className="h-8 w-36 text-[12px]"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Main level</SelectItem>
-                {state.categories.filter(c => c.level === 0).map(c => <SelectItem key={c.id} value={c.id}>under {c.name}</SelectItem>)}
+                {state.categories.filter(c => c.level === 0 && c.active).map(c => <SelectItem key={c.id} value={c.id}>under {c.name}</SelectItem>)}
               </SelectContent>
             </Select>
             <Button size="sm" className="h-8" onClick={() => {

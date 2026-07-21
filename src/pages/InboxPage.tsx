@@ -20,6 +20,7 @@ export default function InboxPage() {
   const pending = state.captures.filter(c => c.status === 'pending')
   const processed = state.captures.filter(c => c.status !== 'pending').slice(0, 6)
   const [reassign, setReassign] = useState<Record<string, string>>({})
+  const [reassignCategory, setReassignCategory] = useState<Record<string, string>>({})
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
@@ -36,6 +37,8 @@ export default function InboxPage() {
             const project = state.projects.find(pr => pr.id === p.projectId)
             const person = state.people.find(x => x.id === p.personId)
             const tracker = state.trackers.find(t => t.id === p.trackerId)
+            const categoryId = reassignCategory[c.id] ?? p.categoryIds?.[0]
+            const category = state.categories.find(cat => cat.id === categoryId)
             return (
               <div key={c.id} className="border-b border-border/70 last:border-0 px-4 py-3">
                 <div className="flex items-start gap-2.5">
@@ -52,6 +55,11 @@ export default function InboxPage() {
                         </span>
                       )}
                       {person && <span className="border border-border rounded-sm bg-background px-1.5 py-px">→ {person.name}</span>}
+                      {category && (
+                        <span className="border border-border rounded-sm bg-background px-1.5 py-px">
+                          {category.level > 0 ? `${state.categories.find(x => x.id === category.parentId)?.name} › ` : ''}{category.name}
+                        </span>
+                      )}
                       <PriorityChip p={p.priority} />
                       {p.due && <span className="text-muted-foreground tabular">due {fmtDate(p.due)}</span>}
                     </div>
@@ -59,12 +67,26 @@ export default function InboxPage() {
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <Select value={reassign[c.id] ?? p.areaId ?? ''} onValueChange={v => setReassign(r => ({ ...r, [c.id]: v }))}>
-                      <SelectTrigger className="h-7 w-[120px] text-[11px] bg-background"><SelectValue placeholder="area" /></SelectTrigger>
+                      <SelectTrigger className="h-7 w-[110px] text-[11px] bg-background"><SelectValue placeholder="area" /></SelectTrigger>
                       <SelectContent>
                         {state.areas.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Button size="sm" className="h-7 px-2" onClick={() => { acceptCapture(c.id); toast.success('Filed — corrections teach the router over time') }}><Check className="h-3.5 w-3.5" /></Button>
+                    <Select value={reassignCategory[c.id] ?? p.categoryIds?.[0] ?? ''} onValueChange={v => setReassignCategory(r => ({ ...r, [c.id]: v }))}>
+                      <SelectTrigger className="h-7 w-[130px] text-[11px] bg-background"><SelectValue placeholder="category" /></SelectTrigger>
+                      <SelectContent>
+                        {state.categories.filter(cat => cat.active).map(cat => (
+                          <SelectItem key={cat.id} value={cat.id}>{cat.level > 0 ? '› ' : ''}{cat.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button size="sm" className="h-7 px-2" onClick={() => {
+                      acceptCapture(c.id, {
+                        areaId: reassign[c.id] ?? p.areaId,
+                        categoryIds: (reassignCategory[c.id] ?? p.categoryIds?.[0]) ? [reassignCategory[c.id] ?? p.categoryIds![0]] : [],
+                      })
+                      toast.success('Filed — corrections teach the router over time')
+                    }}><Check className="h-3.5 w-3.5" /></Button>
                     <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { dismissCapture(c.id); toast('Archived — never deleted') }}><X className="h-3.5 w-3.5" /></Button>
                   </div>
                 </div>

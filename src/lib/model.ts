@@ -159,6 +159,7 @@ export interface RoutingProposal {
   projectId?: string
   personId?: string
   trackerId?: string
+  categoryIds?: string[]
   priority: Priority
   due?: string
   title: string
