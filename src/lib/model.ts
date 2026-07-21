@@ -207,6 +207,7 @@ export interface Settings {
   briefChannel: 'whatsapp' | 'email'
   briefTime: string
   stallDays: number
+  projectWipLimit: number
   tierCadence: Record<Tier, number>
   quickActions: { done: boolean; called: boolean; snooze: boolean; reassign: boolean }
   features: {

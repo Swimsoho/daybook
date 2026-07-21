@@ -174,6 +174,7 @@ export function seedState(): AppState {
       briefChannel: 'whatsapp',
       briefTime: '07:30',
       stallDays: 14,
+      projectWipLimit: 3,
       tierCadence: { inner: 7, active: 14, network: 30, dormant: 90 },
       quickActions: { done: true, called: true, snooze: true, reassign: true },
       features: {

@@ -184,6 +184,10 @@ export default function SettingsPage() {
               <Label className="text-xs">Project stall threshold (days)</Label>
               <Input type="number" value={s.stallDays} className="h-8" onChange={e => updateSettings({ stallDays: Number(e.target.value) || 1 })} />
             </div>
+            <div className="grid gap-1">
+              <Label className="text-xs">Active projects per area (WIP guardrail)</Label>
+              <Input type="number" value={s.projectWipLimit} className="h-8" onChange={e => updateSettings({ projectWipLimit: Number(e.target.value) || 1 })} />
+            </div>
           </div>
         </Section>
 

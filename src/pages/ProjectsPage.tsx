@@ -65,7 +65,7 @@ export default function ProjectsPage() {
   return (
     <div className="grid gap-5">
       <div className="flex items-center justify-between">
-        <p className="text-[13px] text-muted-foreground">Areas hold projects; projects hold tasks. WIP guardrail: keep ~3 active projects per area.</p>
+        <p className="text-[13px] text-muted-foreground">Areas hold projects; projects hold tasks. WIP guardrail: keep ~{state.settings.projectWipLimit} active projects per area (edit in Settings).</p>
         <Button size="sm" className="h-8" onClick={() => setAddingProject(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />New project</Button>
       </div>
       {state.areas.filter(a => a.active).map((a, i) => {
@@ -73,6 +73,8 @@ export default function ProjectsPage() {
         // tasks filed straight under the area, no project attached — the empty-state copy below
         // promises these "live directly under the area" but nothing ever rendered them
         const looseAreaTasks = open.filter(t => t.areaId === a.id && !t.projectId)
+        const activeCount = projs.filter(p => p.status === 'active').length
+        const overWip = activeCount > state.settings.projectWipLimit
         return (
           <section key={a.id} className="border border-border bg-card shadow-sm rise-in" style={{ animationDelay: `${i * 60}ms` }}>
             <div className="px-4 py-3 border-b border-border flex items-center gap-2.5">
@@ -81,6 +83,11 @@ export default function ProjectsPage() {
                 <span className="font-display text-[15.5px] font-semibold">{a.name}</span>
                 <span className="text-[11.5px] text-muted-foreground ml-2">{a.description}</span>
               </div>
+              {overWip && (
+                <span className="text-[10.5px] text-[hsl(8_60%_41%)] uppercase tracking-wide font-semibold">
+                  {activeCount}/{state.settings.projectWipLimit} — over WIP limit
+                </span>
+              )}
               <span className="text-[11px] text-muted-foreground tabular ml-auto">review {a.reviewDay}</span>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border">

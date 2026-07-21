@@ -58,9 +58,17 @@ function debouncedSave(workspaceId: string, s: AppState) {
   }, 800)
 }
 
+// Fields added to Settings after some accounts were already saved to Supabase — a loaded
+// blob missing a key would otherwise leave it silently undefined (blank inputs, broken
+// comparisons) instead of falling back to a sane default. Extend this whenever Settings grows.
+const SETTINGS_BACKFILL: Partial<AppState['settings']> = { projectWipLimit: 3 }
+
 async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<AppState> {
   const { data } = await supabase!.from('workspace_state').select('data').eq('workspace_id', ws.id).maybeSingle()
-  if (data?.data && Object.keys(data.data).length > 0) return data.data as unknown as AppState
+  if (data?.data && Object.keys(data.data).length > 0) {
+    const loaded = data.data as unknown as AppState
+    return { ...loaded, settings: { ...SETTINGS_BACKFILL, ...loaded.settings } }
+  }
   const fresh = ws.kind === 'sample' ? seedState() : emptyState(ownerName || 'there')
   await supabase!.from('workspace_state').upsert({ workspace_id: ws.id, data: fresh as unknown as Record<string, unknown> })
   return fresh
