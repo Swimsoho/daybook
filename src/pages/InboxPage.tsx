@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { toast } from 'sonner'
-import { Check, Mail, MessageCircle, Mic, PenLine, X } from 'lucide-react'
+import { Check, Mail, MessageCircle, MessageSquare, Mic, PenLine, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Source, fmtDate } from '@/lib/model'
@@ -10,6 +10,7 @@ import { EmptyNote, PriorityChip, SectionTitle } from '@/components/bits'
 
 const SOURCE_ICON: Record<Source, React.ReactNode> = {
   whatsapp: <MessageCircle className="h-3.5 w-3.5 text-[hsl(152_35%_35%)]" />,
+  sms: <MessageSquare className="h-3.5 w-3.5 text-[hsl(260_40%_50%)]" />,
   email: <Mail className="h-3.5 w-3.5 text-[hsl(215_45%_42%)]" />,
   voice: <Mic className="h-3.5 w-3.5 text-[hsl(17_63%_47%)]" />,
   manual: <PenLine className="h-3.5 w-3.5 text-muted-foreground" />,

@@ -6,7 +6,7 @@ export type TaskType = 'todo' | 'call' | 'followup'
 export type Tier = 'inner' | 'active' | 'network' | 'dormant'
 export type Channel = 'call' | 'whatsapp' | 'email' | 'in-person'
 export type Sentiment = 'positive' | 'neutral' | 'needs-attention'
-export type Source = 'whatsapp' | 'email' | 'voice' | 'manual'
+export type Source = 'whatsapp' | 'sms' | 'email' | 'voice' | 'manual'
 
 export interface Area {
   id: string

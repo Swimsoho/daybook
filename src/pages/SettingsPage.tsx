@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { PriorityScheme, Tier, TIER_LABELS } from '@/lib/model'
 import { useStore } from '@/lib/store'
+import { Cloud } from '@/lib/cloud'
 
 function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
@@ -22,12 +23,13 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
   )
 }
 
-export default function SettingsPage() {
+export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
   const { state, updateSettings, updateFeatures, updateArea, addArea, addCategory, updateCategory } = useStore()
   const s = state.settings
   const [newArea, setNewArea] = useState('')
   const [newCat, setNewCat] = useState('')
   const [newCatParent, setNewCatParent] = useState('none')
+  const [phone, setPhoneInput] = useState(cloud?.profile.phone ?? '')
 
   // group categories under their top-level parent so sub/secondary levels sit right below it
   const rootIndex = (c: typeof state.categories[number]): number => {
@@ -172,6 +174,32 @@ export default function SettingsPage() {
               <span className="text-[13px]">{f.label}<span className="block text-[11px] text-muted-foreground">{f.sub}</span></span>
             </label>
           ))}
+        </Section>
+
+        <Section title="Text-in capture number" sub="Register your own phone number — a text or WhatsApp message sent from it is matched to your account and filed straight into your Inbox.">
+          {cloud ? (
+            <>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="+15551234567 (E.164 format)"
+                  value={phone}
+                  onChange={e => setPhoneInput(e.target.value)}
+                  onBlur={async () => {
+                    if (phone.trim() === (cloud.profile.phone ?? '')) return
+                    const err = await cloud.setPhone(phone)
+                    if (err) toast.error(err)
+                    else toast.success(phone.trim() ? 'Number saved — texts from it will land in your Inbox' : 'Number removed')
+                  }}
+                  className="h-8 flex-1"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Include the country code (e.g. +1 for US/Canada). Each person on the account registers their own number here — a message only files into the account whose number sent it.
+              </p>
+            </>
+          ) : (
+            <p className="text-[12px] text-muted-foreground italic">Sign in to a real account to register a number.</p>
+          )}
         </Section>
 
         <Section title="Daily capacity & rebalancing" sub="When a day overflows, the lowest-priority non-time-critical items move to the next open day — and you’re told exactly what shifted.">

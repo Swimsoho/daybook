@@ -13,6 +13,7 @@ export interface CloudProfile {
   role: Role
   isSuperAdmin: boolean
   status: 'active' | 'invited' | 'suspended'
+  phone?: string
 }
 
 export interface PortalHandle {
@@ -29,6 +30,7 @@ export interface Cloud {
   saveKey: string // workspace id — remount key
   signOut: () => void
   setPassword: (pw: string) => Promise<string | null>
+  setPhone: (phone: string) => Promise<string | null>
   admin: {
     listUsers: () => Promise<AdminUser[]>
     invite: (u: { name: string; email: string; role: Role }) => Promise<string | null>
@@ -203,7 +205,7 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
       if (pe || !prof) { setErr(pe?.message ?? 'Profile not found — was the database schema applied?'); return }
       const { data: wss, error: we } = await supabase!.from('workspaces').select('*').eq('owner_id', userId)
       if (we || !wss?.length) { setErr(we?.message ?? 'No workspaces — was the sign-up trigger installed?'); return }
-      const p: CloudProfile = { id: prof.id, email: prof.email, name: prof.name, role: prof.role, isSuperAdmin: prof.is_super_admin, status: prof.status }
+      const p: CloudProfile = { id: prof.id, email: prof.email, name: prof.name, role: prof.role, isSuperAdmin: prof.is_super_admin, status: prof.status, phone: prof.phone ?? undefined }
       const loadedStates: Record<string, AppState> = {}
       for (const ws of wss as WorkspaceRow[]) {
         loadedStates[ws.id] = await loadOrSeedState(ws as WorkspaceRow, prof.name)
@@ -237,6 +239,13 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
     setPassword: async pw => {
       const { error } = await supabase!.auth.updateUser({ password: pw })
       return error ? error.message : null
+    },
+    setPhone: async phone => {
+      const trimmed = phone.trim()
+      const { error } = await supabase!.from('profiles').update({ phone: trimmed || null }).eq('id', profile.id)
+      if (error) return error.message
+      setProfile(p => p && { ...p, phone: trimmed || undefined })
+      return null
     },
     admin: {
       async listUsers() {

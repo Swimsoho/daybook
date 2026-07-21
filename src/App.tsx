@@ -300,7 +300,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
           {page === 'collections' && collectionsOn && <CollectionsPage />}
           {page === 'reports' && <ReportsPage />}
           {page === 'history' && <HistoryPage />}
-          {page === 'settings' && <SettingsPage />}
+          {page === 'settings' && <SettingsPage cloud={cloud ?? undefined} />}
           {page === 'admin' && !impersonation && <AdminPage onViewPortal={(u, m) => onImpersonate?.(u, m)} cloud={cloud ?? undefined} />}
         </main>
       </div>
