@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils'
 import { Entry, Tracker, TrackerColumn, fmtDate, today } from '@/lib/model'
 import { useStore } from '@/lib/store'
 import { EmptyNote, Stars } from '@/components/bits'
+import { SPREADSHEET_ACCEPT, downloadXlsxTemplate, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
 function visibleColumns(trk: Tracker, values: Entry['values']): TrackerColumn[] {
   return trk.columns.filter(c => !c.showWhen || values[c.showWhen.columnKey] === c.showWhen.equals)
@@ -272,28 +273,6 @@ function ColumnInput({ col, value, onChange }: { col: TrackerColumn; value: Entr
 
 // ---------- Collections bulk import: per-tracker template + preview ----------
 
-function parseTrackerCsv(text: string): string[][] {
-  const rows: string[][] = []
-  let row: string[] = [], cur = '', inQ = false
-  const src = text.replace(/^﻿/, '')
-  for (let i = 0; i < src.length; i++) {
-    const ch = src[i]
-    if (inQ) {
-      if (ch === '"') { if (src[i + 1] === '"') { cur += '"'; i++ } else inQ = false } else cur += ch
-    } else if (ch === '"') inQ = true
-    else if (ch === ',') { row.push(cur); cur = '' }
-    else if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && src[i + 1] === '\n') i++
-      row.push(cur); cur = ''
-      if (row.some(c => c.trim() !== '')) rows.push(row)
-      row = []
-    } else cur += ch
-  }
-  row.push(cur)
-  if (row.some(c => c.trim() !== '')) rows.push(row)
-  return rows
-}
-
 function downloadTrackerTemplate(tracker: Tracker) {
   const titleCol = tracker.columns.find(c => c.isTitle) ?? tracker.columns[0]
   const header = tracker.columns.map(c => c.name)
@@ -320,12 +299,8 @@ function downloadTrackerTemplate(tracker: Tracker) {
   })
   const instructionsRow = header.map((_h, i) => i === 0 ? `- DELETE THIS ROW - allowed values: ${notes.join(' ')}` : '')
   const rows = [header, exampleRow, instructionsRow]
-  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url; a.download = `daybook-${tracker.name.toLowerCase().replace(/\s+/g, '-')}-template.csv`; a.click()
-  URL.revokeObjectURL(url)
-  toast.success('Template downloaded - matches this tracker’s own columns')
+  downloadXlsxTemplate(`daybook-${tracker.name.toLowerCase().replace(/\s+/g, '-')}-template.xlsx`, tracker.name, rows)
+  toast.success('Excel template downloaded - matches this tracker’s own columns')
 }
 
 interface ParsedEntry {
@@ -342,8 +317,7 @@ function ImportEntriesDialog({ tracker, open, onClose }: { tracker: Tracker; ope
 
   function handleFile(f: File) {
     setFileName(f.name)
-    f.text().then(text => {
-      const rows = parseTrackerCsv(text)
+    parseSpreadsheetFile(f).then(rows => {
       if (rows.length < 2) { toast.error('No data rows found - start from the template'); return }
       const header = rows[0].map(h => h.trim().toLowerCase())
       const colIndex = (name: string) => {
@@ -411,7 +385,7 @@ function ImportEntriesDialog({ tracker, open, onClose }: { tracker: Tracker; ope
       }
       if (!out.length) { toast.error('No importable rows found'); return }
       setParsed(out)
-    })
+    }).catch(() => toast.error('Couldn’t read that file - make sure it’s the .xlsx or .csv you exported/filled in'))
   }
 
   function commit() {
@@ -430,21 +404,21 @@ function ImportEntriesDialog({ tracker, open, onClose }: { tracker: Tracker; ope
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">1</span>
               <div>
-                Download the template - built from this tracker’s own columns, with an example row and the allowed values for each.
-                <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={() => downloadTrackerTemplate(tracker)}>Download template (.csv)</Button></div>
+                Download the Excel template - built from this tracker’s own columns, with an example row and the allowed values for each.
+                <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={() => downloadTrackerTemplate(tracker)}>Download template (.xlsx)</Button></div>
               </div>
             </div>
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">2</span>
-              <span>Fill it in - one entry per row, only <b>{titleCol.name}</b> required - and save/export as CSV.</span>
+              <span>Fill it in - one entry per row, only <b>{titleCol.name}</b> required - and save it (.xlsx or .csv both work).</span>
             </div>
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">3</span>
               <div className="flex-1">
                 Upload for a preview before anything is added to {tracker.name}.
                 <label className="mt-1.5 border border-dashed border-input rounded-sm p-5 text-center text-[13px] text-muted-foreground cursor-pointer hover:bg-accent/50 block">
-                  {fileName || 'Click to choose your filled CSV'}
-                  <input type="file" accept=".csv,text/csv" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                  {fileName || 'Click to choose your filled .xlsx or .csv'}
+                  <input type="file" accept={SPREADSHEET_ACCEPT} className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
                 </label>
               </div>
             </div>

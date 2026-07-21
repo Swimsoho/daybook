@@ -11,6 +11,7 @@ import { Person, Tier, TIER_LABELS, daysSince, fmtDate, personCadence, personOve
 import { buildCallList, useStore } from '@/lib/store'
 import { ClearFiltersButton, EmptyNote, SectionTitle, TierBadge } from '@/components/bits'
 import { LogCallDialog, PersonDetail, SentimentDot } from '@/components/people'
+import { SPREADSHEET_ACCEPT, downloadXlsxTemplate, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
 export default function PeoplePage() {
   const { state, addPerson } = useStore()
@@ -168,28 +169,6 @@ function AddPersonDialog({ open, onClose, onAdd }: { open: boolean; onClose: () 
 
 // ---------- Contacts bulk import: template + preview + merge ----------
 
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = []
-  let row: string[] = [], cur = '', inQ = false
-  const src = text.replace(/^﻿/, '')
-  for (let i = 0; i < src.length; i++) {
-    const ch = src[i]
-    if (inQ) {
-      if (ch === '"') { if (src[i + 1] === '"') { cur += '"'; i++ } else inQ = false } else cur += ch
-    } else if (ch === '"') inQ = true
-    else if (ch === ',') { row.push(cur); cur = '' }
-    else if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && src[i + 1] === '\n') i++
-      row.push(cur); cur = ''
-      if (row.some(c => c.trim() !== '')) rows.push(row)
-      row = []
-    } else cur += ch
-  }
-  row.push(cur)
-  if (row.some(c => c.trim() !== '')) rows.push(row)
-  return rows
-}
-
 function downloadContactsTemplate() {
   const rows = [
     ['Name', 'Phone / WhatsApp', 'Email', 'Tier', 'Cadence days', 'How you know them', 'Topics', 'VIP', 'Notes'],
@@ -198,12 +177,8 @@ function downloadContactsTemplate() {
     ['Ella Rosen', '', 'ella.rosen@gmail.com', 'dormant', '', 'Former client', 'Marketing', '', ''],
     ['- DELETE THIS ROW - allowed values: Tier = inner | active | network | dormant. Cadence days = number (blank = tier default). VIP = yes/no. Only Name is required.', '', '', '', '', '', '', '', ''],
   ]
-  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url; a.download = 'daybook-contacts-template.csv'; a.click()
-  URL.revokeObjectURL(url)
-  toast.success('Template downloaded - opens straight into Excel; save as CSV when done')
+  downloadXlsxTemplate('daybook-contacts-template.xlsx', 'Contacts', rows)
+  toast.success('Excel template downloaded — fill it in and upload it back here')
 }
 
 interface ParsedPerson {
@@ -219,8 +194,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
   function handleFile(f: File) {
     setFileName(f.name)
-    f.text().then(text => {
-      const rows = parseCsv(text)
+    parseSpreadsheetFile(f).then(rows => {
       if (rows.length < 2) { toast.error('No data rows found - start from the template'); return }
       const header = rows[0].map(h => h.trim().toLowerCase())
       const col = (n: string) => header.findIndex(h => h.startsWith(n))
@@ -259,7 +233,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
       }
       if (!out.length) { toast.error('No importable rows found'); return }
       setParsed(out)
-    })
+    }).catch(() => toast.error('Couldn’t read that file - make sure it’s the .xlsx or .csv you exported/filled in'))
   }
 
   function commit() {
@@ -287,21 +261,21 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">1</span>
               <div>
-                Download the template - all fields, example rows, allowed values. It opens straight into Excel or Google Sheets.
-                <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={downloadContactsTemplate}>Download template (.csv)</Button></div>
+                Download the Excel template - all fields, example rows, allowed values.
+                <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={downloadContactsTemplate}>Download template (.xlsx)</Button></div>
               </div>
             </div>
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">2</span>
-              <span>Fill it in - one person per row, only <b>Name</b> required - and save/export as CSV.</span>
+              <span>Fill it in - one person per row, only <b>Name</b> required - and save it (.xlsx or .csv both work).</span>
             </div>
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">3</span>
               <div className="flex-1">
                 Upload for a preview. Duplicates (same email or name) are detected and merged, never doubled.
                 <label className={cn('mt-1.5 border border-dashed border-input rounded-sm p-5 text-center text-[13px] text-muted-foreground cursor-pointer hover:bg-accent/50 block')}>
-                  {fileName || 'Click to choose your filled CSV'}
-                  <input type="file" accept=".csv,text/csv" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                  {fileName || 'Click to choose your filled .xlsx or .csv'}
+                  <input type="file" accept={SPREADSHEET_ACCEPT} className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
                 </label>
               </div>
             </div>
