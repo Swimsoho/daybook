@@ -22,26 +22,56 @@ import { AreaDot, DueChip, PriorityChip } from './bits'
 
 // ---------- Quick add — one line, Enter, done. Usable on any screen ----------
 
-export function QuickAdd({ areaId, due, projectId, placeholder }: { areaId?: string; due?: string; projectId?: string; placeholder?: string }) {
+export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, placeholder }: { areaId?: string; due?: string; projectId?: string; placeholder?: string }) {
   const { state, addTask } = useStore()
   const [text, setText] = useState('')
+  // Area/project pick right inline — only shown for whichever level isn't already fixed by the caller,
+  // so a task never has to be filed "blind" and re-sorted later.
+  const [pickedAreaId, setPickedAreaId] = useState('')
+  const [pickedProjectId, setPickedProjectId] = useState('')
+  const areaId = fixedAreaId ?? (pickedAreaId || undefined)
   const area = state.areas.find(a => a.id === areaId)
+  const projectsInArea = areaId ? state.projects.filter(p => p.areaId === areaId && (p.status === 'active' || p.status === 'on-hold')) : []
+  const projectId = fixedProjectId ?? (pickedProjectId || undefined)
+
   function add() {
     if (!text.trim()) return
     addTask({ title: text.trim(), areaId, projectId, due, priority: due === today() ? 'P1' : 'P2', status: 'next', type: 'todo', source: 'manual' })
-    toast.success(area ? `Added to ${area.name}` : due === today() ? 'Added to today' : 'Task added')
+    const project = state.projects.find(p => p.id === projectId)
+    toast.success(project ? `Added to ${project.name}` : area ? `Added to ${area.name}` : due === today() ? 'Added to today' : 'Task added')
     setText('')
+    if (!fixedAreaId) setPickedAreaId('')
+    if (!fixedProjectId) setPickedProjectId('')
   }
   return (
-    <div className="flex items-center gap-2 px-4 py-1 border-b border-dashed border-border/70 bg-background/40 focus-within:bg-background">
+    <div className="flex flex-wrap items-center gap-1.5 px-4 py-1.5 border-b border-dashed border-border/70 bg-background/40 focus-within:bg-background">
       <span className="text-muted-foreground text-[15px] leading-none shrink-0">+</span>
       <input
         value={text}
         onChange={e => setText(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && add()}
         placeholder={placeholder ?? (area ? `Quick add to ${area.name} — type and press Enter` : 'Quick add a task — type and press Enter')}
-        className="flex-1 h-8 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/50"
+        className="flex-1 min-w-[140px] h-8 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/50"
       />
+      {!fixedAreaId && (
+        <Select value={pickedAreaId || '__none__'} onValueChange={v => { setPickedAreaId(v === '__none__' ? '' : v); setPickedProjectId('') }}>
+          <SelectTrigger className="h-7 w-[112px] text-[11.5px] bg-card shrink-0"><SelectValue placeholder="Area" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">No area</SelectItem>
+            {state.areas.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+      {!fixedProjectId && areaId && projectsInArea.length > 0 && (
+        <Select value={pickedProjectId || '__none__'} onValueChange={v => setPickedProjectId(v === '__none__' ? '' : v)}>
+          <SelectTrigger className="h-7 w-[128px] text-[11.5px] bg-card shrink-0"><SelectValue placeholder="Project" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">No project</SelectItem>
+            {projectsInArea.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
+      <button onClick={add} className="h-7 px-2.5 text-[11.5px] border border-input rounded-sm bg-card hover:bg-accent shrink-0">Add</button>
     </div>
   )
 }
@@ -194,6 +224,26 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll }:
                         <span className="h-2 w-2 rounded-full mr-2" style={{ background: a.color }} />{a.name}
                       </DropdownMenuItem>
                     ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
+              {qa.reassign && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>Reassign project</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
+                    <DropdownMenuItem onClick={() => { updateTask(task.id, { projectId: undefined }, 'removed from project'); toast('No longer tied to a project') }}>
+                      <span className="text-muted-foreground">No project</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {state.projects.filter(p => p.status === 'active' || p.status === 'on-hold').map(p => {
+                      const pa = state.areas.find(a => a.id === p.areaId)
+                      return (
+                        <DropdownMenuItem key={p.id} onClick={() => { updateTask(task.id, { projectId: p.id, areaId: p.areaId }, `moved to project ${p.name}`); toast(`Moved to ${p.name}`) }}>
+                          <span className="h-2 w-2 rounded-full mr-2 shrink-0" style={{ background: pa?.color }} />
+                          <span className="truncate">{p.name}</span>
+                        </DropdownMenuItem>
+                      )
+                    })}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               )}
@@ -455,6 +505,35 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
                   {STATUS_LABELS[st]}
                 </button>
               ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-0.5">Move to</span>
+              <Select value={task.areaId ?? '__none__'} onValueChange={v => {
+                const a = state.areas.find(x => x.id === v)
+                updateTask(task.id, { areaId: v === '__none__' ? undefined : v, projectId: undefined }, a ? `moved to ${a.name}` : 'area cleared')
+                toast(a ? `Moved to ${a.name}` : 'Area cleared')
+              }}>
+                <SelectTrigger className="h-7 w-[130px] text-[11.5px] bg-card"><SelectValue placeholder="Area" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No area</SelectItem>
+                  {state.areas.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {task.areaId && (
+                <Select value={task.projectId ?? '__none__'} onValueChange={v => {
+                  const p = state.projects.find(x => x.id === v)
+                  updateTask(task.id, { projectId: v === '__none__' ? undefined : v, areaId: p ? p.areaId : task.areaId }, p ? `moved to project ${p.name}` : 'project cleared')
+                  toast(p ? `Moved to ${p.name}` : 'No longer tied to a project')
+                }}>
+                  <SelectTrigger className="h-7 w-[150px] text-[11.5px] bg-card"><SelectValue placeholder="Project" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No project</SelectItem>
+                    {state.projects.filter(p => p.areaId === task.areaId && (p.status === 'active' || p.status === 'on-hold')).map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
         )}
