@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Phone, Plus, Upload } from 'lucide-react'
+import { Download, Phone, Plus, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -75,7 +75,8 @@ export default function PeoplePage() {
         </Select>
         <ClearFiltersButton active={!!search || tierFilter !== 'all' || sortBy !== 'overdue'} onClear={() => { setSearch(''); setTierFilter('all'); setSortBy('overdue') }} />
         <div className="ml-auto flex gap-2">
-          <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}><Upload className="h-3.5 w-3.5 mr-1.5" />Import CSV</Button>
+          <Button variant="outline" size="sm" className="h-8" onClick={downloadContactsTemplate}><Download className="h-3.5 w-3.5 mr-1.5" />Excel template</Button>
+          <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}><Upload className="h-3.5 w-3.5 mr-1.5" />Import contacts</Button>
           <Button size="sm" className="h-8" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Add person</Button>
         </div>
       </div>

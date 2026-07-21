@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Plus, Upload } from 'lucide-react'
+import { Download, Plus, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -65,7 +65,8 @@ export default function CollectionsPage() {
           {(['table', 'board', 'gallery'] as const).map(v => (
             <button key={v} onClick={() => setView(v)} className={cn('px-2 py-1 text-[11.5px] border rounded-sm capitalize', activeView === v ? 'bg-secondary border-input' : 'border-transparent hover:border-border')}>{v}</button>
           ))}
-          <Button size="sm" variant="outline" className="h-7 ml-1" onClick={() => setImporting(true)}><Upload className="h-3.5 w-3.5 mr-1" />Import</Button>
+          <Button size="sm" variant="outline" className="h-7 ml-1" onClick={() => downloadTrackerTemplate(tracker)}><Download className="h-3.5 w-3.5 mr-1" />Excel template</Button>
+          <Button size="sm" variant="outline" className="h-7" onClick={() => setImporting(true)}><Upload className="h-3.5 w-3.5 mr-1" />Import</Button>
           <Button size="sm" className="h-7" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5 mr-1" />Entry</Button>
         </div>
       </div>
