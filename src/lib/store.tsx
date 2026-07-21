@@ -19,6 +19,17 @@ export function categoriesForArea(categories: Category[], areaId: string | undef
   )
 }
 
+// How many live things reference this category — tasks filed under it, captures (pending or
+// already actioned) proposing it, and any subcategory nested under it. Zero means it's safe to
+// permanently delete instead of just archiving; anything above zero means archiving is the only
+// option, since a hard delete would silently orphan real history.
+export function categoryUsage(s: AppState, id: string): number {
+  const inTasks = s.tasks.filter(t => t.categoryIds.includes(id)).length
+  const inCaptures = s.captures.filter(c => c.proposal.categoryIds?.includes(id)).length
+  const asParent = s.categories.filter(c => c.parentId === id).length
+  return inTasks + inCaptures + asParent
+}
+
 export interface Store {
   state: AppState
   // audit-aware mutators
@@ -38,6 +49,7 @@ export interface Store {
   updateEntry: (id: string, values: Entry['values']) => void
   addCategory: (c: Partial<Category> & { name: string }) => void
   updateCategory: (id: string, patch: Partial<Category>) => void
+  deleteCategory: (id: string) => void
   updateSettings: (patch: Partial<Settings>) => void
   updateFeatures: (patch: Partial<Settings['features']>) => void
   updateArea: (id: string, patch: Partial<AppState['areas'][0]>) => void
@@ -319,6 +331,15 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         withAudit(
           s => ({ ...s, categories: s.categories.map(c => c.id === id ? { ...c, ...patch } : c) }),
           auditEvent('updated', 'category', id, Object.keys(patch).join(', ') + ' changed'),
+        )
+      },
+      deleteCategory(id) {
+        const cat = state.categories.find(c => c.id === id)
+        if (!cat) return
+        if (categoryUsage(state, id) > 0) return // never silently orphan a task, capture, or subcategory
+        withAudit(
+          s => ({ ...s, categories: s.categories.filter(c => c.id !== id) }),
+          auditEvent('deleted', 'category', id, `${cat.name} permanently deleted — never used`),
         )
       },
       updateSettings(patch) {

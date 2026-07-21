@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { PriorityScheme, Tier, TIER_LABELS } from '@/lib/model'
-import { useStore } from '@/lib/store'
+import { categoryUsage, useStore } from '@/lib/store'
 import { Cloud } from '@/lib/cloud'
 
 function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
@@ -24,7 +24,7 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
 }
 
 export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
-  const { state, updateSettings, updateFeatures, updateArea, addArea, addCategory, updateCategory } = useStore()
+  const { state, updateSettings, updateFeatures, updateArea, addArea, addCategory, updateCategory, deleteCategory } = useStore()
   const s = state.settings
   const [newArea, setNewArea] = useState('')
   const [newCat, setNewCat] = useState('')
@@ -110,6 +110,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           <div className="grid gap-2">
             {sortedCategories.map(c => {
               const tagged = c.areaIds ?? []
+              const usage = categoryUsage(state, c.id)
               return (
                 <div key={c.id} className={cn('grid gap-1', c.parentId && 'pl-5')}>
                   <div className="flex items-center gap-2">
@@ -120,12 +121,29 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                       onChange={e => updateCategory(c.id, { name: e.target.value })}
                       className={cn('h-8 flex-1 text-[12.5px]', !c.active && 'opacity-50')}
                     />
+                    {usage > 0 && (
+                      <span className="text-[10.5px] text-muted-foreground whitespace-nowrap shrink-0" title="In use — archive keeps it out of new work while preserving history">
+                        in use ×{usage}
+                      </span>
+                    )}
                     <Button
                       variant="outline" size="sm" className="h-8 text-[11px] px-2 shrink-0"
                       onClick={() => { updateCategory(c.id, { active: !c.active }); toast(c.active ? `${c.name} archived — history preserved` : `${c.name} restored`) }}
                     >
                       {c.active ? 'Archive' : 'Restore'}
                     </Button>
+                    {usage === 0 && (
+                      <Button
+                        variant="outline" size="sm" className="h-8 text-[11px] px-2 shrink-0 text-destructive hover:text-destructive"
+                        onClick={() => {
+                          if (!window.confirm(`Permanently delete "${c.name}"? It's never been used, so there's no history to lose — but this can't be undone.`)) return
+                          deleteCategory(c.id)
+                          toast.success(`${c.name} deleted`)
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-1 pl-1">
                     <span className="text-[10.5px] text-muted-foreground mr-0.5">
