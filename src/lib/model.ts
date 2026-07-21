@@ -88,6 +88,9 @@ export interface Category {
   level: 0 | 1 | 2
   color?: string
   active: boolean
+  // Which focus areas this category is relevant to. Empty/undefined = shows under every
+  // area (the old, pre-this-feature behavior) — tag it to specific areas to narrow it down.
+  areaIds?: string[]
 }
 
 export interface Vendor {

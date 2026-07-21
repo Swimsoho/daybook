@@ -8,6 +8,17 @@ import { seedState } from './seed'
 
 type Updater = (s: AppState) => AppState
 
+// Categories tagged to specific areas (Settings > Categories) only show up for those
+// areas; an untagged category still shows everywhere, so nothing already in use goes
+// missing the moment this feature ships. `keepId` keeps a task's current category in the
+// list even if it falls outside the area's tagged set, so changing area never silently
+// hides what's already picked.
+export function categoriesForArea(categories: Category[], areaId: string | undefined, keepId?: string): Category[] {
+  return categories.filter(c =>
+    c.active && (!c.areaIds || c.areaIds.length === 0 || (!!areaId && c.areaIds.includes(areaId)) || c.id === keepId),
+  )
+}
+
 export interface Store {
   state: AppState
   // audit-aware mutators

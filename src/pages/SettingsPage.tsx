@@ -106,25 +106,65 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           </label>
         </Section>
 
-        <Section title="Categories — main / sub / secondary" sub="Rename, retire, or bring back — archiving preserves all history. Cross-cutting labels used on tasks, contacts and vendors; every one is reportable.">
-          <div className="grid gap-1.5">
-            {sortedCategories.map(c => (
-              <div key={c.id} className={cn('flex items-center gap-2', c.parentId && 'pl-5')}>
-                {c.parentId && <span className="text-muted-foreground text-[11px] shrink-0">›</span>}
-                {c.color && <span className="h-2 w-2 rounded-full shrink-0" style={{ background: c.color }} />}
-                <Input
-                  value={c.name}
-                  onChange={e => updateCategory(c.id, { name: e.target.value })}
-                  className={cn('h-8 flex-1 text-[12.5px]', !c.active && 'opacity-50')}
-                />
-                <Button
-                  variant="outline" size="sm" className="h-8 text-[11px] px-2 shrink-0"
-                  onClick={() => { updateCategory(c.id, { active: !c.active }); toast(c.active ? `${c.name} archived — history preserved` : `${c.name} restored`) }}
-                >
-                  {c.active ? 'Archive' : 'Restore'}
-                </Button>
-              </div>
-            ))}
+        <Section title="Categories — main / sub / secondary" sub="Rename, retire, or bring back — archiving preserves all history. Cross-cutting labels used on tasks, contacts and vendors; every one is reportable. Tag a category to specific focus areas and it only shows up there — leave it untagged to keep it everywhere.">
+          <div className="grid gap-2">
+            {sortedCategories.map(c => {
+              const tagged = c.areaIds ?? []
+              return (
+                <div key={c.id} className={cn('grid gap-1', c.parentId && 'pl-5')}>
+                  <div className="flex items-center gap-2">
+                    {c.parentId && <span className="text-muted-foreground text-[11px] shrink-0">›</span>}
+                    {c.color && <span className="h-2 w-2 rounded-full shrink-0" style={{ background: c.color }} />}
+                    <Input
+                      value={c.name}
+                      onChange={e => updateCategory(c.id, { name: e.target.value })}
+                      className={cn('h-8 flex-1 text-[12.5px]', !c.active && 'opacity-50')}
+                    />
+                    <Button
+                      variant="outline" size="sm" className="h-8 text-[11px] px-2 shrink-0"
+                      onClick={() => { updateCategory(c.id, { active: !c.active }); toast(c.active ? `${c.name} archived — history preserved` : `${c.name} restored`) }}
+                    >
+                      {c.active ? 'Archive' : 'Restore'}
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1 pl-1">
+                    <span className="text-[10.5px] text-muted-foreground mr-0.5">
+                      {tagged.length === 0 ? 'Shows under every area —' : 'Shows under:'}
+                    </span>
+                    {state.areas.filter(a => a.active).map(a => {
+                      const on = tagged.includes(a.id)
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => {
+                            const next = on ? tagged.filter(id => id !== a.id) : [...tagged, a.id]
+                            updateCategory(c.id, { areaIds: next })
+                          }}
+                          className={cn(
+                            'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10.5px] transition-colors',
+                            on ? 'border-transparent text-primary-foreground' : 'border-border text-muted-foreground hover:bg-accent',
+                          )}
+                          style={on ? { background: a.color } : undefined}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: on ? 'hsl(0 0% 100% / 0.85)' : a.color }} />
+                          {a.name}
+                        </button>
+                      )
+                    })}
+                    {tagged.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => updateCategory(c.id, { areaIds: [] })}
+                        className="text-[10.5px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                      >
+                        clear (show everywhere)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
           </div>
           <div className="flex gap-2">
             <Input placeholder="New category…" value={newCat} onChange={e => setNewCat(e.target.value)} className="h-8" />

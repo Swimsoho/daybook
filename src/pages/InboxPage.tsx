@@ -4,7 +4,7 @@ import { Check, Mail, MessageCircle, MessageSquare, Mic, PenLine, X } from 'luci
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Source, fmtDate } from '@/lib/model'
-import { useStore } from '@/lib/store'
+import { categoriesForArea, useStore } from '@/lib/store'
 import { useSpeech } from '@/hooks/useSpeech'
 import { EmptyNote, PriorityChip, SectionTitle } from '@/components/bits'
 
@@ -34,7 +34,8 @@ export default function InboxPage() {
           {pending.length === 0 && <EmptyNote>Inbox zero. Triage is a two-minute glance, not a chore.</EmptyNote>}
           {pending.map(c => {
             const p = c.proposal
-            const area = state.areas.find(a => a.id === (reassign[c.id] ?? p.areaId))
+            const effectiveAreaId = reassign[c.id] ?? p.areaId
+            const area = state.areas.find(a => a.id === effectiveAreaId)
             const project = state.projects.find(pr => pr.id === p.projectId)
             const person = state.people.find(x => x.id === p.personId)
             const tracker = state.trackers.find(t => t.id === p.trackerId)
@@ -76,7 +77,7 @@ export default function InboxPage() {
                     <Select value={reassignCategory[c.id] ?? p.categoryIds?.[0] ?? ''} onValueChange={v => setReassignCategory(r => ({ ...r, [c.id]: v }))}>
                       <SelectTrigger className="h-7 w-[130px] text-[11px] bg-background"><SelectValue placeholder="category" /></SelectTrigger>
                       <SelectContent>
-                        {state.categories.filter(cat => cat.active).map(cat => (
+                        {categoriesForArea(state.categories, effectiveAreaId, categoryId).map(cat => (
                           <SelectItem key={cat.id} value={cat.id}>{cat.level > 0 ? '› ' : ''}{cat.name}</SelectItem>
                         ))}
                       </SelectContent>

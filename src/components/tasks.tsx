@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils'
 import {
   Priority, PRIORITY_DESC, PRIORITY_LABELS, STATUS_LABELS, Task, TaskStatus, TaskType, TYPE_LABELS, fmtDate, today, addDays, daysSince,
 } from '@/lib/model'
-import { rollup, subtasksOf, useStore } from '@/lib/store'
+import { categoriesForArea, rollup, subtasksOf, useStore } from '@/lib/store'
 import { AreaDot, DueChip, PriorityChip } from './bits'
 
 // ---------- Quick add — one line, Enter, done. Usable on any screen ----------
@@ -80,7 +80,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
         <SelectTrigger className="h-7 w-[112px] text-[11.5px] bg-card shrink-0"><SelectValue placeholder="Category" /></SelectTrigger>
         <SelectContent>
           <SelectItem value="__none__">No category</SelectItem>
-          {state.categories.filter(c => c.active).map(c => <SelectItem key={c.id} value={c.id}>{c.level > 0 ? '› ' : ''}{c.name}</SelectItem>)}
+          {categoriesForArea(state.categories, areaId, pickedCategoryId).map(c => <SelectItem key={c.id} value={c.id}>{c.level > 0 ? '› ' : ''}{c.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <button onClick={add} className="h-7 px-2.5 text-[11.5px] border border-input rounded-sm bg-card hover:bg-accent shrink-0">Add</button>
@@ -267,7 +267,7 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll }:
                       <span className="text-muted-foreground">No category</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    {state.categories.filter(c => c.active).map(c => (
+                    {categoriesForArea(state.categories, task.areaId, task.categoryIds[0]).map(c => (
                       <DropdownMenuItem key={c.id} onClick={() => { updateTask(task.id, { categoryIds: [c.id] }, `re-categorized as ${c.name}`); toast.success(`Re-categorized as ${c.name}`) }}>
                         {c.color && <span className="h-2 w-2 rounded-full mr-2 shrink-0" style={{ background: c.color }} />}
                         <span className="truncate">{c.level > 0 ? '› ' : ''}{c.name}</span>
@@ -315,7 +315,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
   const scheme = state.settings.priorityScheme
 
   const projects = state.projects.filter(p => p.status === 'active' && (!f.areaId || p.areaId === f.areaId))
-  const mainCats = state.categories.filter(c => c.active)
+  const mainCats = categoriesForArea(state.categories, f.areaId, f.categoryIds?.[0])
 
   function save() {
     if (!f.title?.trim()) { toast.error('A title is all that’s required'); return }
@@ -571,7 +571,7 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
                 <SelectTrigger className="h-7 w-[130px] text-[11.5px] bg-card"><SelectValue placeholder="Category" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">No category</SelectItem>
-                  {state.categories.filter(c => c.active).map(c => <SelectItem key={c.id} value={c.id}>{c.level > 0 ? '› ' : ''}{c.name}</SelectItem>)}
+                  {categoriesForArea(state.categories, task.areaId, task.categoryIds[0]).map(c => <SelectItem key={c.id} value={c.id}>{c.level > 0 ? '› ' : ''}{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
