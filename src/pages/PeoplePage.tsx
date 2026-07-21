@@ -166,29 +166,172 @@ function AddPersonDialog({ open, onClose, onAdd }: { open: boolean; onClose: () 
   )
 }
 
-function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const steps = [
-    ['1', 'Upload a CSV or spreadsheet of names'],
-    ['2', 'Map columns to fields — name, phone/WhatsApp, email, tier, notes — with a preview before committing'],
-    ['3', 'Unmapped columns are kept as notes so nothing is lost'],
-    ['4', 'Duplicates are detected and merged; Gmail / Outlook contacts can also be pulled in from Settings › Integrations'],
+// ---------- Contacts bulk import: template + preview + merge ----------
+
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = []
+  let row: string[] = [], cur = '', inQ = false
+  const src = text.replace(/^﻿/, '')
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]
+    if (inQ) {
+      if (ch === '"') { if (src[i + 1] === '"') { cur += '"'; i++ } else inQ = false } else cur += ch
+    } else if (ch === '"') inQ = true
+    else if (ch === ',') { row.push(cur); cur = '' }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && src[i + 1] === '\n') i++
+      row.push(cur); cur = ''
+      if (row.some(c => c.trim() !== '')) rows.push(row)
+      row = []
+    } else cur += ch
+  }
+  row.push(cur)
+  if (row.some(c => c.trim() !== '')) rows.push(row)
+  return rows
+}
+
+function downloadContactsTemplate() {
+  const rows = [
+    ['Name', 'Phone / WhatsApp', 'Email', 'Tier', 'Cadence days', 'How you know them', 'Topics', 'VIP', 'Notes'],
+    ['David Feldman', '+44 7700 900010', 'david@feldman.co', 'active', '', 'Old colleague', 'Consulting, governors', 'yes', 'Owes me an intro'],
+    ['Mum', '+44 7700 900001', '', 'inner', '3', 'Family', 'Family, weekend plans', '', 'Call every few days'],
+    ['Ella Rosen', '', 'ella.rosen@gmail.com', 'dormant', '', 'Former client', 'Marketing', '', ''],
+    ['- DELETE THIS ROW - allowed values: Tier = inner | active | network | dormant. Cadence days = number (blank = tier default). VIP = yes/no. Only Name is required.', '', '', '', '', '', '', '', ''],
   ]
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
+  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
+  const a = document.createElement('a')
+  a.href = url; a.download = 'daybook-contacts-template.csv'; a.click()
+  URL.revokeObjectURL(url)
+  toast.success('Template downloaded - opens straight into Excel; save as CSV when done')
+}
+
+interface ParsedPerson {
+  person: Partial<Person> & { name: string }
+  mergeWith?: Person
+  warnings: string[]
+}
+
+function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { state, addPerson, updatePerson } = useStore()
+  const [parsed, setParsed] = useState<ParsedPerson[] | null>(null)
+  const [fileName, setFileName] = useState('')
+
+  function handleFile(f: File) {
+    setFileName(f.name)
+    f.text().then(text => {
+      const rows = parseCsv(text)
+      if (rows.length < 2) { toast.error('No data rows found - start from the template'); return }
+      const header = rows[0].map(h => h.trim().toLowerCase())
+      const col = (n: string) => header.findIndex(h => h.startsWith(n))
+      const iName = col('name')
+      if (iName === -1) { toast.error('Missing "Name" column - use the downloaded template'); return }
+      const get = (r: string[], n: string) => { const i = col(n); return i === -1 ? '' : (r[i] ?? '').trim() }
+
+      const out: ParsedPerson[] = []
+      for (const r of rows.slice(1)) {
+        const name = (r[iName] ?? '').trim()
+        if (!name || name.startsWith('- DELETE THIS ROW')) continue
+        const warnings: string[] = []
+        const tierRaw = get(r, 'tier').toLowerCase()
+        const tier = (['inner', 'active', 'network', 'dormant'].includes(tierRaw) ? tierRaw : 'network') as Tier
+        if (tierRaw && tier !== tierRaw) warnings.push(`tier "${tierRaw}" -> network`)
+        const cadRaw = get(r, 'cadence')
+        const cadence = cadRaw ? parseInt(cadRaw, 10) : undefined
+        if (cadRaw && (!cadence || cadence < 1)) warnings.push(`cadence "${cadRaw}" ignored`)
+        const email = get(r, 'email')
+        const phone = get(r, 'phone')
+        const existing = state.people.find(p =>
+          (email && p.email && p.email.toLowerCase() === email.toLowerCase()) ||
+          p.name.trim().toLowerCase() === name.toLowerCase(),
+        )
+        out.push({
+          warnings,
+          mergeWith: existing,
+          person: {
+            name, phone: phone || undefined, email: email || undefined, tier,
+            cadenceDays: cadence && cadence > 0 ? cadence : undefined,
+            how: get(r, 'how'), topics: get(r, 'topics'),
+            vip: ['yes', 'y', 'true', '1'].includes(get(r, 'vip').toLowerCase()),
+            notes: get(r, 'notes') || undefined,
+          },
+        })
+      }
+      if (!out.length) { toast.error('No importable rows found'); return }
+      setParsed(out)
+    })
+  }
+
+  function commit() {
+    if (!parsed) return
+    let added = 0, merged = 0
+    for (const p of parsed) {
+      if (p.mergeWith) {
+        updatePerson(p.mergeWith.id, { ...p.person, name: p.mergeWith.name }, 'merged from import')
+        merged++
+      } else {
+        addPerson(p.person)
+        added++
+      }
+    }
+    toast.success(`Imported: ${added} new, ${merged} merged into existing contacts`)
+    setParsed(null); setFileName(''); onClose()
+  }
+
   return (
-    <Dialog open={open} onOpenChange={o => !o && onClose()}>
-      <DialogContent className="sm:max-w-[440px]">
+    <Dialog open={open} onOpenChange={o => { if (!o) { setParsed(null); setFileName(''); onClose() } }}>
+      <DialogContent className="sm:max-w-[620px] max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-lg">Import contacts</DialogTitle></DialogHeader>
-        <div className="grid gap-2.5">
-          {steps.map(([n, s]) => (
-            <div key={n} className="flex gap-3 text-[13px]">
-              <span className="font-display font-semibold text-muted-foreground">{n}</span><span>{s}</span>
+        {!parsed ? (
+          <div className="grid gap-3">
+            <div className="flex items-start gap-3 text-[13px]">
+              <span className="font-display font-semibold text-muted-foreground">1</span>
+              <div>
+                Download the template - all fields, example rows, allowed values. It opens straight into Excel or Google Sheets.
+                <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={downloadContactsTemplate}>Download template (.csv)</Button></div>
+              </div>
             </div>
-          ))}
-          <div className={cn('border border-dashed border-input rounded-sm p-6 text-center text-[13px] text-muted-foreground cursor-pointer hover:bg-accent/50')}
-            onClick={() => toast('Import flow is wired for the build phase — this demo seeds 12 contacts instead')}>
-            Drop a .csv here or click to browse
+            <div className="flex items-start gap-3 text-[13px]">
+              <span className="font-display font-semibold text-muted-foreground">2</span>
+              <span>Fill it in - one person per row, only <b>Name</b> required - and save/export as CSV.</span>
+            </div>
+            <div className="flex items-start gap-3 text-[13px]">
+              <span className="font-display font-semibold text-muted-foreground">3</span>
+              <div className="flex-1">
+                Upload for a preview. Duplicates (same email or name) are detected and merged, never doubled.
+                <label className={cn('mt-1.5 border border-dashed border-input rounded-sm p-5 text-center text-[13px] text-muted-foreground cursor-pointer hover:bg-accent/50 block')}>
+                  {fileName || 'Click to choose your filled CSV'}
+                  <input type="file" accept=".csv,text/csv" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                </label>
+              </div>
+            </div>
           </div>
-        </div>
-        <DialogFooter><Button variant="ghost" onClick={onClose}>Close</Button></DialogFooter>
+        ) : (
+          <div className="grid gap-2.5">
+            <p className="text-[13px]">
+              <b>{parsed.length}</b> contacts from <span className="text-muted-foreground">{fileName}</span>
+              {parsed.some(p => p.mergeWith) && <span> - <b>{parsed.filter(p => p.mergeWith).length}</b> will merge into existing records</span>}
+            </p>
+            <div className="border border-border max-h-[320px] overflow-y-auto">
+              {parsed.map((p, i) => (
+                <div key={i} className="px-3 py-1.5 border-b border-border/60 last:border-0 text-[12.5px]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium truncate">{p.person.name}</span>
+                    <TierBadge tier={p.person.tier ?? 'network'} />
+                    <span className="text-[11px] text-muted-foreground truncate">{p.person.phone ?? p.person.email ?? ''}</span>
+                    {p.mergeWith && <span className="ml-auto text-[10.5px] uppercase tracking-wide text-[hsl(28_60%_32%)] font-semibold shrink-0">merge</span>}
+                  </div>
+                  {p.warnings.length > 0 && <div className="text-[11px] text-[hsl(28_60%_32%)]">{p.warnings.join(' - ')}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => { setParsed(null); setFileName(''); onClose() }}>Cancel</Button>
+          {parsed && <Button variant="outline" onClick={() => { setParsed(null); setFileName('') }}>Different file</Button>}
+          {parsed && <Button onClick={commit}>Import {parsed.length} contacts</Button>}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

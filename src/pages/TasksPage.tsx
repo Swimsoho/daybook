@@ -11,7 +11,7 @@ import {
 } from '@/lib/model'
 import { useStore } from '@/lib/store'
 import { ClearFiltersButton, EmptyNote } from '@/components/bits'
-import { TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
+import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 
 type View = 'today' | 'week' | 'area' | 'waiting' | 'someday' | 'done' | 'all'
 
@@ -219,7 +219,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
                   <Plus className="h-3 w-3 mr-1" />Task
                 </Button>
               </div>
-              <QuickAddRow areaId={area.id} />
+              <QuickAdd areaId={area.id} />
               {tasks.length === 0 && <EmptyNote>Nothing open here — type above or drag a task in.</EmptyNote>}
               {tasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} expandAll={expandAll} />)}
             </section>
@@ -449,27 +449,3 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
   )
 }
 
-// Always-ready inline add: type, press Enter — filed straight into the area.
-function QuickAddRow({ areaId }: { areaId: string }) {
-  const { state, addTask } = useStore()
-  const [text, setText] = useState('')
-  const area = state.areas.find(a => a.id === areaId)
-  function add() {
-    if (!text.trim()) return
-    addTask({ title: text.trim(), areaId, priority: 'P2', status: 'next', type: 'todo', source: 'manual' })
-    toast.success(`Added to ${area?.name}`)
-    setText('')
-  }
-  return (
-    <div className="flex items-center gap-2 px-4 py-1 border-b border-dashed border-border/70 bg-background/40 focus-within:bg-background">
-      <Plus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-      <input
-        value={text}
-        onChange={e => setText(e.target.value)}
-        onKeyDown={e => e.key === 'Enter' && add()}
-        placeholder={`Quick add to ${area?.name} — type and press Enter`}
-        className="flex-1 h-8 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/50"
-      />
-    </div>
-  )
-}

@@ -20,6 +20,32 @@ import {
 import { rollup, subtasksOf, useStore } from '@/lib/store'
 import { AreaDot, DueChip, PriorityChip } from './bits'
 
+// ---------- Quick add — one line, Enter, done. Usable on any screen ----------
+
+export function QuickAdd({ areaId, due, projectId, placeholder }: { areaId?: string; due?: string; projectId?: string; placeholder?: string }) {
+  const { state, addTask } = useStore()
+  const [text, setText] = useState('')
+  const area = state.areas.find(a => a.id === areaId)
+  function add() {
+    if (!text.trim()) return
+    addTask({ title: text.trim(), areaId, projectId, due, priority: due === today() ? 'P1' : 'P2', status: 'next', type: 'todo', source: 'manual' })
+    toast.success(area ? `Added to ${area.name}` : due === today() ? 'Added to today' : 'Task added')
+    setText('')
+  }
+  return (
+    <div className="flex items-center gap-2 px-4 py-1 border-b border-dashed border-border/70 bg-background/40 focus-within:bg-background">
+      <span className="text-muted-foreground text-[15px] leading-none shrink-0">+</span>
+      <input
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => e.key === 'Enter' && add()}
+        placeholder={placeholder ?? (area ? `Quick add to ${area.name} — type and press Enter` : 'Quick add a task — type and press Enter')}
+        className="flex-1 h-8 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/50"
+      />
+    </div>
+  )
+}
+
 // ---------- Task row with quick actions ----------
 
 export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll }: {
@@ -56,13 +82,26 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll }:
         )}
         style={{ paddingLeft: 8 + depth * 26 }}
       >
-        {/* complete */}
+        {/* complete / reopen */}
         <button
-          aria-label="complete"
-          onClick={() => { if (!done) { completeTask(task.id); toast.success('Done — archived, never deleted') } }}
+          aria-label={done ? 'reopen' : 'complete'}
+          title={done ? 'Click to reopen' : 'Complete (undo available)'}
+          onClick={() => {
+            if (done) {
+              updateTask(task.id, { status: 'next', completedAt: undefined, droppedReason: undefined }, 'reopened')
+              toast.success('Reopened — back on the list')
+            } else {
+              const prev = task.status
+              completeTask(task.id)
+              toast.success('Done — archived, never deleted', {
+                action: { label: 'Undo', onClick: () => updateTask(task.id, { status: prev, completedAt: undefined }, 'undo complete') },
+                duration: 6000,
+              })
+            }
+          }}
           className={cn(
             'h-[17px] w-[17px] shrink-0 rounded-full border flex items-center justify-center transition-all',
-            done ? 'bg-primary border-primary text-primary-foreground' : 'border-[hsl(96_10%_13%_/_0.4)] hover:border-primary hover:scale-110',
+            done ? 'bg-primary border-primary text-primary-foreground hover:opacity-70' : 'border-[hsl(96_10%_13%_/_0.4)] hover:border-primary hover:scale-110',
           )}
         >
           {done && <Check className="h-3 w-3" />}
@@ -366,7 +405,12 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
         {!done && (
           <div className="grid gap-2 border border-border bg-accent/40 rounded-sm p-2.5">
             <div className="flex flex-wrap gap-1.5">
-              <Button size="sm" className="h-7 px-2.5 text-[12px]" onClick={() => { completeTask(task.id); toast.success('Done — archived'); onClose() }}>
+              <Button size="sm" className="h-7 px-2.5 text-[12px]" onClick={() => {
+                const prev = task.status
+                completeTask(task.id)
+                toast.success('Done — archived', { action: { label: 'Undo', onClick: () => updateTask(task.id, { status: prev, completedAt: undefined }, 'undo complete') }, duration: 6000 })
+                onClose()
+              }}>
                 <Check className="h-3.5 w-3.5 mr-1" />Done
               </Button>
               {(task.type === 'call' || task.personId) && (

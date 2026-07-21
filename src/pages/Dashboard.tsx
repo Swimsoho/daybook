@@ -11,7 +11,7 @@ import {
   buildCallList, callsMadeOn, isOverdue, openTasks, stalledProjects, useStore,
 } from '@/lib/store'
 import { EmptyNote, KpiTile, SectionTitle, TierBadge } from '@/components/bits'
-import { TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
+import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { LogCallDialog, PersonDetail } from '@/components/people'
 
 export default function Dashboard({ mode, goTo, projectFilter }: { mode: 'today' | 'overall'; goTo: (page: string) => void; projectFilter?: string | null }) {
@@ -115,6 +115,7 @@ function TodayDash({ goTo, projectFilter }: { goTo: (p: string) => void; project
               <Button size="sm" variant="outline" className="h-6 text-[11px] shrink-0" onClick={() => toast('Auto-rebalance proposed: 2 P2 items → tomorrow. You confirm before anything moves.')}>Rebalance</Button>
             </div>
           )}
+          <QuickAdd due={today()} placeholder="Quick add for today — type and press Enter" />
           <div>
             {todays.length === 0 && <EmptyNote>Nothing due today. The backlog stays out of your face.</EmptyNote>}
             {todays.map(t => <TaskRow key={t.id} task={t} onOpen={setOpenTask} />)}
@@ -316,6 +317,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
                       )
                     })}
                     {projs.length === 0 && <span className="text-[12px] text-muted-foreground italic">no live projects</span>}
+                    <QuickAdd areaId={a.id} />
                   </div>
                 </div>
               )
