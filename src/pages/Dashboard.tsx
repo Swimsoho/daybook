@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowRight, Cake, CalendarClock, ChevronDown, ChevronRight, Heart, Inbox, MessageCircle, Phone, Sparkles } from 'lucide-react'
+import { ArrowRight, Cake, CalendarClock, ChevronDown, ChevronRight, GripVertical, Heart, Inbox, LayoutGrid, Maximize2, MessageCircle, Minimize2, Phone, RotateCcw, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
@@ -46,15 +46,102 @@ function dateLabel(daysUntil: number, occ: string): string {
   return fmtDate(occ)
 }
 
+// ================= TODAY dashboard: drag-to-reorder / resize widgets =================
+//
+// Widgets can be dragged to reorder (within or across the two columns) and toggled between
+// their normal column width and a full-width "wide" row. The arrangement persists to
+// settings.dashboardLayout so it survives reload/devices, but only ever changes when the
+// person explicitly drags something or hits "Rearrange widgets" — the default layout renders
+// pixel-for-pixel the same as before this feature existed.
+const ALL_WIDGET_IDS = ['brief', 'today', 'attention', 'calls', 'inbox', 'dates', 'areas'] as const
+type WidgetId = typeof ALL_WIDGET_IDS[number]
+type DashboardLayout = { wide: WidgetId[]; left: WidgetId[]; right: WidgetId[] }
+const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = {
+  wide: [], left: ['brief', 'today', 'attention'], right: ['calls', 'inbox', 'dates', 'areas'],
+}
+const WIDGET_TITLE: Record<WidgetId, string> = {
+  brief: 'Morning brief', today: 'Today', attention: 'Attention needed',
+  calls: 'Today’s call list', inbox: 'Inbox', dates: 'Upcoming dates', areas: 'By area',
+}
+
+// Repairs a saved layout against the current widget set: preserves the person's chosen
+// order/placement, drops any stray id from a since-removed widget, and appends any widget
+// that shipped after the layout was saved (into its shipped default slot) instead of it
+// silently vanishing.
+function normalizeDashboardLayout(saved: { wide: string[]; left: string[]; right: string[] } | undefined): DashboardLayout {
+  if (!saved) return DEFAULT_DASHBOARD_LAYOUT
+  const isWidget = (id: string): id is WidgetId => (ALL_WIDGET_IDS as readonly string[]).includes(id)
+  const seen = new Set<string>()
+  const clean = (ids: string[]) => ids.filter(isWidget).filter(id => (seen.has(id) ? false : (seen.add(id), true)))
+  const wide = clean(saved.wide ?? [])
+  const left = clean(saved.left ?? [])
+  const right = clean(saved.right ?? [])
+  for (const id of ALL_WIDGET_IDS) {
+    if (!seen.has(id)) {
+      if (DEFAULT_DASHBOARD_LAYOUT.left.includes(id)) left.push(id)
+      else if (DEFAULT_DASHBOARD_LAYOUT.right.includes(id)) right.push(id)
+      else wide.push(id)
+    }
+  }
+  return { wide, left, right }
+}
+
+function WidgetShell({
+  title, wide, customize, dragging, onDragStart, onDragOver, onDrop, onToggleWide, children,
+}: {
+  title: string
+  wide: boolean
+  customize: boolean
+  dragging: boolean
+  onDragStart: () => void
+  onDragOver: (e: React.DragEvent) => void
+  onDrop: (e: React.DragEvent) => void
+  onToggleWide: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      draggable={customize}
+      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart() }}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={cn(customize && 'ring-1 ring-border/70 rounded-sm p-1', dragging && 'opacity-40')}
+    >
+      {customize && (
+        <div className="flex items-center gap-1.5 mb-1 px-1 text-[10.5px] text-muted-foreground">
+          <GripVertical className="h-3.5 w-3.5 cursor-grab active:cursor-grabbing shrink-0" />
+          <span className="uppercase tracking-wide truncate">{title}</span>
+          <button onClick={onToggleWide} className="ml-auto flex items-center gap-1 border border-border rounded-sm px-1.5 py-0.5 hover:bg-accent shrink-0 bg-card">
+            {wide ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+            {wide ? 'Normal' : 'Full width'}
+          </button>
+        </div>
+      )}
+      {children}
+    </div>
+  )
+}
+
+function DropZone({ active, onDragOver, onDrop }: { active: boolean; onDragOver: (e: React.DragEvent) => void; onDrop: (e: React.DragEvent) => void }) {
+  if (!active) return null
+  return (
+    <div onDragOver={onDragOver} onDrop={onDrop} className="min-h-[32px] border border-dashed border-border rounded-sm flex items-center justify-center text-[10.5px] text-muted-foreground">
+      drop here
+    </div>
+  )
+}
+
 // ================= TODAY =================
 
 function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => void; projectFilter?: string | null; viewerName?: string }) {
-  const { state } = useStore()
+  const { state, updateSettings } = useStore()
   const [openTask, setOpenTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [logPerson, setLogPerson] = useState<Person | null>(null)
   const [viewPerson, setViewPerson] = useState<Person | null>(null)
   const [briefOpen, setBriefOpen] = useState(true)
+  const [customize, setCustomize] = useState(false)
+  const [dragId, setDragId] = useState<WidgetId | null>(null)
 
   const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
   // to-call tasks surface today by default (a call with no due date shouldn't go quiet),
@@ -95,11 +182,50 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
     return 'Nothing slipping today. Enjoy the margin.'
   }, [state])
 
-  return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
-      <div className="grid grid-cols-1 gap-5 content-start">
-        {/* Morning brief */}
-        {state.settings.features.morningBrief && (
+  const layout = useMemo(() => normalizeDashboardLayout(state.settings.dashboardLayout), [state.settings.dashboardLayout])
+  const available: Record<WidgetId, boolean> = {
+    brief: state.settings.features.morningBrief, today: true, attention: true,
+    calls: true, inbox: true, dates: !!datesTracker, areas: true,
+  }
+  function moveWidget(id: WidgetId, toZone: 'wide' | 'left' | 'right', beforeId?: WidgetId) {
+    const strip = (arr: WidgetId[]) => arr.filter(x => x !== id)
+    const next: DashboardLayout = { wide: strip(layout.wide), left: strip(layout.left), right: strip(layout.right) }
+    const target = next[toZone]
+    const idx = beforeId ? target.indexOf(beforeId) : -1
+    if (idx === -1) target.push(id); else target.splice(idx, 0, id)
+    updateSettings({ dashboardLayout: next })
+  }
+  function toggleWide(id: WidgetId) {
+    if (layout.wide.includes(id)) moveWidget(id, DEFAULT_DASHBOARD_LAYOUT.left.includes(id) ? 'left' : 'right')
+    else moveWidget(id, 'wide')
+  }
+  function resetLayout() {
+    updateSettings({ dashboardLayout: DEFAULT_DASHBOARD_LAYOUT })
+    toast.success('Dashboard layout reset to default')
+  }
+  const renderZone = (ids: WidgetId[], zone: 'wide' | 'left' | 'right') => ids.filter(id => available[id]).map(id => (
+    <WidgetShell
+      key={id}
+      title={WIDGET_TITLE[id]}
+      wide={zone === 'wide'}
+      customize={customize}
+      dragging={dragId === id}
+      onDragStart={() => setDragId(id)}
+      onDragOver={e => { if (customize && dragId && dragId !== id) e.preventDefault() }}
+      onDrop={e => { e.preventDefault(); if (dragId && dragId !== id) moveWidget(dragId, zone, id); setDragId(null) }}
+      onToggleWide={() => toggleWide(id)}
+    >
+      {WIDGET_NODE[id]}
+    </WidgetShell>
+  ))
+  const zoneDropProps = (zone: 'wide' | 'left' | 'right') => ({
+    active: customize,
+    onDragOver: (e: React.DragEvent) => { if (dragId) e.preventDefault() },
+    onDrop: (e: React.DragEvent) => { e.preventDefault(); if (dragId) moveWidget(dragId, zone); setDragId(null) },
+  })
+
+  const WIDGET_NODE: Record<WidgetId, React.ReactNode> = {
+    brief: (
           <section className="rise-in border border-border bg-card shadow-sm">
             <button onClick={() => setBriefOpen(o => !o)} className="w-full flex items-center gap-2 px-4 py-2.5 border-b border-border bg-[hsl(152_22%_23%)] text-[hsl(45_50%_96%)]">
               <MessageCircle className="h-3.5 w-3.5" />
@@ -137,9 +263,8 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
               </div>
             )}
           </section>
-        )}
-
-        {/* Today's tasks */}
+    ),
+    today: (
         <section className="rise-in border border-border bg-card shadow-sm" style={{ animationDelay: '60ms' }}>
           <div className="px-4 pt-3.5 pb-1 flex items-baseline justify-between">
             <SectionTitle className="mb-0">Today</SectionTitle>
@@ -160,8 +285,8 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
             {todays.map(t => <TaskRow key={t.id} task={t} onOpen={setOpenTask} />)}
           </div>
         </section>
-
-        {/* Attention needed */}
+    ),
+    attention: (
         <section className="rise-in border border-border bg-card shadow-sm" style={{ animationDelay: '120ms' }}>
           <div className="px-4 pt-3.5 pb-1">
             <SectionTitle className="mb-0">Attention needed</SectionTitle>
@@ -169,11 +294,8 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
           {attention.length === 0 && <EmptyNote>Nothing slipping. That’s the goal.</EmptyNote>}
           {attention.map(t => <TaskRow key={t.id} task={t} onOpen={setOpenTask} />)}
         </section>
-      </div>
-
-      {/* Right column */}
-      <div className="grid grid-cols-1 gap-5 content-start">
-        {/* Call list */}
+    ),
+    calls: (
         <section className="rise-in border border-border bg-card shadow-sm" style={{ animationDelay: '90ms' }}>
           <div className="px-4 pt-3.5 pb-2 flex items-baseline justify-between">
             <SectionTitle className="mb-0">Today’s call list</SectionTitle>
@@ -198,8 +320,8 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
             {calls.length === 0 && <EmptyNote>No calls suggested — everyone’s within cadence.</EmptyNote>}
           </div>
         </section>
-
-        {/* Inbox */}
+    ),
+    inbox: (
         <section className="rise-in border border-border bg-card shadow-sm" style={{ animationDelay: '150ms' }}>
           <button onClick={() => goTo('inbox')} className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-accent/50 text-left">
             <Inbox className="h-4 w-4 text-muted-foreground" />
@@ -210,9 +332,8 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
           </button>
         </section>
-
-        {/* Upcoming dates — birthdays, anniversaries, anything filed in Collections > Personal > Dates to Remember */}
-        {datesTracker && (
+    ),
+    dates: datesTracker ? (
           <section className="rise-in border border-border bg-card shadow-sm" style={{ animationDelay: '165ms' }}>
             <div className="px-4 pt-3.5 pb-1 flex items-baseline justify-between">
               <SectionTitle className="mb-0">Upcoming dates</SectionTitle>
@@ -229,9 +350,8 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
               ))}
             </div>
           </section>
-        )}
-
-        {/* Areas collapsed */}
+    ) : null,
+    areas: (
         <section className="rise-in border border-border bg-card shadow-sm" style={{ animationDelay: '180ms' }}>
           <div className="px-4 pt-3.5 pb-1">
             <SectionTitle className="mb-1">By area</SectionTitle>
@@ -250,6 +370,51 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
             })}
           </div>
         </section>
+    ),
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-3">
+      <div className="flex items-center justify-end gap-2">
+        {customize && (
+          <button onClick={resetLayout} className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+            <RotateCcw className="h-3 w-3" /> Reset layout
+          </button>
+        )}
+        <button
+          onClick={() => setCustomize(v => !v)}
+          className={cn(
+            'text-[11px] flex items-center gap-1.5 border border-border rounded-sm px-2 py-1 hover:bg-accent',
+            customize && 'bg-[hsl(152_22%_23%)] text-white border-[hsl(152_22%_23%)] hover:bg-[hsl(152_22%_23%)]',
+          )}
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />
+          {customize ? 'Done arranging' : 'Rearrange widgets'}
+        </button>
+      </div>
+      {customize && (
+        <p className="text-[11px] text-muted-foreground -mt-1">
+          Drag a widget by its grip handle to reorder, or use “Full width” to stretch it across both columns.
+        </p>
+      )}
+
+      {(layout.wide.some(id => available[id]) || customize) && (
+        <div className="grid grid-cols-1 gap-5">
+          {renderZone(layout.wide, 'wide')}
+          <DropZone {...zoneDropProps('wide')} />
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
+        <div className="grid grid-cols-1 gap-5 content-start">
+          {renderZone(layout.left, 'left')}
+          <DropZone {...zoneDropProps('left')} />
+        </div>
+
+        <div className="grid grid-cols-1 gap-5 content-start">
+          {renderZone(layout.right, 'right')}
+          <DropZone {...zoneDropProps('right')} />
+        </div>
       </div>
 
       <TaskDetail task={openTask} onClose={() => setOpenTask(null)} onEdit={t => setEditTask(t)} />

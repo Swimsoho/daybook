@@ -267,6 +267,10 @@ export interface Settings {
     morningBrief: boolean
     lunchReminder: boolean
   }
+  // User-arranged Today-dashboard widget layout — which widgets are full-width ("wide") and
+  // the order of the rest split across the two columns. Optional: undefined just means "use
+  // the shipped default arrangement," so accounts saved before this existed need no backfill.
+  dashboardLayout?: { wide: string[]; left: string[]; right: string[] }
 }
 
 export interface AppState {

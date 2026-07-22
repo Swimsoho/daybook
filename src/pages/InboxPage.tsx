@@ -112,7 +112,7 @@ export default function InboxPage() {
                     </div>
                     <p className="mt-1 text-[11px] text-muted-foreground italic">{p.explanation}</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto sm:shrink-0 pl-[26px] sm:pl-0">
+                  <div className="flex flex-wrap items-center gap-1.5 w-full pl-[26px]">
                     <Input
                       value={titleEdit[c.id] ?? p.title}
                       onChange={e => setTitleEdit(t => ({ ...t, [c.id]: e.target.value }))}

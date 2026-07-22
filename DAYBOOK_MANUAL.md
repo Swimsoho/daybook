@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v33 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v35 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -279,3 +279,15 @@ None of these are things the rest of the app depends on to function — they're 
     Third, **searchable dropdowns**. Area, category, action, person, project, vendor and tracker pickers only grow over time, and a plain scrolling `<select>` gets unwieldy well before a real account's taxonomy settles. Replaced with a new `SearchableSelect` component (Inbox reassign fields, quick-add, the detailed task dialog, and the task detail sheet's "Move to" row): click to open, type to filter by name, and the list orders "frequently used first" (by how many live tasks/entries actually reference that item) then everything else alphabetically — so the few areas/categories/people you actually use daily surface before a long tail of one-off entries. Fixed small option sets (Priority, Status, and similar 3–5-option pickers) were deliberately left as plain dropdowns, since search adds nothing there.
 
     Both changes are entirely client-side plus the matching Telegram/Slack Edge Function updates (already deployed) — no new Settings fields, no migration, nothing to reconfigure.
+
+22. **v34** — Two usability fixes to the v33 work above, both reported directly against it.
+
+    First, **Notes now has its own tab on the Collections page**, separate from your other Collections (Movies, Books, Subscriptions, Dates to remember). Previously the new Notes tracker just sat in the same pill row as everything else, which made it hard to tell "a structured collection I'm tracking" apart from "a scratch note I jotted down." Collections now shows two top-level tabs — **Collections** and **Notes** — matched by the collection's name so a rename or a re-seed doesn't break the split, and the tab bar only appears once you actually have a Notes tracker to separate out.
+
+    Second, **every searchable dropdown can now be cleared back to blank.** The new `SearchableSelect` from v33 had no way to un-pick something once you'd picked it — several fields (the Inbox's area/category/action reassign pickers, the task dialog's contact and area fields) had no "None" option in their list at all, so once you picked a value there was no way back except picking a different real one. Every one of those now has an explicit blank entry ("No area," "No contact," etc.) at the top of its list. Fixed alongside it: a one-off-by-one bug in the "Frequent / All" divider that only shows up when a blank entry is manually added to a list — the divider was landing one row early, mislabeling the first real, non-blank option as "frequent."
+
+23. **v35** — Two more usability fixes, both reported directly from real day-to-day use.
+
+    First, **the Inbox's pending-capture row no longer looks squeezed** next to the WhatsApp capture panel. Root cause: the row of controls (title, File as, area, category, action, confirm/dismiss) had a `sm:w-auto sm:shrink-0` className meaning that above the mobile breakpoint, it tried to sit inline to the right of the capture's text instead of on its own line — with six-plus controls competing for whatever width was left after the summary/text column and the adjacent WhatsApp simulator panel, it wrapped badly and looked cramped. The controls row now always renders full-width on its own line beneath the capture's text, at every screen size — the same layout the row already used on mobile, just applied everywhere.
+
+    Second, **Today-dashboard widgets can now be dragged to reorder and resized to full width.** A new "Rearrange widgets" button (top-right of the Today page) turns on a customize mode: each widget (Morning brief, Today, Attention needed, Today's call list, Inbox, Upcoming dates, By area) gets a grip handle to drag-and-drop it into a new position — within its column or across to the other one — and a "Full width" button that stretches it across both columns instead of sitting in just one. The arrangement is saved per-account (`settings.dashboardLayout`) and survives reload; a "Reset layout" link puts everything back to the shipped default. Scoped deliberately to just the Today dashboard's widgets, not the Overall/Portfolio page or any other page's panels — with the default arrangement rendering pixel-for-pixel identical to before this feature existed, so nobody sees any change unless they explicitly open customize mode.
