@@ -207,6 +207,9 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
   const [newCatParent, setNewCatParent] = useState('none')
   const [newAction, setNewAction] = useState('')
   const [phone, setPhoneInput] = useState(cloud?.profile.phone ?? '')
+  const [telegramId, setTelegramIdInput] = useState(cloud?.profile.telegramChatId ?? '')
+  const [slackId, setSlackIdInput] = useState(cloud?.profile.slackUserId ?? '')
+  const [sendingTest, setSendingTest] = useState<'telegram' | 'slack' | null>(null)
   const [newCollection, setNewCollection] = useState('')
   const [newTracker, setNewTracker] = useState<Record<string, string>>({}) // per-collection draft name
   const [expandedTracker, setExpandedTracker] = useState<string | null>(null)
@@ -615,6 +618,84 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
             </>
           ) : (
             <p className="text-[12px] text-muted-foreground italic">Sign in to a real account to register a number.</p>
+          )}
+        </Section>
+
+        <Section title="Telegram & Slack (new in v28)" sub="Two-way messaging: send either one a message and it lands in your Inbox like text/WhatsApp capture; Daybook can also push the morning brief and nudges there instead of (or alongside) WhatsApp/email.">
+          {cloud ? (
+            <div className="grid gap-4">
+              <div className="grid gap-1.5">
+                <Label className="text-xs">Telegram chat ID</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="e.g. 123456789"
+                    value={telegramId}
+                    onChange={e => setTelegramIdInput(e.target.value)}
+                    onBlur={async () => {
+                      if (telegramId.trim() === (cloud.profile.telegramChatId ?? '')) return
+                      const err = await cloud.setTelegramChatId(telegramId)
+                      if (err) toast.error(err)
+                      else toast.success(telegramId.trim() ? 'Telegram connected' : 'Telegram disconnected')
+                    }}
+                    className="h-8 flex-1"
+                  />
+                  <Button
+                    variant="outline" size="sm" className="h-8 text-[11.5px] shrink-0"
+                    disabled={!cloud.profile.telegramChatId || sendingTest === 'telegram'}
+                    onClick={async () => {
+                      setSendingTest('telegram')
+                      const err = await cloud.sendTestMessage('telegram')
+                      setSendingTest(null)
+                      if (err) toast.error(err)
+                      else toast.success('Sent — check Telegram')
+                    }}
+                  >
+                    {sendingTest === 'telegram' ? 'Sending…' : 'Send test'}
+                  </Button>
+                </div>
+                <p className="text-[10.5px] text-muted-foreground leading-relaxed">
+                  Message your Daybook bot on Telegram once (anything — "hi" works) and it'll reply with your chat ID to paste here. Setup Daybook still needs from you: create a bot via @BotFather, add its token as the <code>TELEGRAM_BOT_TOKEN</code> Edge Function secret, and point the bot's webhook at the deployed <code>telegram-inbound</code> function.
+                </p>
+              </div>
+              <div className="grid gap-1.5 border-t border-border pt-3">
+                <Label className="text-xs">Slack member ID</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="e.g. U012ABCDEF"
+                    value={slackId}
+                    onChange={e => setSlackIdInput(e.target.value)}
+                    onBlur={async () => {
+                      if (slackId.trim() === (cloud.profile.slackUserId ?? '')) return
+                      const err = await cloud.setSlackUserId(slackId)
+                      if (err) toast.error(err)
+                      else toast.success(slackId.trim() ? 'Slack connected' : 'Slack disconnected')
+                    }}
+                    className="h-8 flex-1"
+                  />
+                  <Button
+                    variant="outline" size="sm" className="h-8 text-[11.5px] shrink-0"
+                    disabled={!cloud.profile.slackUserId || sendingTest === 'slack'}
+                    onClick={async () => {
+                      setSendingTest('slack')
+                      const err = await cloud.sendTestMessage('slack')
+                      setSendingTest(null)
+                      if (err) toast.error(err)
+                      else toast.success('Sent — check Slack')
+                    }}
+                  >
+                    {sendingTest === 'slack' ? 'Sending…' : 'Send test'}
+                  </Button>
+                </div>
+                <p className="text-[10.5px] text-muted-foreground leading-relaxed">
+                  Find your member ID in Slack under your profile → "More" → "Copy member ID". Setup Daybook still needs from you: create a Slack app at api.slack.com/apps in your workspace, install it, subscribe to the <code>message.im</code> event pointing at the deployed <code>slack-events</code> function, and add its bot token + signing secret as the <code>SLACK_BOT_TOKEN</code> / <code>SLACK_SIGNING_SECRET</code> Edge Function secrets.
+                </p>
+              </div>
+              <p className="text-[10.5px] text-muted-foreground italic border-t border-dashed border-border pt-2">
+                Honest scope: the capture, reply, and test-send paths above are real and fully wired end-to-end. The morning brief still only sends when something calls the <code>send-message</code> function on a schedule — wire a Supabase Cron job (Database → Cron in the dashboard) to call it daily at your Send time above, the same way the existing brief Channel/Send time fields already describe the intended schedule.
+              </p>
+            </div>
+          ) : (
+            <p className="text-[12px] text-muted-foreground italic">Sign in to a real account to connect Telegram or Slack.</p>
           )}
         </Section>
 

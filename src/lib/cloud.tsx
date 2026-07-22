@@ -14,6 +14,8 @@ export interface CloudProfile {
   isSuperAdmin: boolean
   status: 'active' | 'invited' | 'suspended'
   phone?: string
+  telegramChatId?: string
+  slackUserId?: string
 }
 
 export interface PortalHandle {
@@ -31,6 +33,9 @@ export interface Cloud {
   signOut: () => void
   setPassword: (pw: string) => Promise<string | null>
   setPhone: (phone: string) => Promise<string | null>
+  setTelegramChatId: (id: string) => Promise<string | null>
+  setSlackUserId: (id: string) => Promise<string | null>
+  sendTestMessage: (channel: 'telegram' | 'slack') => Promise<string | null>
   admin: {
     listUsers: () => Promise<AdminUser[]>
     invite: (u: { name: string; email: string; role: Role }) => Promise<string | null>
@@ -213,7 +218,10 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
       if (pe || !prof) { setErr(pe?.message ?? 'Profile not found — was the database schema applied?'); return }
       const { data: wss, error: we } = await supabase!.from('workspaces').select('*').eq('owner_id', userId)
       if (we || !wss?.length) { setErr(we?.message ?? 'No workspaces — was the sign-up trigger installed?'); return }
-      const p: CloudProfile = { id: prof.id, email: prof.email, name: prof.name, role: prof.role, isSuperAdmin: prof.is_super_admin, status: prof.status, phone: prof.phone ?? undefined }
+      const p: CloudProfile = {
+        id: prof.id, email: prof.email, name: prof.name, role: prof.role, isSuperAdmin: prof.is_super_admin, status: prof.status,
+        phone: prof.phone ?? undefined, telegramChatId: prof.telegram_chat_id ?? undefined, slackUserId: prof.slack_user_id ?? undefined,
+      }
       const loadedStates: Record<string, AppState> = {}
       for (const ws of wss as WorkspaceRow[]) {
         loadedStates[ws.id] = await loadOrSeedState(ws as WorkspaceRow, prof.name)
@@ -253,6 +261,33 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
       const { error } = await supabase!.from('profiles').update({ phone: trimmed || null }).eq('id', profile.id)
       if (error) return error.message
       setProfile(p => p && { ...p, phone: trimmed || undefined })
+      return null
+    },
+    setTelegramChatId: async id => {
+      const trimmed = id.trim()
+      const { error } = await supabase!.from('profiles').update({ telegram_chat_id: trimmed || null }).eq('id', profile.id)
+      if (error) return error.message
+      setProfile(p => p && { ...p, telegramChatId: trimmed || undefined })
+      return null
+    },
+    setSlackUserId: async id => {
+      const trimmed = id.trim()
+      const { error } = await supabase!.from('profiles').update({ slack_user_id: trimmed || null }).eq('id', profile.id)
+      if (error) return error.message
+      setProfile(p => p && { ...p, slackUserId: trimmed || undefined })
+      return null
+    },
+    // Calls the send-message Edge Function with the caller's own session — the function
+    // verifies the JWT belongs to this profile (verify_jwt: true) before sending, and holds
+    // the actual bot token / signing secret server-side (Edge Function secrets), never in
+    // client code. Lets Craig confirm end-to-end delivery is really wired up before trusting
+    // it for the scheduled morning brief.
+    sendTestMessage: async channel => {
+      const { data, error } = await supabase!.functions.invoke('send-message', {
+        body: { channel, text: 'Test message from Daybook — if you can read this, the connection works.' },
+      })
+      if (error) return error.message
+      if (data?.error) return data.error as string
       return null
     },
     admin: {
