@@ -68,7 +68,7 @@ function SidebarContent({
           {!compact && <div className="text-[9.5px] uppercase tracking-[0.22em] opacity-50 mt-1.5">Run your life from it</div>}
         </div>
         {onClose && (
-          <button onClick={onClose} className="h-8 w-8 grid place-items-center rounded-sm opacity-70 hover:opacity-100 hover:bg-[hsl(45_50%_96%_/_0.1)]">
+          <button onClick={onClose} className="h-8 w-8 grid place-items-center rounded-sm opacity-70 hover:opacity-100 hover:bg-[hsl(var(--nav-text)_/_0.1)]">
             <X className="h-4 w-4" />
           </button>
         )}
@@ -81,8 +81,8 @@ function SidebarContent({
             className={cn(
               'flex items-center gap-2.5 px-2.5 py-2 md:py-[7px] text-[13.5px] md:text-[13px] rounded-sm transition-colors text-left',
               page === n.id
-                ? 'bg-[hsl(45_50%_96%_/_0.13)] text-[hsl(45_50%_97%)]'
-                : 'opacity-70 hover:opacity-100 hover:bg-[hsl(45_50%_96%_/_0.06)]',
+                ? 'bg-[hsl(var(--nav-text)_/_0.13)] text-[hsl(var(--nav-text))]'
+                : 'opacity-70 hover:opacity-100 hover:bg-[hsl(var(--nav-text)_/_0.06)]',
             )}
             title={n.label}
           >
@@ -93,12 +93,12 @@ function SidebarContent({
         ))}
       </nav>
       {cloud && !impersonation && (
-        <div className="px-3 py-3 border-t border-[hsl(45_50%_96%_/_0.1)] grid gap-2">
+        <div className="px-3 py-3 border-t border-[hsl(var(--nav-text)_/_0.1)] grid gap-2">
           <div className="text-[10.5px] opacity-70 truncate">{cloud.profile.email}</div>
-          <div className="flex border border-[hsl(45_50%_96%_/_0.3)] rounded-sm overflow-hidden text-[11px]">
+          <div className="flex border border-[hsl(var(--nav-text)_/_0.3)] rounded-sm overflow-hidden text-[11px]">
             {(['real', 'sample'] as const).map(m => (
               <button key={m} onClick={() => cloud.setMode(m)}
-                className={cn('flex-1 px-2 py-1.5 md:py-1 capitalize', cloud.mode === m ? 'bg-[hsl(45_50%_96%_/_0.9)] text-[hsl(152_22%_18%)] font-semibold' : 'opacity-70 hover:opacity-100')}>
+                className={cn('flex-1 px-2 py-1.5 md:py-1 capitalize', cloud.mode === m ? 'bg-[hsl(var(--nav-text)_/_0.9)] text-[hsl(var(--primary))] font-semibold' : 'opacity-70 hover:opacity-100')}>
                 {m}
               </button>
             ))}
@@ -117,7 +117,7 @@ function SidebarContent({
           </div>
         </div>
       )}
-      <div className="px-4 py-4 text-[10px] leading-relaxed opacity-45 border-t border-[hsl(45_50%_96%_/_0.1)]">
+      <div className="px-4 py-4 text-[10px] leading-relaxed opacity-45 border-t border-[hsl(var(--nav-text)_/_0.1)]">
         {impersonation ? <>{impersonation.user.name} · {impersonation.mode} account<br />viewed by super-admin</> : cloud ? <>{cloud.profile.name || cloud.profile.email}{cloud.profile.isSuperAdmin && ' · super-admin'}<br />{cloud.mode === 'sample' ? 'Sample world — explore freely' : 'AI proposes, you dispose.'}</> : <>Craig · super-admin<br />AI proposes, you dispose.</>}<br />
         Archive, never delete.
       </div>
@@ -218,7 +218,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
       {navOpen && (
         <div className="fixed inset-0 z-40 md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setNavOpen(false)} />
-          <aside className="absolute left-0 top-0 bottom-0 w-[260px] max-w-[80vw] flex flex-col border-r border-[hsl(152_18%_16%)] text-[hsl(45_40%_90%)]" style={{ background: 'linear-gradient(178deg, hsl(152 20% 17%), hsl(152 24% 12%))' }}>
+          <aside className="absolute left-0 top-0 bottom-0 w-[260px] max-w-[80vw] flex flex-col border-r border-[hsl(var(--nav-border))] text-[hsl(var(--nav-text))]" style={{ background: 'linear-gradient(178deg, hsl(var(--nav-from)), hsl(var(--nav-to)))' }}>
             <SidebarContent
               nav={nav} page={page} compact={false} cloud={cloud} impersonation={impersonation}
               onNavigate={id => { setPage(id); setNavOpen(false) }}
@@ -229,20 +229,20 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
       )}
 
       {/* Desktop resizable sidebar — hidden below md, where the drawer above takes over */}
-      <aside className="hidden md:flex relative shrink-0 flex-col border-r border-[hsl(152_18%_16%)] text-[hsl(45_40%_90%)]" style={{ width: navW, background: 'linear-gradient(178deg, hsl(152 20% 17%), hsl(152 24% 12%))' }}>
+      <aside className="hidden md:flex relative shrink-0 flex-col border-r border-[hsl(var(--nav-border))] text-[hsl(var(--nav-text))]" style={{ width: navW, background: 'linear-gradient(178deg, hsl(var(--nav-from)), hsl(var(--nav-to)))' }}>
         <SidebarContent nav={nav} page={page} compact={compactNav} cloud={cloud} impersonation={impersonation} onNavigate={setPage} />
         {/* drag to resize the navigation pane */}
         <div
           onPointerDown={startNavResize}
           title="Drag to resize"
-          className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[hsl(45_50%_96%_/_0.2)] active:bg-[hsl(17_63%_47%_/_0.6)] transition-colors"
+          className="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-[hsl(var(--nav-text)_/_0.2)] active:bg-[hsl(17_63%_47%_/_0.6)] transition-colors"
         />
       </aside>
 
       {/* Main */}
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Top bar */}
-        <header className="sticky top-0 z-20 border-b border-border bg-[hsl(42_44%_94%_/_0.92)] backdrop-blur px-4 md:px-6 py-3 flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+        <header className="sticky top-0 z-20 border-b border-border bg-[hsl(var(--background)_/_0.92)] backdrop-blur px-4 md:px-6 py-3 flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setNavOpen(true)}
@@ -293,7 +293,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
         </header>
 
         {(page === 'today' || page === 'overall' || page === 'tasks' || page === 'projects') && (
-          <div className="border-b border-border bg-[hsl(42_40%_92%)] px-4 md:px-6 py-2">
+          <div className="border-b border-border bg-muted px-4 md:px-6 py-2">
             <ProjectFilterBar value={projectFilter} onChange={setProjectFilter} />
           </div>
         )}
