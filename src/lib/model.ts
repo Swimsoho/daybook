@@ -243,7 +243,7 @@ export interface Settings {
   dailyCapacity: number
   callGoal: number
   followUpDays: number
-  briefChannel: 'whatsapp' | 'email'
+  briefChannel: 'whatsapp' | 'email' | 'telegram' | 'slack' | 'sms'
   briefTime: string
   // IANA timezone (e.g. "Europe/London") the scheduled Telegram/Slack morning & lunch pushes
   // use to work out "what time is it for this person" — separate from briefChannel/briefTime

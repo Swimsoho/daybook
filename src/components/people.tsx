@@ -97,7 +97,7 @@ export function LogCallDialog({ person, open, onClose }: { person: Person | null
             <Textarea rows={2} value={outcome} onChange={e => setOutcome(e.target.value)} placeholder="Spoke to David, catching up next month, send him the article" />
           </div>
           <label className="flex items-center gap-2 text-[13px] cursor-pointer">
-            <input type="checkbox" checked={followUp} onChange={e => setFollowUp(e.target.checked)} className="accent-[hsl(152_22%_23%)]" />
+            <input type="checkbox" checked={followUp} onChange={e => setFollowUp(e.target.checked)} className="accent-[hsl(var(--primary))]" />
             Create a dated follow-up task
           </label>
           {followUp && (

@@ -322,7 +322,7 @@ function ColumnInput({ col, value, onChange }: { col: TrackerColumn; value: Entr
     case 'date':
       return <Input type="date" value={String(value ?? '')} onChange={e => onChange(e.target.value)} />
     case 'checkbox':
-      return <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} className="h-4 w-4 accent-[hsl(152_22%_23%)]" />
+      return <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
     case 'rating':
       return <Stars n={Number(value ?? 0)} onChange={onChange} />
     case 'select':

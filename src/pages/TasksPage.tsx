@@ -255,7 +255,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
           <label className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground cursor-pointer select-none shrink-0">
             <input
               type="checkbox"
-              className="h-3.5 w-3.5 accent-[hsl(152_22%_23%)] cursor-pointer"
+              className="h-3.5 w-3.5 accent-[hsl(var(--primary))] cursor-pointer"
               checked={allVisibleSelected}
               onChange={toggleSelectAllVisible}
             />
@@ -498,7 +498,7 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
                   <td className="px-2.5 py-1.5">
                     <input
                       type="checkbox"
-                      className="h-3.5 w-3.5 accent-[hsl(152_22%_23%)] cursor-pointer"
+                      className="h-3.5 w-3.5 accent-[hsl(var(--primary))] cursor-pointer"
                       checked={!!selected?.has(t.id)}
                       onChange={() => onToggleSelect(t.id)}
                     />

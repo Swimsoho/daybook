@@ -298,11 +298,11 @@ function InviteDialog({ open, onClose, onInvite }: {
           <div className="grid grid-cols-1 gap-2 border border-border rounded-sm p-3 bg-accent/30">
             <span className="text-[10.5px] uppercase tracking-wide text-muted-foreground">Accounts to provision</span>
             <label className="flex items-start gap-2.5 text-[13px] cursor-pointer">
-              <input type="checkbox" checked={hasReal} onChange={e => setHasReal(e.target.checked)} className="mt-0.5 accent-[hsl(152_22%_23%)]" />
+              <input type="checkbox" checked={hasReal} onChange={e => setHasReal(e.target.checked)} className="mt-0.5 accent-[hsl(var(--primary))]" />
               <span><b>Real account</b><span className="block text-[11.5px] text-muted-foreground">Starts clean — areas, categories, tiers and trackers seeded, no data</span></span>
             </label>
             <label className="flex items-start gap-2.5 text-[13px] cursor-pointer">
-              <input type="checkbox" checked={hasSample} onChange={e => setHasSample(e.target.checked)} className="mt-0.5 accent-[hsl(152_22%_23%)]" />
+              <input type="checkbox" checked={hasSample} onChange={e => setHasSample(e.target.checked)} className="mt-0.5 accent-[hsl(var(--primary))]" />
               <span><b>Sample account</b> <span className="text-[10.5px] text-[hsl(40_65%_36%)] font-semibold">RECOMMENDED</span><span className="block text-[11.5px] text-muted-foreground">A fully-populated demo world to explore safely; they can switch between the two at sign-in</span></span>
             </label>
           </div>

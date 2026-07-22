@@ -34,6 +34,10 @@ function matchesProject(t: Task, projectFilter?: string | null): boolean {
 // "Dates to Remember" (Collections > Personal) — trk_dates is a seeded id, same pattern
 // ReportsPage already relies on for trk_subs.
 const DATE_TRACKER_ID = 'trk_dates'
+// Pretty labels for the morning-brief channel chip (settings stores lowercase keys).
+const CHANNEL_LABEL: Record<string, string> = {
+  whatsapp: 'WhatsApp', telegram: 'Telegram', slack: 'Slack', sms: 'SMS', email: 'Email',
+}
 const DATE_TYPE_ICON: Record<string, React.ReactNode> = {
   Birthday: <Cake className="h-3.5 w-3.5 text-[hsl(340_45%_50%)]" />,
   Anniversary: <Heart className="h-3.5 w-3.5 text-[hsl(0_55%_50%)]" />,
@@ -297,9 +301,9 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   const WIDGET_NODE: Record<WidgetId, React.ReactNode> = {
     brief: (
           <section className="rise-in border border-border bg-card shadow-sm">
-            <button onClick={() => setBriefOpen(o => !o)} className="w-full flex items-center gap-2 px-4 py-2.5 border-b border-border bg-[hsl(152_22%_23%)] text-[hsl(45_50%_96%)]">
+            <button onClick={() => setBriefOpen(o => !o)} className="w-full flex items-center gap-2 px-4 py-2.5 border-b border-border bg-primary text-primary-foreground">
               <MessageCircle className="h-3.5 w-3.5" />
-              <span className="text-[11px] uppercase tracking-[0.14em] font-semibold">Morning brief · {state.settings.briefTime} · {state.settings.briefChannel}</span>
+              <span className="text-[11px] uppercase tracking-[0.14em] font-semibold">Morning brief · {state.settings.briefTime} · {CHANNEL_LABEL[state.settings.briefChannel] ?? state.settings.briefChannel}</span>
               <span className="ml-auto">{briefOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</span>
             </button>
             {briefOpen && (
@@ -455,7 +459,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
           onClick={() => setCustomize(v => !v)}
           className={cn(
             'text-[11px] flex items-center gap-1.5 border border-border rounded-sm px-2 py-1 hover:bg-accent',
-            customize && 'bg-[hsl(152_22%_23%)] text-white border-[hsl(152_22%_23%)] hover:bg-[hsl(152_22%_23%)]',
+            customize && 'bg-primary text-primary-foreground border-primary hover:bg-primary/90',
           )}
         >
           <LayoutGrid className="h-3.5 w-3.5" />
@@ -587,13 +591,13 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
                   <span className="flex border border-border rounded-sm overflow-hidden">
                     <button
                       onClick={() => setPortfolioView('area')}
-                      className={cn('text-[11.5px] px-2 py-0.5', portfolioView === 'area' ? 'bg-[hsl(152_22%_23%)] text-white' : 'hover:bg-accent')}
+                      className={cn('text-[11.5px] px-2 py-0.5', portfolioView === 'area' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent')}
                     >
                       By Area
                     </button>
                     <button
                       onClick={() => setPortfolioView('list')}
-                      className={cn('text-[11.5px] px-2 py-0.5 border-l border-border', portfolioView === 'list' ? 'bg-[hsl(152_22%_23%)] text-white' : 'hover:bg-accent')}
+                      className={cn('text-[11.5px] px-2 py-0.5 border-l border-border', portfolioView === 'list' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent')}
                     >
                       List
                     </button>
@@ -745,7 +749,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
           onClick={() => setCustomize(v => !v)}
           className={cn(
             'text-[11px] flex items-center gap-1.5 border border-border rounded-sm px-2 py-1 hover:bg-accent',
-            customize && 'bg-[hsl(152_22%_23%)] text-white border-[hsl(152_22%_23%)] hover:bg-[hsl(152_22%_23%)]',
+            customize && 'bg-primary text-primary-foreground border-primary hover:bg-primary/90',
           )}
         >
           <LayoutGrid className="h-3.5 w-3.5" />

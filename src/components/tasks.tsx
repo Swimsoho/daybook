@@ -159,7 +159,7 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
             onMouseDown={e => e.stopPropagation()}
             onClick={e => e.stopPropagation()}
             onChange={() => onToggleSelect(task.id)}
-            className="h-3.5 w-3.5 shrink-0 accent-[hsl(152_22%_23%)] cursor-pointer"
+            className="h-3.5 w-3.5 shrink-0 accent-[hsl(var(--primary))] cursor-pointer"
           />
         )}
 

@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v39 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v40 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -313,3 +313,13 @@ None of these are things the rest of the app depends on to function — they're 
     First, **four new palettes** (Settings → Appearance, alongside the original Sage/Clay/Ocean/Plum/Slate): **Ink** — near-black text on pale ivory, the highest-contrast, most "broadsheet" option; **Burgundy** — a deep wine accent on soft rose paper, for a private-study feel; **Forest** — a richer, more saturated pine green, deeper than Sage rather than a repeat of it; and **Brass** — warm gold-ochre on parchment, closer to a leather-bound ledger than a notebook. Same mechanism as the original five (a CSS custom-property block per palette, picked from one array in `themes.ts`), so nothing else in the app needed to change to support them — they just showed up in the picker.
 
     Second, a **legibility and header pass** applied everywhere at once, not page by page. Secondary text — dates, meta lines, captions — was rendered at 40% lightness; that's now 34%, a shared value used by every palette, so captions and metadata read more confidently without becoming as heavy as primary text. Every section header (`SectionTitle`, used across Today, Overall, Inbox, People, Reports, Admin, and Collections) now carries a small accent-colored tick mark to its left — a light editorial touch that also makes section boundaries easier to scan on a busy page. And the top bar on every page now carries a thin accent-colored rule along its very top edge — a small "masthead" line — with the page title itself bumped up slightly in size. None of this touched layout, spacing, or any interactive behavior — it's a color-and-type pass only, so nothing about how the app works changed, only how it reads.
+
+28. **v40** — A proper professional/legibility pass, plus two Settings upgrades.
+
+    First, the biggest one: **every palette now themes the whole app.** Until now, a lot of the interface — the Morning brief bar, the active "By Area / List" toggle, the "Rearrange" buttons, checkboxes, radio buttons, the selected-palette ring — had the original sage green hard-coded into it. So if you picked Ocean or Burgundy, those pieces stubbornly stayed green and the app looked half-changed and inconsistent. All ~19 of those spots now use the theme's own colour, so switching palette recolours the *entire* app cleanly, top to bottom. (Semantic colours — red for overdue, green for "healthy," amber for warnings — deliberately stay constant across palettes, since those are meaning cues, not styling.)
+
+    Second, **clearer section headers.** Every settings section now has a tinted header bar with an accent tick down its left edge, so the long Settings page reads as distinct, labelled blocks instead of one continuous scroll. This builds on the v39 header work (accent ticks on in-page section titles, the masthead rule on the top bar, deeper text contrast).
+
+    Third, **the timezone field is now a searchable dropdown** instead of a free-text box you had to type an exact IANA name into. It lists every timezone (your common ones — London, Jerusalem, New York, etc. — first), and you can type to filter. No more guessing the exact spelling of "Europe/London."
+
+    Fourth, **the Morning-brief channel now offers Telegram, Slack and SMS**, not just WhatsApp and Email — and the in-app brief card shows the channel name properly capitalised. (This is still the display/reference channel for the in-app card; the actual scheduled pushes are wired up in the Telegram & Slack section, as before.)

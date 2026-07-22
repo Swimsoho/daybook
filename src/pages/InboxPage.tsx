@@ -225,7 +225,7 @@ function WhatsAppPanel({ onSend }: { onSend: (text: string, source: Source) => v
   }
   return (
     <section className="border border-border bg-card shadow-sm rise-in h-fit" style={{ animationDelay: '80ms' }}>
-      <div className="px-4 py-2.5 bg-[hsl(152_22%_23%)] text-[hsl(45_50%_96%)] flex items-center gap-2">
+      <div className="px-4 py-2.5 bg-primary text-primary-foreground flex items-center gap-2">
         <MessageCircle className="h-4 w-4" />
         <div>
           <div className="text-[12.5px] font-semibold leading-tight">WhatsApp capture</div>

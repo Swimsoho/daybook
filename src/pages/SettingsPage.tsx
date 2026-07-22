@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SearchableSelect, SearchableSelectOption } from '@/components/ui/searchable-select'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { ColumnType, PriorityScheme, Tier, TIER_LABELS, Tracker, TrackerColumn } from '@/lib/model'
@@ -19,6 +20,31 @@ const COLUMN_TYPE_LABELS: Record<ColumnType, string> = {
 }
 const OPTIONS_TYPES: ColumnType[] = ['select', 'multiselect', 'status']
 
+// A handful of timezones surfaced first in the picker (Craig's own + the ones most Daybook
+// users are likely to want), then the full IANA list alphabetically underneath. Built once at
+// module load. `Intl.supportedValuesOf` is a modern-browser API not yet in this TS lib target,
+// hence the cast; the curated fallback keeps the picker usable if it's ever unavailable.
+const TIMEZONE_OPTIONS: SearchableSelectOption[] = (() => {
+  const common = [
+    'Europe/London', 'Asia/Jerusalem', 'America/New_York', 'America/Chicago',
+    'America/Denver', 'America/Los_Angeles', 'Europe/Paris', 'Europe/Berlin',
+    'Asia/Dubai', 'Asia/Kolkata', 'Asia/Tokyo', 'Australia/Sydney', 'UTC',
+  ]
+  let all: string[]
+  try {
+    const supported = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf
+    all = supported ? supported('timeZone') : []
+  } catch { all = [] }
+  if (!all.length) all = [...common]
+  const rest = all.filter(z => !common.includes(z)).sort()
+  const ordered = [...common.filter(z => all.includes(z) || common.includes(z)), ...rest]
+  const seen = new Set<string>()
+  return ordered
+    .filter(z => (seen.has(z) ? false : (seen.add(z), true)))
+    .map(z => ({ value: z, label: z.replace(/_/g, ' ') }))
+})()
+const TIMEZONE_POPULAR_COUNT = 13
+
 function slugKey(name: string, existing: string[]): string {
   const base = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'field'
   let key = base, i = 2
@@ -28,10 +54,13 @@ function slugKey(name: string, existing: string[]): string {
 
 function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
-    <section className="border border-border bg-card shadow-sm">
-      <div className="px-4 py-3 border-b border-border">
-        <h2 className="font-display text-[15px] font-semibold">{title}</h2>
-        {sub && <p className="text-[11.5px] text-muted-foreground mt-0.5">{sub}</p>}
+    <section className="border border-border bg-card shadow-sm rounded-sm overflow-hidden">
+      <div className="px-4 py-3 border-b border-border bg-muted/40">
+        <h2 className="flex items-center gap-2">
+          <span className="inline-block w-[3px] h-[14px] rounded-full bg-primary shrink-0" aria-hidden="true" />
+          <span className="font-display text-[15.5px] font-semibold tracking-tight">{title}</span>
+        </h2>
+        {sub && <p className="text-[11.5px] text-muted-foreground mt-1 pl-[11px]">{sub}</p>}
       </div>
       <div className="px-4 py-3.5 grid grid-cols-1 gap-3">{children}</div>
     </section>
@@ -130,11 +159,11 @@ function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
               )}
               <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
                 <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="radio" name={`title-${tracker.id}`} checked={!!c.isTitle} onChange={() => setTitle(c.key)} className="accent-[hsl(152_22%_23%)]" />
+                  <input type="radio" name={`title-${tracker.id}`} checked={!!c.isTitle} onChange={() => setTitle(c.key)} className="accent-[hsl(var(--primary))]" />
                   Title field
                 </label>
                 <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={!!c.required} onChange={e => updateColumn(c.key, { required: e.target.checked })} className="accent-[hsl(152_22%_23%)]" />
+                  <input type="checkbox" checked={!!c.required} onChange={e => updateColumn(c.key, { required: e.target.checked })} className="accent-[hsl(var(--primary))]" />
                   Required
                 </label>
               </div>
@@ -299,7 +328,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                   onClick={() => updateSettings({ theme: t.id })}
                   className={cn(
                     'text-left border rounded-sm px-2.5 py-2 transition-colors',
-                    active ? 'border-[hsl(152_22%_23%)] ring-1 ring-[hsl(152_22%_23%)]' : 'border-border hover:bg-accent',
+                    active ? 'border-primary ring-1 ring-primary' : 'border-border hover:bg-accent',
                   )}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -309,7 +338,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                       ))}
                     </span>
                     <span className="text-[12.5px] font-medium flex-1">{t.name}</span>
-                    {active && <Check className="h-3.5 w-3.5 shrink-0 text-[hsl(152_22%_23%)]" />}
+                    {active && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
                   </div>
                   <p className="text-[10.5px] text-muted-foreground leading-snug">{t.blurb}</p>
                 </button>
@@ -766,6 +795,9 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                 <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                  <SelectItem value="telegram">Telegram</SelectItem>
+                  <SelectItem value="slack">Slack</SelectItem>
+                  <SelectItem value="sms">SMS</SelectItem>
                   <SelectItem value="email">Email</SelectItem>
                 </SelectContent>
               </Select>
@@ -777,14 +809,17 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           </div>
           <div className="grid grid-cols-1 gap-1.5 border-t border-border pt-3">
             <Label className="text-xs">Your timezone</Label>
-            <Input
+            <SearchableSelect
               value={s.timezone}
-              placeholder="e.g. Europe/London"
-              className="h-8"
-              onChange={e => updateSettings({ timezone: e.target.value })}
+              onValueChange={v => updateSettings({ timezone: v })}
+              options={TIMEZONE_OPTIONS}
+              popularCount={TIMEZONE_POPULAR_COUNT}
+              placeholder="Select your timezone…"
+              searchPlaceholder="Search timezones…"
+              className="h-8 w-full"
             />
             <p className="text-[10.5px] text-muted-foreground">
-              An IANA timezone name (Europe/London, America/New_York, Asia/Jerusalem…) — this is what "morning" and "lunch" below actually mean for you, regardless of where the server runs.
+              Pick your IANA timezone — this is what "morning" and "lunch" below actually mean for you, regardless of where the server runs. Type to search; the most common ones are listed first.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
