@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { ColumnType, PriorityScheme, Tier, TIER_LABELS, Tracker, TrackerColumn } from '@/lib/model'
-import { actionUsage, categoryUsage, useStore } from '@/lib/store'
+import { actionUsage, categoryUsage, composeLunchCheckinText, composeMorningBriefText, useStore } from '@/lib/store'
 import { Cloud } from '@/lib/cloud'
 import { THEMES } from '@/lib/themes'
 
@@ -210,6 +210,16 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
   const [telegramId, setTelegramIdInput] = useState(cloud?.profile.telegramChatId ?? '')
   const [slackId, setSlackIdInput] = useState(cloud?.profile.slackUserId ?? '')
   const [sendingTest, setSendingTest] = useState<'telegram' | 'slack' | null>(null)
+  const [sendingNow, setSendingNow] = useState<string | null>(null) // `${channel}-${kind}`, e.g. "telegram-morning"
+  async function sendNow(channel: 'telegram' | 'slack', kind: 'morning' | 'lunch') {
+    if (!cloud) return
+    setSendingNow(`${channel}-${kind}`)
+    const text = kind === 'morning' ? composeMorningBriefText(state) : composeLunchCheckinText(state)
+    const err = await cloud.sendTestMessage(channel, text)
+    setSendingNow(null)
+    if (err) toast.error(err)
+    else toast.success(`Sent — check ${channel === 'telegram' ? 'Telegram' : 'Slack'}`)
+  }
   const [newCollection, setNewCollection] = useState('')
   const [newTracker, setNewTracker] = useState<Record<string, string>>({}) // per-collection draft name
   const [expandedTracker, setExpandedTracker] = useState<string | null>(null)
@@ -653,6 +663,22 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                     {sendingTest === 'telegram' ? 'Sending…' : 'Send test'}
                   </Button>
                 </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline" size="sm" className="h-7 text-[11px] shrink-0"
+                    disabled={!cloud.profile.telegramChatId || sendingNow === 'telegram-morning'}
+                    onClick={() => sendNow('telegram', 'morning')}
+                  >
+                    {sendingNow === 'telegram-morning' ? 'Sending…' : "Send today's brief now"}
+                  </Button>
+                  <Button
+                    variant="outline" size="sm" className="h-7 text-[11px] shrink-0"
+                    disabled={!cloud.profile.telegramChatId || sendingNow === 'telegram-lunch'}
+                    onClick={() => sendNow('telegram', 'lunch')}
+                  >
+                    {sendingNow === 'telegram-lunch' ? 'Sending…' : 'Send lunch check-in now'}
+                  </Button>
+                </div>
                 <p className="text-[10.5px] text-muted-foreground leading-relaxed">
                   Message your Daybook bot on Telegram once (anything — "hi" works) and it'll reply with your chat ID to paste here. Setup Daybook still needs from you: create a bot via @BotFather, add its token as the <code>TELEGRAM_BOT_TOKEN</code> Edge Function secret, and point the bot's webhook at the deployed <code>telegram-inbound</code> function.
                 </p>
@@ -686,12 +712,28 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                     {sendingTest === 'slack' ? 'Sending…' : 'Send test'}
                   </Button>
                 </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline" size="sm" className="h-7 text-[11px] shrink-0"
+                    disabled={!cloud.profile.slackUserId || sendingNow === 'slack-morning'}
+                    onClick={() => sendNow('slack', 'morning')}
+                  >
+                    {sendingNow === 'slack-morning' ? 'Sending…' : "Send today's brief now"}
+                  </Button>
+                  <Button
+                    variant="outline" size="sm" className="h-7 text-[11px] shrink-0"
+                    disabled={!cloud.profile.slackUserId || sendingNow === 'slack-lunch'}
+                    onClick={() => sendNow('slack', 'lunch')}
+                  >
+                    {sendingNow === 'slack-lunch' ? 'Sending…' : 'Send lunch check-in now'}
+                  </Button>
+                </div>
                 <p className="text-[10.5px] text-muted-foreground leading-relaxed">
                   Find your member ID in Slack under your profile → "More" → "Copy member ID". Setup Daybook still needs from you: create a Slack app at api.slack.com/apps in your workspace, install it, subscribe to the <code>message.im</code> event pointing at the deployed <code>slack-events</code> function, and add its bot token + signing secret as the <code>SLACK_BOT_TOKEN</code> / <code>SLACK_SIGNING_SECRET</code> Edge Function secrets.
                 </p>
               </div>
-              <p className="text-[10.5px] text-muted-foreground italic border-t border-dashed border-border pt-2">
-                Honest scope: the capture, reply, and test-send paths above are real and fully wired end-to-end. The morning brief still only sends when something calls the <code>send-message</code> function on a schedule — wire a Supabase Cron job (Database → Cron in the dashboard) to call it daily at your Send time above, the same way the existing brief Channel/Send time fields already describe the intended schedule.
+              <p className="text-[10.5px] text-muted-foreground leading-relaxed border-t border-dashed border-border pt-2">
+                <b>v31:</b> the morning and lunch reminders below now really do push to Telegram/Slack — a scheduled job checks every account every 15 minutes and sends whichever is due, in whichever of Telegram/Slack you've connected above (both, if you've connected both). No separate setup needed beyond connecting your chat ID / member ID above.
               </p>
             </div>
           ) : (
@@ -716,10 +758,10 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           </div>
         </Section>
 
-        <Section title="Morning brief & nudges">
+        <Section title="Morning brief & nudges" sub="The in-app card below always shows the Channel/Send-time you set here for reference — the actual Telegram/Slack push (see Telegram & Slack above) uses the Morning and Lunch times right below instead, checked against your Timezone.">
           <div className="grid grid-cols-2 gap-3">
             <div className="grid grid-cols-1 gap-1">
-              <Label className="text-xs">Channel</Label>
+              <Label className="text-xs">Channel (in-app card only)</Label>
               <Select value={s.briefChannel} onValueChange={v => updateSettings({ briefChannel: v as never })}>
                 <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -729,10 +771,37 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
               </Select>
             </div>
             <div className="grid grid-cols-1 gap-1">
-              <Label className="text-xs">Send time</Label>
+              <Label className="text-xs">Send time (in-app card only)</Label>
               <Input type="time" value={s.briefTime} className="h-8" onChange={e => updateSettings({ briefTime: e.target.value })} />
             </div>
           </div>
+          <div className="grid grid-cols-1 gap-1.5 border-t border-border pt-3">
+            <Label className="text-xs">Your timezone</Label>
+            <Input
+              value={s.timezone}
+              placeholder="e.g. Europe/London"
+              className="h-8"
+              onChange={e => updateSettings({ timezone: e.target.value })}
+            />
+            <p className="text-[10.5px] text-muted-foreground">
+              An IANA timezone name (Europe/London, America/New_York, Asia/Jerusalem…) — this is what "morning" and "lunch" below actually mean for you, regardless of where the server runs.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 border-t border-border pt-3">
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <Switch checked={s.features.morningBrief} onCheckedChange={v => updateFeatures({ morningBrief: v })} />
+              <span className="text-[12.5px]">Morning to-do push</span>
+            </label>
+            <Input type="time" value={s.briefTime} className="h-8" disabled={!s.features.morningBrief} onChange={e => updateSettings({ briefTime: e.target.value })} />
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <Switch checked={s.features.lunchReminder} onCheckedChange={v => updateFeatures({ lunchReminder: v })} />
+              <span className="text-[12.5px]">Lunch reminder push</span>
+            </label>
+            <Input type="time" value={s.lunchTime} className="h-8" disabled={!s.features.lunchReminder} onChange={e => updateSettings({ lunchTime: e.target.value })} />
+          </div>
+          <p className="text-[10.5px] text-muted-foreground">
+            Both require Telegram or Slack connected above — nothing sends until you've connected at least one.
+          </p>
         </Section>
 
         <Section title="Quick actions" sub="Pick the one-tap buttons on task and contact rows.">

@@ -239,6 +239,16 @@ export interface Settings {
   followUpDays: number
   briefChannel: 'whatsapp' | 'email'
   briefTime: string
+  // IANA timezone (e.g. "Europe/London") the scheduled Telegram/Slack morning & lunch pushes
+  // use to work out "what time is it for this person" — separate from briefChannel/briefTime
+  // above, which only ever drove the in-app Morning Brief card, not a real push.
+  timezone: string
+  lunchTime: string
+  // Last date (YYYY-MM-DD, in `timezone`) each scheduled push actually sent — lets the
+  // send-scheduled-digest Edge Function avoid double-sending if its cron tick lands more than
+  // once inside the same send window. Set by that function, not the client.
+  lastMorningPushSent?: string
+  lastLunchPushSent?: string
   stallDays: number
   projectWipLimit: number
   tierCadence: Record<Tier, number>
@@ -255,6 +265,7 @@ export interface Settings {
     calendar: boolean
     collections: boolean
     morningBrief: boolean
+    lunchReminder: boolean
   }
 }
 

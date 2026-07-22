@@ -35,7 +35,7 @@ export interface Cloud {
   setPhone: (phone: string) => Promise<string | null>
   setTelegramChatId: (id: string) => Promise<string | null>
   setSlackUserId: (id: string) => Promise<string | null>
-  sendTestMessage: (channel: 'telegram' | 'slack') => Promise<string | null>
+  sendTestMessage: (channel: 'telegram' | 'slack', text?: string) => Promise<string | null>
   admin: {
     listUsers: () => Promise<AdminUser[]>
     invite: (u: { name: string; email: string; role: Role }) => Promise<string | null>
@@ -68,7 +68,9 @@ function debouncedSave(workspaceId: string, s: AppState) {
 // Fields added to Settings after some accounts were already saved to Supabase — a loaded
 // blob missing a key would otherwise leave it silently undefined (blank inputs, broken
 // comparisons) instead of falling back to a sane default. Extend this whenever Settings grows.
-const SETTINGS_BACKFILL: Partial<AppState['settings']> = { projectWipLimit: 3, theme: 'sage' }
+const SETTINGS_BACKFILL: Partial<AppState['settings']> = {
+  projectWipLimit: 3, theme: 'sage', timezone: 'Europe/London', lunchTime: '12:30',
+}
 
 async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<AppState> {
   const { data } = await supabase!.from('workspace_state').select('data').eq('workspace_id', ws.id).maybeSingle()
@@ -76,7 +78,16 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
     const loaded = data.data as unknown as AppState
     return {
       ...loaded,
-      settings: { ...SETTINGS_BACKFILL, ...loaded.settings },
+      settings: {
+        ...SETTINGS_BACKFILL,
+        ...loaded.settings,
+        // `features` is a nested object — the shallow spread above would otherwise let an
+        // existing account's saved `features` blob (from before `lunchReminder` existed)
+        // silently drop the new key, since object spread doesn't merge nested objects. The
+        // field is typed as required, but an old saved blob won't actually have it at runtime —
+        // hence the explicit ?? fallback rather than relying on spread order.
+        features: { ...loaded.settings?.features, lunchReminder: loaded.settings?.features?.lunchReminder ?? true },
+      },
       // Actions (Settings > Actions) shipped after some accounts were already saved — a blob
       // saved before then has no `actions` key at all, and every `state.actions.filter(...)`
       // call across the app would throw on undefined. Backfill the standard starter set once;
@@ -280,11 +291,12 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
     // Calls the send-message Edge Function with the caller's own session — the function
     // verifies the JWT belongs to this profile (verify_jwt: true) before sending, and holds
     // the actual bot token / signing secret server-side (Edge Function secrets), never in
-    // client code. Lets Craig confirm end-to-end delivery is really wired up before trusting
-    // it for the scheduled morning brief.
-    sendTestMessage: async channel => {
+    // client code. `text` defaults to a generic connectivity check (Settings > "Send test");
+    // Settings > "Send now" passes the real composed brief/check-in text instead, so a
+    // person can trigger today's push on demand rather than waiting for the scheduled time.
+    sendTestMessage: async (channel, text) => {
       const { data, error } = await supabase!.functions.invoke('send-message', {
-        body: { channel, text: 'Test message from Daybook — if you can read this, the connection works.' },
+        body: { channel, text: text ?? 'Test message from Daybook — if you can read this, the connection works.' },
       })
       if (error) return error.message
       if (data?.error) return data.error as string

@@ -197,6 +197,8 @@ export function seedState(): AppState {
       followUpDays: 3,
       briefChannel: 'whatsapp',
       briefTime: '07:30',
+      timezone: 'Europe/London',
+      lunchTime: '12:30',
       stallDays: 14,
       projectWipLimit: 3,
       tierCadence: { inner: 7, active: 14, network: 30, dormant: 90 },
@@ -204,7 +206,7 @@ export function seedState(): AppState {
       features: {
         whatsapp: true, emailForward: true, gmail: false, outlook: false,
         sms: false, slack: false, teams: false, voiceNotes: true,
-        calendar: false, collections: true, morningBrief: true,
+        calendar: false, collections: true, morningBrief: true, lunchReminder: true,
       },
     },
   }

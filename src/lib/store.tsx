@@ -562,6 +562,44 @@ export function buildCallList(s: AppState): CallSuggestion[] {
   return out
 }
 
+const PRIORITY_ORDER: Record<Priority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 }
+
+// Plain-text versions of the Morning Brief / midday check-in, for the "Send now" buttons in
+// Settings > Telegram & Slack — same underlying data as the scheduled push (see the
+// send-scheduled-digest Edge Function), computed client-side so pressing the button is instant
+// rather than waiting for the next cron tick. Kept in plain text (not HTML) since this same
+// string goes to whichever of Telegram/Slack is connected via send-message, and Slack doesn't
+// understand HTML tags.
+export function composeMorningBriefText(s: AppState): string {
+  const t = today()
+  const open = s.tasks.filter(x => x.status !== 'done' && x.status !== 'dropped')
+  const dueToday = open.filter(x => x.due === t).sort((a, b) => PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority])
+  const overdue = open.filter(x => x.due && x.due < t)
+  const calls = buildCallList(s).slice(0, s.settings.callGoal)
+  const lines = [`Good morning. Here's today (${dueToday.length} of ${s.settings.dailyCapacity} capacity${dueToday.length > s.settings.dailyCapacity ? ' — over' : ''}):`]
+  if (dueToday.length) {
+    lines.push('', 'Top of the list:')
+    dueToday.slice(0, 3).forEach((x, i) => lines.push(`${i + 1}. ${x.title}`))
+  } else {
+    lines.push('', 'Nothing due today — a rare quiet morning.')
+  }
+  if (overdue.length) lines.push('', `${overdue.length} overdue task${overdue.length === 1 ? '' : 's'} waiting.`)
+  if (calls.length) lines.push('', `Calls: ${calls.map(c => c.person.name).join(', ')}`)
+  return lines.join('\n')
+}
+
+export function composeLunchCheckinText(s: AppState): string {
+  const t = today()
+  const dueToday = s.tasks.filter(x => x.due === t && x.status !== 'dropped')
+  const done = dueToday.filter(x => x.status === 'done').length
+  const open = dueToday.filter(x => x.status !== 'done').length
+  const calls = buildCallList(s).slice(0, s.settings.callGoal)
+  const lines = [`Midday check-in: ${done} done, ${open} still open for today.`]
+  if (calls.length) lines.push(`${calls.length} call${calls.length === 1 ? '' : 's'} still on your list: ${calls.map(c => c.person.name).join(', ')}`)
+  else lines.push('No calls left on today’s list.')
+  return lines.join('\n')
+}
+
 export function callsMadeOn(s: AppState, date: string): number {
   return s.interactions.filter(i => i.date === date && (i.channel === 'call' || i.channel === 'whatsapp')).length
 }
