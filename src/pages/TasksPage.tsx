@@ -37,6 +37,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   const [areaFilter, setAreaFilter] = useState('all')
   const [prioFilter, setPrioFilter] = useState('all')
   const [catFilter, setCatFilter] = useState('all')
+  const [actFilter, setActFilter] = useState('all')
   const [openTask, setOpenTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [adding, setAdding] = useState(false)
@@ -46,8 +47,8 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   const [dragCat, setDragCat] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const scheme = state.settings.priorityScheme
-  const filtersActive = !!search || areaFilter !== 'all' || prioFilter !== 'all' || catFilter !== 'all' || !!projectFilter
-  const clearAll = () => { setSearch(''); setAreaFilter('all'); setPrioFilter('all'); setCatFilter('all'); onClearProject?.() }
+  const filtersActive = !!search || areaFilter !== 'all' || prioFilter !== 'all' || catFilter !== 'all' || actFilter !== 'all' || !!projectFilter
+  const clearAll = () => { setSearch(''); setAreaFilter('all'); setPrioFilter('all'); setCatFilter('all'); setActFilter('all'); onClearProject?.() }
 
   // Selection is view-scoped — switching tabs starts fresh so a bulk action never silently
   // lands on tasks you can no longer see.
@@ -68,6 +69,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       (areaFilter === 'all' || t.areaId === areaFilter) &&
       (prioFilter === 'all' || t.priority === prioFilter) &&
       (catFilter === 'all' || t.categoryIds.includes(catFilter)) &&
+      (actFilter === 'all' || (t.actionIds ?? []).includes(actFilter)) &&
       (!projectFilter || (projectFilter === '__none__' ? !t.projectId : t.projectId === projectFilter)) &&
       (!search || t.title.toLowerCase().includes(search.toLowerCase()))
 
@@ -92,19 +94,21 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       case 'list':
         return ts.filter(t => t.status !== 'done' && t.status !== 'dropped')
     }
-  }, [state.tasks, view, search, areaFilter, prioFilter, catFilter, projectFilter])
+  }, [state.tasks, view, search, areaFilter, prioFilter, catFilter, actFilter, projectFilter])
 
   const sorted = [...filtered].sort((a, b) => a.priority.localeCompare(b.priority) || (a.due ?? '9999').localeCompare(b.due ?? '9999'))
 
   function exportCsv() {
     // Selecting tasks first scopes the export to just those — otherwise it's the whole current view.
     const source = selected.size > 0 ? sorted.filter(t => selected.has(t.id)) : sorted
-    const rows = [['Title', 'Type', 'Area', 'Project', 'Priority', 'Status', 'Due', 'Created']]
+    const rows = [['Title', 'Type', 'Area', 'Project', 'Category', 'Action', 'Priority', 'Status', 'Due', 'Created']]
     for (const t of source) {
       rows.push([
         t.title, t.type,
         state.areas.find(a => a.id === t.areaId)?.name ?? '',
         state.projects.find(p => p.id === t.projectId)?.name ?? '',
+        state.categories.find(c => t.categoryIds.includes(c.id))?.name ?? '',
+        state.actions.find(a => (t.actionIds ?? []).includes(a.id))?.name ?? '',
         PRIORITY_LABELS[scheme][t.priority], STATUS_LABELS[t.status], t.due ?? '', t.created,
       ])
     }
@@ -204,6 +208,13 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
           <SelectContent>
             <SelectItem value="all">All categories</SelectItem>
             {state.categories.filter(c => c.active).map(c => <SelectItem key={c.id} value={c.id}>{c.level > 0 ? '› ' : ''}{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={actFilter} onValueChange={setActFilter}>
+          <SelectTrigger className="h-8 w-36 bg-card text-[12.5px]"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All actions</SelectItem>
+            {state.actions.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <ClearFiltersButton active={filtersActive} onClear={clearAll} />
@@ -316,6 +327,21 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="h-7 px-2 text-[12px]">Action ▾</Button></DropdownMenuTrigger>
+                <DropdownMenuContent className="max-h-72 overflow-y-auto">
+                  <DropdownMenuItem onClick={() => bulkApply({ actionIds: [] }, 'bulk action cleared')}>
+                    <span className="text-muted-foreground">No action</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {state.actions.filter(a => a.active).map(a => (
+                    <DropdownMenuItem key={a.id} onClick={() => bulkApply({ actionIds: [a.id] }, `bulk action → ${a.name}`)}>
+                      {a.color && <span className="h-2 w-2 rounded-full mr-2 shrink-0" style={{ background: a.color }} />}
+                      {a.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           )}
         </div>
@@ -397,10 +423,10 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
 
 // ================== "List" view — every task as a sortable, checkable table ==================
 
-type SortKey = 'title' | 'type' | 'area' | 'project' | 'category' | 'priority' | 'status' | 'due'
+type SortKey = 'title' | 'type' | 'area' | 'project' | 'category' | 'action' | 'priority' | 'status' | 'due'
 
 const SORT_LABELS: Record<SortKey, string> = {
-  title: 'Title', type: 'Type', area: 'Area', project: 'Project', category: 'Category', priority: 'Priority', status: 'Status', due: 'Due',
+  title: 'Title', type: 'Type', area: 'Area', project: 'Project', category: 'Category', action: 'Action', priority: 'Priority', status: 'Status', due: 'Due',
 }
 
 function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
@@ -420,6 +446,7 @@ function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
       case 'area': return (state.areas.find(a => a.id === t.areaId)?.name ?? '').toLowerCase()
       case 'project': return (state.projects.find(p => p.id === t.projectId)?.name ?? '').toLowerCase()
       case 'category': return (state.categories.find(c => t.categoryIds.includes(c.id))?.name ?? '').toLowerCase()
+      case 'action': return (state.actions.find(a => (t.actionIds ?? []).includes(a.id))?.name ?? '').toLowerCase()
       case 'priority': return t.priority
       case 'status': return t.status
       case 'due': return t.due ?? '9999-99-99'
@@ -430,7 +457,7 @@ function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
     const arr = [...tasks].sort((a, b) => valueFor(a, sortKey).localeCompare(valueFor(b, sortKey)))
     return sortDir === 'asc' ? arr : arr.reverse()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks, sortKey, sortDir, state.areas, state.projects, state.categories])
+  }, [tasks, sortKey, sortDir, state.areas, state.projects, state.categories, state.actions])
 
   function headerClick(key: SortKey) {
     if (key === sortKey) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
@@ -445,7 +472,7 @@ function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
         <thead className="border-b border-border bg-accent/30">
           <tr>
             <th className="px-2.5 py-2 w-8" />
-            {(['title', 'type', 'area', 'project', 'category', 'priority', 'status', 'due'] as SortKey[]).map(k => (
+            {(['title', 'type', 'area', 'project', 'category', 'action', 'priority', 'status', 'due'] as SortKey[]).map(k => (
               <th
                 key={k}
                 onClick={() => headerClick(k)}
@@ -464,6 +491,7 @@ function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
             const area = state.areas.find(a => a.id === t.areaId)
             const project = state.projects.find(p => p.id === t.projectId)
             const category = state.categories.find(c => t.categoryIds.includes(c.id))
+            const action = state.actions.find(a => (t.actionIds ?? []).includes(a.id))
             return (
               <tr key={t.id} className={cn('border-b border-border/60 last:border-0 hover:bg-accent/40 transition-colors', selected.has(t.id) && 'bg-[hsl(17_63%_47%_/_0.06)]')}>
                 <td className="px-2.5 py-1.5">
@@ -485,6 +513,7 @@ function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
                 </td>
                 <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[160px]">{project?.name ?? '—'}</td>
                 <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[130px]">{category?.name ?? '—'}</td>
+                <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[110px]">{action?.name ?? '—'}</td>
                 <td className="px-2.5 py-1.5"><PriorityChip p={t.priority} /></td>
                 <td className="px-2.5 py-1.5">
                   <select
@@ -514,7 +543,7 @@ function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
 
 const TEMPLATE_COLUMNS = [
   'Title', 'Type', 'Area', 'Project', 'Priority', 'Status', 'Due date', 'Follow-up date',
-  'Category', 'Person', 'Vendor', 'Call about', 'Waiting on', 'Notes',
+  'Category', 'Action', 'Person', 'Vendor', 'Call about', 'Waiting on', 'Notes',
 ] as const
 
 // Column indexes into TEMPLATE_COLUMNS that get a real in-cell dropdown, built from whatever's
@@ -530,8 +559,9 @@ function taskTemplateDropdowns(state: ReturnType<typeof useStore>['state']): Col
     { col: 4, values: (['P0', 'P1', 'P2', 'P3'] as Priority[]).map(p => PRIORITY_LABELS[scheme][p]) }, // Priority
     { col: 5, values: ['inbox', 'next', 'in-progress', 'waiting'] }, // Status (the literal values the importer accepts)
     { col: 8, values: state.categories.filter(c => c.active).map(c => c.name) }, // Category
-    { col: 9, values: state.people.map(p => p.name) }, // Person
-    { col: 10, values: state.vendors.map(v => v.name) }, // Vendor
+    { col: 9, values: state.actions.filter(a => a.active).map(a => a.name) }, // Action
+    { col: 10, values: state.people.map(p => p.name) }, // Person
+    { col: 11, values: state.vendors.map(v => v.name) }, // Vendor
   ].filter(d => d.values.length > 0)
 }
 
@@ -539,13 +569,13 @@ async function downloadTemplate(state: ReturnType<typeof useStore>['state']) {
   const areaNames = state.areas.filter(a => a.active).map(a => a.name).join(' | ')
   const rows = [
     [...TEMPLATE_COLUMNS],
-    ['Book the hall', 'todo', state.areas[0]?.name ?? 'Family / Home', '', 'P1', 'next', '2026-08-01', '', 'Events', '', '', '', '', 'Any notes you like'],
-    ['Call the plumber re boiler quote', 'call', state.areas[0]?.name ?? 'Family / Home', '', 'P2', 'next', '', '', '', 'Mick Doyle', 'Mick Doyle Plumbing', 'Quote for new boiler', '', ''],
-    ['Chase the caterer', 'followup', '', '', 'P1', 'waiting', '', '2026-08-05', 'Follow-up', '', '', '', 'Caterer', 'They owe us final menu'],
-    ['— DELETE THIS ROW — allowed values → Type: todo | call | followup · Priority: P0 P1 P2 P3 (or High/Medium/Low/1-4) · Status: next | in-progress | waiting · Dates: YYYY-MM-DD · Areas: ' + areaNames, '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    ['Book the hall', 'todo', state.areas[0]?.name ?? 'Family / Home', '', 'P1', 'next', '2026-08-01', '', 'Events', '', '', '', '', '', 'Any notes you like'],
+    ['Call the plumber re boiler quote', 'call', state.areas[0]?.name ?? 'Family / Home', '', 'P2', 'next', '', '', '', 'Call', 'Mick Doyle', 'Mick Doyle Plumbing', 'Quote for new boiler', '', ''],
+    ['Chase the caterer', 'followup', '', '', 'P1', 'waiting', '', '2026-08-05', '', 'Follow-up', '', '', '', 'Caterer', 'They owe us final menu'],
+    ['— DELETE THIS ROW — allowed values → Type: todo | call | followup · Priority: P0 P1 P2 P3 (or High/Medium/Low/1-4) · Status: next | in-progress | waiting · Dates: YYYY-MM-DD · Areas: ' + areaNames, '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
   ]
   await downloadXlsxTemplateWithDropdowns('daybook-tasks-template.xlsx', 'Tasks', rows, taskTemplateDropdowns(state))
-  toast.success('Template downloaded — Area/Project/Priority/Status/Category/Person/Vendor are real dropdowns, built from what you have set up')
+  toast.success('Template downloaded — Area/Project/Priority/Status/Category/Action/Person/Vendor are real dropdowns, built from what you have set up')
 }
 
 interface ParsedRow {
@@ -593,6 +623,8 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
         if (get(r, 'project') && !project) warnings.push(`project “${get(r, 'project')}” not found`)
         const category = byName(state.categories.filter(c => c.active), get(r, 'category'))
         if (get(r, 'category') && !category) warnings.push(`category “${get(r, 'category')}” not found`)
+        const action = byName(state.actions.filter(a => a.active), get(r, 'action'))
+        if (get(r, 'action') && !action) warnings.push(`action “${get(r, 'action')}” not found`)
         const person = byName(state.people, get(r, 'person'))
         if (get(r, 'person') && !person) warnings.push(`person “${get(r, 'person')}” not found`)
         const vendor = byName(state.vendors, get(r, 'vendor'))
@@ -610,6 +642,7 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
             areaId: project ? project.areaId : area?.id,
             projectId: project?.id,
             categoryIds: category ? [category.id] : [],
+            actionIds: action ? [action.id] : undefined,
             personId: person?.id, vendorId: vendor?.id,
             due: dateOk(due) ? due : undefined,
             followUp: dateOk(fu) ? fu : undefined,
@@ -645,7 +678,7 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">1</span>
               <div>
-                Download the template — Area, Project, Priority, Status, Category, Person and Vendor are real dropdowns built from what you've already set up, so you're picking from a list rather than retyping names.
+                Download the template — Area, Project, Priority, Status, Category, Action, Person and Vendor are real dropdowns built from what you've already set up, so you're picking from a list rather than retyping names.
                 <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={() => downloadTemplate(state)}><Download className="h-3 w-3 mr-1.5" />Download template (.xlsx)</Button></div>
               </div>
             </div>

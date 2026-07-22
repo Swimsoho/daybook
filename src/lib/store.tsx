@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useMemo, useState } from 'react'
 import {
-  AdminUser, AppState, AuditEvent, Capture, Category, Collection, Entry, Interaction, Person, Priority,
+  Action, AdminUser, AppState, AuditEvent, Capture, Category, Collection, Entry, Interaction, Person, Priority,
   RoutingProposal, Settings, Task, TaskAttachment, TaskStatus, Tracker, addDays, personOverdueBy,
   daysSince, today, uid,
 } from './model'
@@ -30,6 +30,14 @@ export function categoryUsage(s: AppState, id: string): number {
   return inTasks + inCaptures + asParent
 }
 
+// Same "never silently orphan" guard as categoryUsage, for the flat Action list — how many
+// live things reference this action (tasks tagged with it, captures proposing it).
+export function actionUsage(s: AppState, id: string): number {
+  const inTasks = s.tasks.filter(t => t.actionIds?.includes(id)).length
+  const inCaptures = s.captures.filter(c => c.proposal.actionIds?.includes(id)).length
+  return inTasks + inCaptures
+}
+
 export interface Store {
   state: AppState
   // audit-aware mutators
@@ -43,13 +51,16 @@ export interface Store {
   updatePerson: (id: string, patch: Partial<Person>, auditLabel?: string) => void
   logInteraction: (i: Omit<Interaction, 'id'>, opts?: { followUpTitle?: string }) => void
   capture: (text: string, source: Capture['source']) => Capture
-  acceptCapture: (id: string, overrides?: { areaId?: string; projectId?: string; categoryIds?: string[] }) => void
+  acceptCapture: (id: string, overrides?: { areaId?: string; projectId?: string; categoryIds?: string[]; actionIds?: string[] }) => void
   dismissCapture: (id: string) => void
   addEntry: (trackerId: string, values: Entry['values']) => void
   updateEntry: (id: string, values: Entry['values']) => void
   addCategory: (c: Partial<Category> & { name: string }) => void
   updateCategory: (id: string, patch: Partial<Category>) => void
   deleteCategory: (id: string) => void
+  addAction: (a: Partial<Action> & { name: string }) => Action
+  updateAction: (id: string, patch: Partial<Action>) => void
+  deleteAction: (id: string) => void
   updateSettings: (patch: Partial<Settings>) => void
   updateFeatures: (patch: Partial<Settings['features']>) => void
   updateArea: (id: string, patch: Partial<AppState['areas'][0]>) => void
@@ -138,9 +149,6 @@ export function routeCapture(text: string, state: AppState): RoutingProposal {
     { id: 'c_money_ins', kws: ['insurance', 'policy'] },
     { id: 'c_money_bills', kws: ['bill', 'late fee', 'invoice'] },
     { id: 'c_chesed_hosp', kws: ['hospital'] },
-    { id: 'c_call', kws: ['call', 'phone', 'ring'] },
-    { id: 'c_errand', kws: ['errand', 'pick up', 'pickup', 'buy', 'shop', 'shopping', 'drop off'] },
-    { id: 'c_followup', kws: ['follow up', 'follow-up', 'circle back', 'chase'] },
     { id: 'c_admin', kws: ['admin', 'paperwork', 'proposal', 'vat', 'form'] },
     { id: 'c_home', kws: ['boiler', 'garden', 'plumber', 'repair', 'maintenance', 'house'] },
     { id: 'c_events', kws: ['dinner', 'party', 'event', 'invitation', 'rsvp', 'seating'] },
@@ -152,6 +160,22 @@ export function routeCapture(text: string, state: AppState): RoutingProposal {
     if (!cat) continue
     const hit = kws.find(k => lower.includes(k))
     if (hit) { categoryIds = [cat.id]; reasons.push(`“${hit}” → ${cat.level > 0 ? cat.name : cat.name} category`); break }
+  }
+
+  // action match — what kind of action this task is (Call, Errand, Follow-up, ...)
+  let actionIds: string[] | undefined
+  const actionKeywords: { id: string; kws: string[] }[] = [
+    { id: 'a_call', kws: ['call', 'phone', 'ring'] },
+    { id: 'a_errand', kws: ['errand', 'pick up', 'pickup', 'buy', 'shop', 'shopping', 'drop off'] },
+    { id: 'a_followup', kws: ['follow up', 'follow-up', 'circle back', 'chase'] },
+    { id: 'a_email', kws: ['email', 'reply to', 'send the'] },
+    { id: 'a_meeting', kws: ['meeting', 'meet up', 'sit down'] },
+  ]
+  for (const { id, kws } of actionKeywords) {
+    const act = state.actions.find(a => a.id === id && a.active)
+    if (!act) continue
+    const hit = kws.find(k => lower.includes(k))
+    if (hit) { actionIds = [act.id]; reasons.push(`“${hit}” → ${act.name} action`); break }
   }
 
   // date extraction
@@ -166,7 +190,7 @@ export function routeCapture(text: string, state: AppState): RoutingProposal {
   const title = body.charAt(0).toUpperCase() + body.slice(1)
   return {
     kind, taskType: isCall ? 'call' : kind === 'idea' ? 'todo' : 'todo',
-    areaId, projectId, personId: person?.id, categoryIds, priority, due, title,
+    areaId, projectId, personId: person?.id, categoryIds, actionIds, priority, due, title,
     explanation: reasons.length ? reasons.join(' · ') : 'No strong match — left in the inbox for a quick confirm',
   }
 }
@@ -198,6 +222,7 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         const task: Task = {
           id: uid('t'), title: t.title, type: t.type ?? 'todo', areaId: t.areaId, projectId: t.projectId,
           parentId: t.parentId, personId: t.personId, vendorId: t.vendorId, categoryIds: t.categoryIds ?? [],
+          actionIds: t.actionIds,
           priority: t.priority ?? 'P2', status: t.status ?? 'next', due: t.due, followUp: t.followUp,
           source: t.source ?? 'manual', notes: t.notes, callAbout: t.callAbout, waitingOn: t.waitingOn,
           created: today(),
@@ -235,7 +260,8 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         if (!t) return
         const fu: Task = {
           id: uid('t'), title: `Follow up: ${t.title.replace(/^Call /i, '')}`, type: 'followup',
-          areaId: t.areaId, projectId: t.projectId, personId: t.personId, categoryIds: ['c_followup'],
+          areaId: t.areaId, projectId: t.projectId, personId: t.personId, categoryIds: [],
+          actionIds: ['a_followup'],
           priority: 'P1', status: 'next', due: addDays(today(), state.settings.followUpDays),
           source: 'manual', created: today(),
         }
@@ -266,7 +292,7 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         const inter: Interaction = { ...i, id: uid('i') }
         const followTask: Task | null = i.followUpDate ? {
           id: uid('t'), title: opts?.followUpTitle || `Follow up with ${state.people.find(p => p.id === i.personId)?.name ?? 'contact'}`,
-          type: 'followup', personId: i.personId, categoryIds: ['c_followup'], priority: 'P1', status: 'next',
+          type: 'followup', personId: i.personId, categoryIds: [], actionIds: ['a_followup'], priority: 'P1', status: 'next',
           due: i.followUpDate, source: 'manual', created: today(),
         } : null
         withAudit(
@@ -292,6 +318,7 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         const areaId = overrides?.areaId ?? p.areaId
         const projectId = overrides?.projectId ?? p.projectId
         const categoryIds = overrides?.categoryIds ?? p.categoryIds ?? []
+        const actionIds = overrides?.actionIds ?? p.actionIds
         if (p.kind === 'entry' && p.trackerId) {
           const trk = state.trackers.find(t => t.id === p.trackerId)
           const titleCol = trk?.columns.find(c => c.isTitle)?.key ?? 'name'
@@ -305,7 +332,7 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         }
         const task: Task = {
           id: uid('t'), title: p.title, type: p.taskType, areaId, projectId,
-          personId: p.personId, categoryIds, priority: p.priority, status: 'next', due: p.due,
+          personId: p.personId, categoryIds, actionIds, priority: p.priority, status: 'next', due: p.due,
           source: cap.source, created: today(),
         }
         withAudit(
@@ -346,6 +373,26 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         withAudit(
           s => ({ ...s, categories: s.categories.filter(c => c.id !== id) }),
           auditEvent('deleted', 'category', id, `${cat.name} permanently deleted — never used`),
+        )
+      },
+      addAction(a) {
+        const act: Action = { id: uid('a'), name: a.name, active: true, color: a.color }
+        withAudit(s => ({ ...s, actions: [...s.actions, act] }), auditEvent('created', 'action', act.id, act.name))
+        return act
+      },
+      updateAction(id, patch) {
+        withAudit(
+          s => ({ ...s, actions: s.actions.map(a => a.id === id ? { ...a, ...patch } : a) }),
+          auditEvent('updated', 'action', id, Object.keys(patch).join(', ') + ' changed'),
+        )
+      },
+      deleteAction(id) {
+        const act = state.actions.find(a => a.id === id)
+        if (!act) return
+        if (actionUsage(state, id) > 0) return // never silently orphan a task or capture
+        withAudit(
+          s => ({ ...s, actions: s.actions.filter(a => a.id !== id) }),
+          auditEvent('deleted', 'action', id, `${act.name} permanently deleted — never used`),
         )
       },
       updateSettings(patch) {

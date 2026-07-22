@@ -69,7 +69,15 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
   const { data } = await supabase!.from('workspace_state').select('data').eq('workspace_id', ws.id).maybeSingle()
   if (data?.data && Object.keys(data.data).length > 0) {
     const loaded = data.data as unknown as AppState
-    return { ...loaded, settings: { ...SETTINGS_BACKFILL, ...loaded.settings } }
+    return {
+      ...loaded,
+      settings: { ...SETTINGS_BACKFILL, ...loaded.settings },
+      // Actions (Settings > Actions) shipped after some accounts were already saved — a blob
+      // saved before then has no `actions` key at all, and every `state.actions.filter(...)`
+      // call across the app would throw on undefined. Backfill the standard starter set once;
+      // it behaves exactly like a freshly seeded account from here on.
+      actions: loaded.actions ?? seedState().actions,
+    }
   }
   const fresh = ws.kind === 'sample' ? seedState() : emptyState(ownerName || 'there')
   await supabase!.from('workspace_state').upsert({ workspace_id: ws.id, data: fresh as unknown as Record<string, unknown> })

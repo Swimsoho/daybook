@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { ColumnType, PriorityScheme, Tier, TIER_LABELS, Tracker, TrackerColumn } from '@/lib/model'
-import { categoryUsage, useStore } from '@/lib/store'
+import { actionUsage, categoryUsage, useStore } from '@/lib/store'
 import { Cloud } from '@/lib/cloud'
 
 const COLUMN_TYPE_LABELS: Record<ColumnType, string> = {
@@ -192,16 +192,31 @@ function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
 export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
   const {
     state, updateSettings, updateFeatures, updateArea, addArea, addCategory, updateCategory, deleteCategory,
+    addAction, updateAction, deleteAction,
     addCollection, updateCollection, addTracker, updateTracker,
   } = useStore()
   const s = state.settings
   const [newArea, setNewArea] = useState('')
   const [newCat, setNewCat] = useState('')
   const [newCatParent, setNewCatParent] = useState('none')
+  const [newAction, setNewAction] = useState('')
   const [phone, setPhoneInput] = useState(cloud?.profile.phone ?? '')
   const [newCollection, setNewCollection] = useState('')
   const [newTracker, setNewTracker] = useState<Record<string, string>>({}) // per-collection draft name
   const [expandedTracker, setExpandedTracker] = useState<string | null>(null)
+
+  // Everything on this page autosaves as you type (same store as every other page) — this
+  // bar is purely a visible confirmation so it's never in doubt, plus a Save button for
+  // anyone who wants to explicitly confirm rather than trust the autosave.
+  const [savedAt, setSavedAt] = useState<Date>(() => new Date())
+  const [saving, setSaving] = useState(false)
+  const firstRender = React.useRef(true)
+  React.useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return }
+    setSaving(true)
+    const t = setTimeout(() => { setSaving(false); setSavedAt(new Date()) }, 350)
+    return () => clearTimeout(t)
+  }, [state])
 
   // group categories under their top-level parent so sub/secondary levels sit right below it
   const rootIndex = (c: typeof state.categories[number]): number => {
@@ -238,7 +253,22 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
   ]
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2 items-start">
+    <div className="grid gap-4">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border border-border bg-card shadow-sm px-4 py-2 rounded-sm">
+        <span className="text-[12px] text-muted-foreground">
+          {saving ? 'Saving…' : `Everything on this page autosaves as you type — last saved ${savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+        </span>
+        <Button
+          size="sm" className="h-7 text-[11.5px] shrink-0"
+          onClick={() => {
+            setSaving(true)
+            setTimeout(() => { setSaving(false); setSavedAt(new Date()); toast.success('All changes saved') }, 300)
+          }}
+        >
+          <Check className="h-3.5 w-3.5 mr-1" />Save
+        </Button>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2 items-start">
       <div className="grid gap-4">
         <Section title="Focus areas" sub="Add, rename, colour, retire — archiving preserves all history. Keep to 3–6.">
           {state.areas.map(a => (
@@ -369,6 +399,55 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
               if (!newCat.trim()) return
               addCategory({ name: newCat, parentId: newCatParent === 'none' ? undefined : newCatParent, level: newCatParent === 'none' ? 0 : 1 })
               setNewCat(''); toast.success('Category added — now in every dropdown and report')
+            }}><Plus className="h-3.5 w-3.5" /></Button>
+          </div>
+        </Section>
+
+        <Section title="Actions" sub="What kind of action a task is — Call, Meeting, Decide, Email… A flat, separate list from Category (the sub-topic under a focus area) and from the task's Type field, which it supplements rather than replaces.">
+          <div className="grid gap-2">
+            {state.actions.map(a => {
+              const usage = actionUsage(state, a.id)
+              return (
+                <div key={a.id} className="flex items-center gap-2">
+                  {a.color && <span className="h-2 w-2 rounded-full shrink-0" style={{ background: a.color }} />}
+                  <Input
+                    value={a.name}
+                    onChange={e => updateAction(a.id, { name: e.target.value })}
+                    className={cn('h-8 flex-1 text-[12.5px]', !a.active && 'opacity-50')}
+                  />
+                  {usage > 0 && (
+                    <span className="text-[10.5px] text-muted-foreground whitespace-nowrap shrink-0" title="In use — archive keeps it out of new work while preserving history">
+                      in use ×{usage}
+                    </span>
+                  )}
+                  <Button
+                    variant="outline" size="sm" className="h-8 text-[11px] px-2 shrink-0"
+                    onClick={() => { updateAction(a.id, { active: !a.active }); toast(a.active ? `${a.name} archived — history preserved` : `${a.name} restored`) }}
+                  >
+                    {a.active ? 'Archive' : 'Restore'}
+                  </Button>
+                  {usage === 0 && (
+                    <Button
+                      variant="outline" size="sm" className="h-8 text-[11px] px-2 shrink-0 text-destructive hover:text-destructive"
+                      onClick={() => {
+                        if (!window.confirm(`Permanently delete "${a.name}"? It's never been used, so there's no history to lose — but this can't be undone.`)) return
+                        deleteAction(a.id)
+                        toast.success(`${a.name} deleted`)
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <div className="flex gap-2">
+            <Input placeholder="New action…" value={newAction} onChange={e => setNewAction(e.target.value)} className="h-8" />
+            <Button size="sm" className="h-8" onClick={() => {
+              if (!newAction.trim()) return
+              addAction({ name: newAction })
+              setNewAction(''); toast.success('Action added — now available on tasks')
             }}><Plus className="h-3.5 w-3.5" /></Button>
           </div>
         </Section>
@@ -555,6 +634,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
             Prove the single-user system first; add this layer when you decide to commercialize.
           </p>
         </Section>
+      </div>
       </div>
     </div>
   )

@@ -22,6 +22,7 @@ export default function InboxPage() {
   const processed = state.captures.filter(c => c.status !== 'pending').slice(0, 6)
   const [reassign, setReassign] = useState<Record<string, string>>({})
   const [reassignCategory, setReassignCategory] = useState<Record<string, string>>({})
+  const [reassignAction, setReassignAction] = useState<Record<string, string>>({})
 
   return (
     <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
@@ -41,6 +42,8 @@ export default function InboxPage() {
             const tracker = state.trackers.find(t => t.id === p.trackerId)
             const categoryId = reassignCategory[c.id] ?? p.categoryIds?.[0]
             const category = state.categories.find(cat => cat.id === categoryId)
+            const actionId = reassignAction[c.id] ?? p.actionIds?.[0]
+            const action = state.actions.find(act => act.id === actionId)
             return (
               <div key={c.id} className="border-b border-border/70 last:border-0 px-4 py-3">
                 <div className="flex items-start gap-2.5">
@@ -62,6 +65,9 @@ export default function InboxPage() {
                           {category.level > 0 ? `${state.categories.find(x => x.id === category.parentId)?.name} › ` : ''}{category.name}
                         </span>
                       )}
+                      {action && (
+                        <span className="border border-border rounded-sm bg-background px-1.5 py-px">{action.name}</span>
+                      )}
                       <PriorityChip p={p.priority} />
                       {p.due && <span className="text-muted-foreground tabular">due {fmtDate(p.due)}</span>}
                     </div>
@@ -82,10 +88,19 @@ export default function InboxPage() {
                         ))}
                       </SelectContent>
                     </Select>
+                    <Select value={reassignAction[c.id] ?? p.actionIds?.[0] ?? ''} onValueChange={v => setReassignAction(r => ({ ...r, [c.id]: v }))}>
+                      <SelectTrigger className="h-7 w-[116px] text-[11px] bg-background"><SelectValue placeholder="action" /></SelectTrigger>
+                      <SelectContent>
+                        {state.actions.filter(act => act.active || act.id === actionId).map(act => (
+                          <SelectItem key={act.id} value={act.id}>{act.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button size="sm" className="h-7 px-2" onClick={() => {
                       acceptCapture(c.id, {
                         areaId: reassign[c.id] ?? p.areaId,
                         categoryIds: (reassignCategory[c.id] ?? p.categoryIds?.[0]) ? [reassignCategory[c.id] ?? p.categoryIds![0]] : [],
+                        actionIds: (reassignAction[c.id] ?? p.actionIds?.[0]) ? [reassignAction[c.id] ?? p.actionIds![0]] : undefined,
                       })
                       toast.success('Filed — corrections teach the router over time')
                     }}><Check className="h-3.5 w-3.5" /></Button>

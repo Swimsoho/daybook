@@ -32,6 +32,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
   const [pickedAreaId, setPickedAreaId] = useState('')
   const [pickedProjectId, setPickedProjectId] = useState('')
   const [pickedCategoryId, setPickedCategoryId] = useState('')
+  const [pickedActionId, setPickedActionId] = useState('')
   const areaId = fixedAreaId ?? (pickedAreaId || undefined)
   const area = state.areas.find(a => a.id === areaId)
   const projectsInArea = areaId ? state.projects.filter(p => p.areaId === areaId && (p.status === 'active' || p.status === 'on-hold')) : []
@@ -42,6 +43,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
     addTask({
       title: text.trim(), areaId, projectId, due, priority: due === today() ? 'P1' : 'P2', status: 'next', type: 'todo', source: 'manual',
       categoryIds: pickedCategoryId ? [pickedCategoryId] : [],
+      actionIds: pickedActionId ? [pickedActionId] : undefined,
     })
     const project = state.projects.find(p => p.id === projectId)
     toast.success(project ? `Added to ${project.name}` : area ? `Added to ${area.name}` : due === today() ? 'Added to today' : 'Task added')
@@ -49,6 +51,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
     if (!fixedAreaId) setPickedAreaId('')
     if (!fixedProjectId) setPickedProjectId('')
     setPickedCategoryId('')
+    setPickedActionId('')
   }
   return (
     <div className="flex flex-wrap items-center gap-1.5 px-4 py-1.5 border-b border-dashed border-border/70 bg-background/40 focus-within:bg-background">
@@ -83,6 +86,13 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
         <SelectContent>
           <SelectItem value="__none__">No category</SelectItem>
           {categoriesForArea(state.categories, areaId, pickedCategoryId).map(c => <SelectItem key={c.id} value={c.id}>{c.level > 0 ? '› ' : ''}{c.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Select value={pickedActionId || '__none__'} onValueChange={v => setPickedActionId(v === '__none__' ? '' : v)}>
+        <SelectTrigger className="h-7 w-[104px] text-[11.5px] bg-card shrink-0"><SelectValue placeholder="Action" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="__none__">No action</SelectItem>
+          {state.actions.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
         </SelectContent>
       </Select>
       <button onClick={add} className="h-7 px-2.5 text-[11.5px] border border-input rounded-sm bg-card hover:bg-accent shrink-0">Add</button>
@@ -292,6 +302,23 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               )}
+              {qa.reassign && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>Reassign action</DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
+                    <DropdownMenuItem onClick={() => { updateTask(task.id, { actionIds: [] }, 'action cleared'); toast('Action cleared') }}>
+                      <span className="text-muted-foreground">No action</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {state.actions.filter(a => a.active).map(a => (
+                      <DropdownMenuItem key={a.id} onClick={() => { updateTask(task.id, { actionIds: [a.id] }, `action → ${a.name}`); toast.success(`Action set to ${a.name}`) }}>
+                        {a.color && <span className="h-2 w-2 rounded-full mr-2 shrink-0" style={{ background: a.color }} />}
+                        <span className="truncate">{a.name}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>Set status</DropdownMenuSubTrigger>
@@ -332,6 +359,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
 
   const projects = state.projects.filter(p => p.status === 'active' && (!f.areaId || p.areaId === f.areaId))
   const mainCats = categoriesForArea(state.categories, f.areaId, f.categoryIds?.[0])
+  const activeActions = state.actions.filter(a => a.active || a.id === f.actionIds?.[0])
 
   function save() {
     if (!f.title?.trim()) { toast.error('A title is all that’s required'); return }
@@ -457,6 +485,17 @@ export function TaskDialog({ open, onClose, task, defaults }: {
               </div>
             </div>
           )}
+
+          <div className="grid gap-1.5">
+            <Label className="text-xs">Action <span className="text-muted-foreground">(optional — what kind of action this is)</span></Label>
+            <Select value={f.actionIds?.[0] ?? 'none'} onValueChange={v => set({ actionIds: v === 'none' ? [] : [v] })}>
+              <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {activeActions.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
 
           <div className="grid gap-1.5">
             <Label className="text-xs">Notes</Label>
@@ -663,6 +702,17 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
                 <SelectContent>
                   <SelectItem value="__none__">No category</SelectItem>
                   {categoriesForArea(state.categories, task.areaId, task.categoryIds[0]).map(c => <SelectItem key={c.id} value={c.id}>{c.level > 0 ? '› ' : ''}{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={task.actionIds?.[0] ?? '__none__'} onValueChange={v => {
+                const a = state.actions.find(x => x.id === v)
+                updateTask(task.id, { actionIds: v === '__none__' ? [] : [v] }, a ? `action → ${a.name}` : 'action cleared')
+                toast(a ? `Action set to ${a.name}` : 'Action cleared')
+              }}>
+                <SelectTrigger className="h-7 w-[120px] text-[11.5px] bg-card"><SelectValue placeholder="Action" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No action</SelectItem>
+                  {state.actions.filter(a => a.active || a.id === task.actionIds?.[0]).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

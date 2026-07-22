@@ -50,6 +50,7 @@ export interface Task {
   personId?: string
   vendorId?: string
   categoryIds: string[]
+  actionIds?: string[]
   priority: Priority
   status: TaskStatus
   due?: string
@@ -101,6 +102,18 @@ export interface Category {
   // Which focus areas this category is relevant to. Empty/undefined = shows under every
   // area (the old, pre-this-feature behavior) — tag it to specific areas to narrow it down.
   areaIds?: string[]
+}
+
+// An Action tags *what kind of action* a task is (Call, Meeting, Decide, Email, ...) —
+// a flat, non-hierarchical list, separate from Category (which tags the sub-topic/area of
+// a task, e.g. Money, Home, Events). Supplements the existing Task.type field rather than
+// replacing it: type still drives call-list/follow-up behavior, actionIds is a free-form
+// tag a task can optionally carry in addition.
+export interface Action {
+  id: string
+  name: string
+  color?: string
+  active: boolean
 }
 
 export interface Vendor {
@@ -173,6 +186,7 @@ export interface RoutingProposal {
   personId?: string
   trackerId?: string
   categoryIds?: string[]
+  actionIds?: string[]
   priority: Priority
   due?: string
   title: string
@@ -245,6 +259,7 @@ export interface AppState {
   people: Person[]
   interactions: Interaction[]
   categories: Category[]
+  actions: Action[]
   vendors: Vendor[]
   collections: Collection[]
   trackers: Tracker[]
