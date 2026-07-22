@@ -57,10 +57,14 @@ export interface Store {
   updateEntry: (id: string, values: Entry['values']) => void
   addCategory: (c: Partial<Category> & { name: string }) => void
   updateCategory: (id: string, patch: Partial<Category>) => void
-  deleteCategory: (id: string) => void
+  // force=true deletes even if tasks/captures/subcategories still reference it — those
+  // references are left pointing at a category that no longer exists (shown as blank/"—"
+  // wherever the app looks it up) rather than being silently cleaned up. Default is the
+  // safe path: refuse when anything is still using it.
+  deleteCategory: (id: string, force?: boolean) => void
   addAction: (a: Partial<Action> & { name: string }) => Action
   updateAction: (id: string, patch: Partial<Action>) => void
-  deleteAction: (id: string) => void
+  deleteAction: (id: string, force?: boolean) => void
   updateSettings: (patch: Partial<Settings>) => void
   updateFeatures: (patch: Partial<Settings['features']>) => void
   updateArea: (id: string, patch: Partial<AppState['areas'][0]>) => void
@@ -366,13 +370,17 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
           auditEvent('updated', 'category', id, Object.keys(patch).join(', ') + ' changed'),
         )
       },
-      deleteCategory(id) {
+      deleteCategory(id, force) {
         const cat = state.categories.find(c => c.id === id)
         if (!cat) return
-        if (categoryUsage(state, id) > 0) return // never silently orphan a task, capture, or subcategory
+        const usage = categoryUsage(state, id)
+        if (!force && usage > 0) return // never silently orphan a task, capture, or subcategory
         withAudit(
           s => ({ ...s, categories: s.categories.filter(c => c.id !== id) }),
-          auditEvent('deleted', 'category', id, `${cat.name} permanently deleted — never used`),
+          auditEvent(
+            'deleted', 'category', id,
+            usage > 0 ? `${cat.name} force-deleted while in use ×${usage} — those tasks/captures were left referencing a category that no longer exists` : `${cat.name} permanently deleted — never used`,
+          ),
         )
       },
       addAction(a) {
@@ -386,13 +394,17 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
           auditEvent('updated', 'action', id, Object.keys(patch).join(', ') + ' changed'),
         )
       },
-      deleteAction(id) {
+      deleteAction(id, force) {
         const act = state.actions.find(a => a.id === id)
         if (!act) return
-        if (actionUsage(state, id) > 0) return // never silently orphan a task or capture
+        const usage = actionUsage(state, id)
+        if (!force && usage > 0) return // never silently orphan a task or capture
         withAudit(
           s => ({ ...s, actions: s.actions.filter(a => a.id !== id) }),
-          auditEvent('deleted', 'action', id, `${act.name} permanently deleted — never used`),
+          auditEvent(
+            'deleted', 'action', id,
+            usage > 0 ? `${act.name} force-deleted while in use ×${usage} — those tasks/captures were left referencing an action that no longer exists` : `${act.name} permanently deleted — never used`,
+          ),
         )
       },
       updateSettings(patch) {

@@ -62,7 +62,7 @@ export default function InboxPage() {
                       {person && <span className="border border-border rounded-sm bg-background px-1.5 py-px">→ {person.name}</span>}
                       {category && (
                         <span className="border border-border rounded-sm bg-background px-1.5 py-px">
-                          {category.level > 0 ? `${state.categories.find(x => x.id === category.parentId)?.name} › ` : ''}{category.name}
+                          {category.level > 0 ? `${state.categories.find(x => x.id === category.parentId)?.name ?? '—'} › ` : ''}{category.name}
                         </span>
                       )}
                       {action && (

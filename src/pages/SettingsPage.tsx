@@ -334,18 +334,19 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                     >
                       {c.active ? 'Archive' : 'Restore'}
                     </Button>
-                    {usage === 0 && (
-                      <Button
-                        variant="outline" size="sm" className="h-8 text-[11px] px-2 shrink-0 text-destructive hover:text-destructive"
-                        onClick={() => {
-                          if (!window.confirm(`Permanently delete "${c.name}"? It's never been used, so there's no history to lose — but this can't be undone.`)) return
-                          deleteCategory(c.id)
-                          toast.success(`${c.name} deleted`)
-                        }}
-                      >
-                        Delete
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline" size="sm" className="h-8 text-[11px] px-2 shrink-0 text-destructive hover:text-destructive"
+                      onClick={() => {
+                        const msg = usage > 0
+                          ? `"${c.name}" is still in use ×${usage} (tasks, captures, or subcategories). Deleting it now will leave those pointing at a category that no longer exists — you'll need to manually re-tag them afterward. Delete anyway?`
+                          : `Permanently delete "${c.name}"? It's never been used, so there's no history to lose — but this can't be undone.`
+                        if (!window.confirm(msg)) return
+                        deleteCategory(c.id, usage > 0)
+                        toast.success(usage > 0 ? `${c.name} deleted — ${usage} task${usage === 1 ? '' : 's'} left untagged` : `${c.name} deleted`)
+                      }}
+                    >
+                      Delete
+                    </Button>
                   </div>
                   <div className="flex flex-wrap items-center gap-1 pl-1">
                     <span className="text-[10.5px] text-muted-foreground mr-0.5">
@@ -426,18 +427,19 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                   >
                     {a.active ? 'Archive' : 'Restore'}
                   </Button>
-                  {usage === 0 && (
-                    <Button
-                      variant="outline" size="sm" className="h-8 text-[11px] px-2 shrink-0 text-destructive hover:text-destructive"
-                      onClick={() => {
-                        if (!window.confirm(`Permanently delete "${a.name}"? It's never been used, so there's no history to lose — but this can't be undone.`)) return
-                        deleteAction(a.id)
-                        toast.success(`${a.name} deleted`)
-                      }}
-                    >
-                      Delete
-                    </Button>
-                  )}
+                  <Button
+                    variant="outline" size="sm" className="h-8 text-[11px] px-2 shrink-0 text-destructive hover:text-destructive"
+                    onClick={() => {
+                      const msg = usage > 0
+                        ? `"${a.name}" is still in use ×${usage} (tasks or captures). Deleting it now will leave those pointing at an action that no longer exists — you'll need to manually re-tag them afterward. Delete anyway?`
+                        : `Permanently delete "${a.name}"? It's never been used, so there's no history to lose — but this can't be undone.`
+                      if (!window.confirm(msg)) return
+                      deleteAction(a.id, usage > 0)
+                      toast.success(usage > 0 ? `${a.name} deleted — ${usage} task${usage === 1 ? '' : 's'} left untagged` : `${a.name} deleted`)
+                    }}
+                  >
+                    Delete
+                  </Button>
                 </div>
               )
             })}
