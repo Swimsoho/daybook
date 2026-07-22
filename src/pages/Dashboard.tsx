@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowRight, ChevronDown, ChevronRight, Inbox, MessageCircle, Phone, Sparkles } from 'lucide-react'
+import { ArrowRight, Cake, CalendarClock, ChevronDown, ChevronRight, Heart, Inbox, MessageCircle, Phone, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import {
-  Person, Task, daysSince, fmtDateLong, personOverdueBy, today,
+  Person, Task, daysBetween, daysSince, fmtDate, fmtDateLong, nextOccurrence, personOverdueBy, today,
 } from '@/lib/model'
 import {
   buildCallList, callsMadeOn, isOverdue, openTasks, stalledProjects, useStore,
@@ -28,6 +28,21 @@ function greeting(): string {
 function matchesProject(t: Task, projectFilter?: string | null): boolean {
   if (!projectFilter) return true
   return projectFilter === '__none__' ? !t.projectId : t.projectId === projectFilter
+}
+
+// "Dates to Remember" (Collections > Personal) — trk_dates is a seeded id, same pattern
+// ReportsPage already relies on for trk_subs.
+const DATE_TRACKER_ID = 'trk_dates'
+const DATE_TYPE_ICON: Record<string, React.ReactNode> = {
+  Birthday: <Cake className="h-3.5 w-3.5 text-[hsl(340_45%_50%)]" />,
+  Anniversary: <Heart className="h-3.5 w-3.5 text-[hsl(0_55%_50%)]" />,
+  Other: <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />,
+}
+function dateLabel(daysUntil: number, occ: string): string {
+  if (daysUntil === 0) return 'today'
+  if (daysUntil === 1) return 'tomorrow'
+  if (daysUntil <= 7) return `in ${daysUntil}d`
+  return fmtDate(occ)
 }
 
 // ================= TODAY =================
@@ -57,6 +72,20 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   const overCapacity = todays.length > capacity
 
   const top3 = todays.slice(0, 3)
+  const datesTracker = state.trackers.find(t => t.id === DATE_TRACKER_ID && t.active)
+  // upcoming birthdays/anniversaries/other dates in the next 30 days, nearest first — recurring
+  // ones are re-projected onto this (or next) year, one-off ones use the date as stored
+  const upcomingDates = useMemo(() => {
+    if (!datesTracker) return []
+    return state.entries
+      .filter(e => e.trackerId === datesTracker.id && e.values.date)
+      .map(e => {
+        const occ = nextOccurrence(String(e.values.date), !!e.values.recurring)
+        return { id: e.id, name: String(e.values.name ?? 'Untitled'), type: String(e.values.type ?? 'Other'), occ, daysUntil: daysBetween(today(), occ) }
+      })
+      .filter(x => x.daysUntil >= 0 && x.daysUntil <= 30)
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+  }, [state.entries, datesTracker])
   const nudge = useMemo(() => {
     const dorm = state.people.filter(p => p.tier === 'dormant').sort((a, b) => daysSince(b.lastContact) - daysSince(a.lastContact))[0]
     const stalled = stalledProjects(state)[0]
@@ -180,6 +209,26 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
           </button>
         </section>
+
+        {/* Upcoming dates — birthdays, anniversaries, anything filed in Collections > Personal > Dates to Remember */}
+        {datesTracker && (
+          <section className="rise-in border border-border bg-card shadow-sm" style={{ animationDelay: '165ms' }}>
+            <div className="px-4 pt-3.5 pb-1 flex items-baseline justify-between">
+              <SectionTitle className="mb-0">Upcoming dates</SectionTitle>
+              <button onClick={() => goTo('collections')} className="text-[11px] text-muted-foreground hover:text-foreground">manage →</button>
+            </div>
+            <div className="pb-2">
+              {upcomingDates.length === 0 && <EmptyNote>Nothing in the next 30 days — add birthdays and anniversaries under Collections.</EmptyNote>}
+              {upcomingDates.map(d => (
+                <div key={d.id} className="flex items-center gap-2.5 px-4 py-1.5 border-b border-border/60 last:border-0">
+                  {DATE_TYPE_ICON[d.type] ?? DATE_TYPE_ICON.Other}
+                  <span className="text-[13px] flex-1 truncate">{d.name}</span>
+                  <span className="text-[11.5px] text-muted-foreground tabular shrink-0">{dateLabel(d.daysUntil, d.occ)}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Areas collapsed */}
         <section className="rise-in border border-border bg-card shadow-sm" style={{ animationDelay: '180ms' }}>

@@ -1,19 +1,22 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Download, FileUp, Plus } from 'lucide-react'
+import { ArrowUpDown, Check, Download, FileUp, Plus } from 'lucide-react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import {
-  Priority, PRIORITY_LABELS, STATUS_LABELS, Task, daysSince, fmtDate, today,
+  Priority, PRIORITY_LABELS, STATUS_LABELS, Task, TaskStatus, TYPE_LABELS, daysSince, fmtDate, today,
 } from '@/lib/model'
 import { useStore } from '@/lib/store'
-import { ClearFiltersButton, EmptyNote } from '@/components/bits'
+import { AreaDot, ClearFiltersButton, DueChip, EmptyNote, PriorityChip } from '@/components/bits'
 import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 
-type View = 'today' | 'week' | 'area' | 'waiting' | 'someday' | 'done' | 'all'
+type View = 'today' | 'week' | 'area' | 'waiting' | 'someday' | 'done' | 'all' | 'list'
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'today', label: 'Today' },
@@ -23,10 +26,11 @@ const VIEWS: { id: View; label: string }[] = [
   { id: 'someday', label: 'Someday' },
   { id: 'done', label: 'Accomplished' },
   { id: 'all', label: 'Everything' },
+  { id: 'list', label: 'List' },
 ]
 
 export default function TasksPage({ projectFilter, onClearProject }: { projectFilter?: string | null; onClearProject?: () => void }) {
-  const { state, updateTask } = useStore()
+  const { state, updateTask, completeTask, dropTask } = useStore()
   const [view, setView] = useState<View>('today')
   const [search, setSearch] = useState('')
   const [areaFilter, setAreaFilter] = useState('all')
@@ -39,9 +43,22 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   const [importOpen, setImportOpen] = useState(false)
   const [expandAll, setExpandAll] = useState(false)
   const [dragCat, setDragCat] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const scheme = state.settings.priorityScheme
   const filtersActive = !!search || areaFilter !== 'all' || prioFilter !== 'all' || catFilter !== 'all' || !!projectFilter
   const clearAll = () => { setSearch(''); setAreaFilter('all'); setPrioFilter('all'); setCatFilter('all'); onClearProject?.() }
+
+  // Selection is view-scoped — switching tabs starts fresh so a bulk action never silently
+  // lands on tasks you can no longer see.
+  useEffect(() => { setSelected(new Set()) }, [view])
+
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
 
   const filtered = useMemo(() => {
     let ts = state.tasks.filter(t => !t.parentId) // parents view; children shown expanded
@@ -71,6 +88,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
         return state.tasks.filter(t => (t.status === 'done' || t.status === 'dropped') && matches(t)).sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''))
       case 'area':
       case 'all':
+      case 'list':
         return ts.filter(t => t.status !== 'done' && t.status !== 'dropped')
     }
   }, [state.tasks, view, search, areaFilter, prioFilter, catFilter, projectFilter])
@@ -78,8 +96,10 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   const sorted = [...filtered].sort((a, b) => a.priority.localeCompare(b.priority) || (a.due ?? '9999').localeCompare(b.due ?? '9999'))
 
   function exportCsv() {
+    // Selecting tasks first scopes the export to just those — otherwise it's the whole current view.
+    const source = selected.size > 0 ? sorted.filter(t => selected.has(t.id)) : sorted
     const rows = [['Title', 'Type', 'Area', 'Project', 'Priority', 'Status', 'Due', 'Created']]
-    for (const t of sorted) {
+    for (const t of source) {
       rows.push([
         t.title, t.type,
         state.areas.find(a => a.id === t.areaId)?.name ?? '',
@@ -92,7 +112,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
     const a = document.createElement('a')
     a.href = url; a.download = `tasks-${view}-${today()}.csv`; a.click()
     URL.revokeObjectURL(url)
-    toast.success('Exported to CSV (Excel-ready)')
+    toast.success(selected.size > 0 ? `Exported ${source.length} selected task${source.length === 1 ? '' : 's'}` : 'Exported to CSV (Excel-ready)')
   }
 
   const groupedByArea = view === 'area'
@@ -103,6 +123,39 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
     today: sorted.filter(t => t.completedAt === today()).length,
     week: sorted.filter(t => t.completedAt && daysSince(t.completedAt) <= 7).length,
   } : null
+
+  // The full set of task ids on screen right now, regardless of which layout renders them —
+  // used by the "select all visible" checkbox so it works the same in every view.
+  const allVisibleIds = groupedByArea ? groupedByArea.flatMap(g => g.tasks.map(t => t.id)) : sorted.map(t => t.id)
+  const allVisibleSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selected.has(id))
+
+  function toggleSelectAllVisible() {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (allVisibleSelected) allVisibleIds.forEach(id => next.delete(id))
+      else allVisibleIds.forEach(id => next.add(id))
+      return next
+    })
+  }
+
+  function bulkApply(patch: Partial<Task>, label: string) {
+    const ids = Array.from(selected)
+    ids.forEach(id => updateTask(id, patch, label))
+    toast.success(`${label} — ${ids.length} task${ids.length === 1 ? '' : 's'}`)
+    setSelected(new Set())
+  }
+  function bulkDone() {
+    const ids = Array.from(selected)
+    ids.forEach(id => completeTask(id))
+    toast.success(`Marked done — ${ids.length} task${ids.length === 1 ? '' : 's'}`)
+    setSelected(new Set())
+  }
+  function bulkDrop() {
+    const ids = Array.from(selected)
+    ids.forEach(id => dropTask(id, 'Bulk dropped from Tasks list'))
+    toast(`Dropped — ${ids.length} task${ids.length === 1 ? '' : 's'}`)
+    setSelected(new Set())
+  }
 
   return (
     <div className="grid gap-4">
@@ -184,6 +237,89 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
         <span className="text-[10.5px] text-muted-foreground italic shrink-0 ml-1">drag a task onto a chip to re-categorize</span>
       </div>
 
+      {/* Bulk selection + actions */}
+      {allVisibleIds.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 text-[11.5px] text-muted-foreground cursor-pointer select-none shrink-0">
+            <input
+              type="checkbox"
+              className="h-3.5 w-3.5 accent-[hsl(152_22%_23%)] cursor-pointer"
+              checked={allVisibleSelected}
+              onChange={toggleSelectAllVisible}
+            />
+            {selected.size > 0 ? <span className="font-medium text-foreground">{selected.size} selected</span> : `Select all (${allVisibleIds.length})`}
+          </label>
+          {selected.size > 0 && (
+            <>
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px]" onClick={() => setSelected(new Set())}>Clear</Button>
+              <span className="h-4 w-px bg-border" />
+              <Button variant="outline" size="sm" className="h-7 px-2 text-[12px]" onClick={bulkDone}><Check className="h-3.5 w-3.5 mr-1" />Mark done</Button>
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] text-[hsl(8_60%_41%)]" onClick={bulkDrop}>Drop</Button>
+              <span className="h-4 w-px bg-border" />
+              <span className="text-[11px] text-muted-foreground">Priority</span>
+              {(['P0', 'P1', 'P2', 'P3'] as Priority[]).map(p => (
+                <button
+                  key={p}
+                  onClick={() => bulkApply({ priority: p }, `bulk priority → ${PRIORITY_LABELS[scheme][p]}`)}
+                  className="px-2 py-1 text-[11px] border border-border rounded-sm bg-card hover:bg-accent"
+                >
+                  {PRIORITY_LABELS[scheme][p]}
+                </button>
+              ))}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="h-7 px-2 text-[12px]">Status ▾</Button></DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  {(['next', 'in-progress', 'waiting'] as TaskStatus[]).map(st => (
+                    <DropdownMenuItem key={st} onClick={() => bulkApply({ status: st, waitingSince: st === 'waiting' ? today() : undefined }, `bulk status → ${STATUS_LABELS[st]}`)}>
+                      {STATUS_LABELS[st]}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="h-7 px-2 text-[12px]">Move to area ▾</Button></DropdownMenuTrigger>
+                <DropdownMenuContent className="max-h-72 overflow-y-auto">
+                  {state.areas.filter(a => a.active).map(a => (
+                    <DropdownMenuItem key={a.id} onClick={() => bulkApply({ areaId: a.id, projectId: undefined }, `bulk moved to ${a.name}`)}>
+                      <span className="h-2 w-2 rounded-full mr-2 shrink-0" style={{ background: a.color }} />{a.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="h-7 px-2 text-[12px]">Move to project ▾</Button></DropdownMenuTrigger>
+                <DropdownMenuContent className="max-h-72 overflow-y-auto">
+                  <DropdownMenuItem onClick={() => bulkApply({ projectId: undefined }, 'bulk removed from project')}>
+                    <span className="text-muted-foreground">No project</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {state.projects.filter(p => p.status === 'active' || p.status === 'on-hold').map(p => (
+                    <DropdownMenuItem key={p.id} onClick={() => bulkApply({ projectId: p.id, areaId: p.areaId }, `bulk moved to project ${p.name}`)}>
+                      {p.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="h-7 px-2 text-[12px]">Category ▾</Button></DropdownMenuTrigger>
+                <DropdownMenuContent className="max-h-72 overflow-y-auto">
+                  <DropdownMenuItem onClick={() => bulkApply({ categoryIds: [] }, 'bulk category cleared')}>
+                    <span className="text-muted-foreground">No category</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {state.categories.filter(c => c.active).map(c => (
+                    <DropdownMenuItem key={c.id} onClick={() => bulkApply({ categoryIds: [c.id] }, `bulk re-categorized as ${c.name}`)}>
+                      {c.color && <span className="h-2 w-2 rounded-full mr-2 shrink-0" style={{ background: c.color }} />}
+                      {c.level > 0 ? '› ' : ''}{c.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Accomplished header */}
       {doneStats && (
         <div className="flex gap-6 border border-border bg-card px-4 py-2.5 text-[13px]">
@@ -194,7 +330,9 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       )}
 
       {/* List */}
-      {groupedByArea ? (
+      {view === 'list' ? (
+        <TaskListTable tasks={sorted} selected={selected} onToggleSelect={toggleSelect} onOpen={setOpenTask} />
+      ) : groupedByArea ? (
         <div className="grid gap-4">
           {groupedByArea.map(({ area, tasks }) => (
             <section
@@ -223,7 +361,9 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
               </div>
               <QuickAdd areaId={area.id} />
               {tasks.length === 0 && <EmptyNote>Nothing open here — type above or drag a task in.</EmptyNote>}
-              {tasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} expandAll={expandAll} />)}
+              {tasks.map(t => (
+                <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} expandAll={expandAll} selected={selected.has(t.id)} onToggleSelect={toggleSelect} />
+              ))}
             </section>
           ))}
         </div>
@@ -232,7 +372,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
           {sorted.length === 0 && <EmptyNote>Nothing in this view{view === 'someday' ? ' — the backlog rests until the weekly review' : ''}.</EmptyNote>}
           {sorted.map(t => (
             <div key={t.id}>
-              <TaskRow task={t} onOpen={setOpenTask} expandAll={expandAll} />
+              <TaskRow task={t} onOpen={setOpenTask} expandAll={expandAll} selected={selected.has(t.id)} onToggleSelect={toggleSelect} />
               {view === 'done' && t.completedAt && (
                 <div className="px-11 -mt-1 pb-1 text-[11px] text-muted-foreground tabular">
                   {t.status === 'dropped' ? `dropped ${fmtDate(t.completedAt)}${t.droppedReason ? ` — ${t.droppedReason}` : ''}` : `completed ${fmtDate(t.completedAt)}`}
@@ -251,6 +391,121 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       <TaskDialog open={!!editTask || adding} onClose={() => { setEditTask(null); setAdding(false); setAddDefaults(null) }} task={editTask} defaults={addDefaults ?? undefined} />
       <ImportTasksDialog open={importOpen} onClose={() => setImportOpen(false)} />
     </div>
+  )
+}
+
+// ================== "List" view — every task as a sortable, checkable table ==================
+
+type SortKey = 'title' | 'type' | 'area' | 'project' | 'category' | 'priority' | 'status' | 'due'
+
+const SORT_LABELS: Record<SortKey, string> = {
+  title: 'Title', type: 'Type', area: 'Area', project: 'Project', category: 'Category', priority: 'Priority', status: 'Status', due: 'Due',
+}
+
+function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
+  tasks: Task[]
+  selected: Set<string>
+  onToggleSelect: (id: string) => void
+  onOpen: (t: Task) => void
+}) {
+  const { state, updateTask } = useStore()
+  const [sortKey, setSortKey] = useState<SortKey>('priority')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  function valueFor(t: Task, key: SortKey): string {
+    switch (key) {
+      case 'title': return t.title.toLowerCase()
+      case 'type': return t.type
+      case 'area': return (state.areas.find(a => a.id === t.areaId)?.name ?? '').toLowerCase()
+      case 'project': return (state.projects.find(p => p.id === t.projectId)?.name ?? '').toLowerCase()
+      case 'category': return (state.categories.find(c => t.categoryIds.includes(c.id))?.name ?? '').toLowerCase()
+      case 'priority': return t.priority
+      case 'status': return t.status
+      case 'due': return t.due ?? '9999-99-99'
+    }
+  }
+
+  const rows = useMemo(() => {
+    const arr = [...tasks].sort((a, b) => valueFor(a, sortKey).localeCompare(valueFor(b, sortKey)))
+    return sortDir === 'asc' ? arr : arr.reverse()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks, sortKey, sortDir, state.areas, state.projects, state.categories])
+
+  function headerClick(key: SortKey) {
+    if (key === sortKey) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir('asc') }
+  }
+
+  if (rows.length === 0) return <EmptyNote>Nothing matches the current filters.</EmptyNote>
+
+  return (
+    <section className="border border-border bg-card shadow-sm overflow-x-auto">
+      <table className="w-full text-[12.5px] border-collapse min-w-[820px]">
+        <thead className="border-b border-border bg-accent/30">
+          <tr>
+            <th className="px-2.5 py-2 w-8" />
+            {(['title', 'type', 'area', 'project', 'category', 'priority', 'status', 'due'] as SortKey[]).map(k => (
+              <th
+                key={k}
+                onClick={() => headerClick(k)}
+                className="px-2.5 py-2 text-left text-[10.5px] uppercase tracking-wide text-muted-foreground font-medium cursor-pointer select-none hover:text-foreground whitespace-nowrap"
+              >
+                <span className="inline-flex items-center gap-1">
+                  {SORT_LABELS[k]}
+                  {sortKey === k && <ArrowUpDown className="h-2.5 w-2.5" />}
+                </span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(t => {
+            const area = state.areas.find(a => a.id === t.areaId)
+            const project = state.projects.find(p => p.id === t.projectId)
+            const category = state.categories.find(c => t.categoryIds.includes(c.id))
+            return (
+              <tr key={t.id} className={cn('border-b border-border/60 last:border-0 hover:bg-accent/40 transition-colors', selected.has(t.id) && 'bg-[hsl(17_63%_47%_/_0.06)]')}>
+                <td className="px-2.5 py-1.5">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 accent-[hsl(152_22%_23%)] cursor-pointer"
+                    checked={selected.has(t.id)}
+                    onChange={() => onToggleSelect(t.id)}
+                  />
+                </td>
+                <td className="px-2.5 py-1.5 max-w-[260px]">
+                  <button onClick={() => onOpen(t)} className="truncate text-left hover:underline block w-full">{t.title}</button>
+                </td>
+                <td className="px-2.5 py-1.5 text-muted-foreground whitespace-nowrap">{TYPE_LABELS[t.type]}</td>
+                <td className="px-2.5 py-1.5 whitespace-nowrap">
+                  {area ? (
+                    <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full shrink-0" style={{ background: area.color }} />{area.name}</span>
+                  ) : <span className="text-muted-foreground">—</span>}
+                </td>
+                <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[160px]">{project?.name ?? '—'}</td>
+                <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[130px]">{category?.name ?? '—'}</td>
+                <td className="px-2.5 py-1.5"><PriorityChip p={t.priority} /></td>
+                <td className="px-2.5 py-1.5">
+                  <select
+                    value={t.status}
+                    onChange={e => {
+                      const v = e.target.value as TaskStatus
+                      updateTask(t.id, { status: v, waitingSince: v === 'waiting' ? today() : t.waitingSince }, `status → ${STATUS_LABELS[v]}`)
+                    }}
+                    className="h-6 text-[11px] border border-border rounded-sm bg-background px-1 text-muted-foreground hover:border-input hover:text-foreground cursor-pointer outline-none"
+                  >
+                    {(['inbox', 'next', 'in-progress', 'waiting'] as TaskStatus[]).filter(s => s !== 'inbox' || t.status === 'inbox').map(s => (
+                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-2.5 py-1.5 whitespace-nowrap"><DueChip due={t.due} /></td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </section>
   )
 }
 

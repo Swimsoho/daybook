@@ -92,12 +92,14 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
 
 // ---------- Task row with quick actions ----------
 
-export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll }: {
+export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, selected, onToggleSelect }: {
   task: Task
   showArea?: boolean
   depth?: number
   onOpen: (t: Task) => void
   expandAll?: boolean
+  selected?: boolean
+  onToggleSelect?: (id: string) => void
 }) {
   const { state, completeTask, snoozeTask, calledFollowUp, updateTask, dropTask } = useStore()
   const [localExp, setLocalExp] = useState<boolean | null>(null)
@@ -126,6 +128,18 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll }:
         )}
         style={{ paddingLeft: 8 + depth * 26 }}
       >
+        {/* bulk-select checkbox */}
+        {onToggleSelect && (
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onMouseDown={e => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
+            onChange={() => onToggleSelect(task.id)}
+            className="h-3.5 w-3.5 shrink-0 accent-[hsl(152_22%_23%)] cursor-pointer"
+          />
+        )}
+
         {/* complete / reopen */}
         <button
           aria-label={done ? 'reopen' : 'complete'}

@@ -60,8 +60,14 @@ function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
   }
   const setTitle = (key: string) => setColumns(columns.map(c => ({ ...c, isTitle: c.key === key })))
 
-  // a column can only be a conditional-visibility target if it has options to be conditional on
-  const optionColumns = columns.filter(c => (c.type === 'select' || c.type === 'status') && (c.options?.length ?? 0) > 0)
+  // A single-choice or status column is a valid conditional-visibility target as soon as it
+  // exists — it doesn't need its options filled in first. Requiring that up front was the bug:
+  // a freshly-added Status field with no options typed in yet couldn't be picked as a
+  // dependency at all, so "Only show when" looked entirely missing on any new tracker
+  // (built-in ones like Movies only ever look "complete" because their Status field already
+  // has options saved). The value picker below falls back to free text when the target
+  // doesn't have options yet, so setting this up never has to happen in a fixed order.
+  const optionColumns = columns.filter(c => c.type === 'select' || c.type === 'status')
 
   return (
     <div className={cn('border border-border rounded-sm bg-background', !tracker.active && 'opacity-60')}>
@@ -128,7 +134,7 @@ function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
                   Required
                 </label>
               </div>
-              {optionColumns.some(oc => oc.key !== c.key) && (
+              {optionColumns.some(oc => oc.key !== c.key) ? (
                 <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
                   <span className="text-muted-foreground">Only show when</span>
                   <Select
@@ -145,18 +151,32 @@ function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
                       {optionColumns.filter(oc => oc.key !== c.key).map(oc => <SelectItem key={oc.key} value={oc.key}>{oc.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {c.showWhen && (
-                    <>
-                      <span className="text-muted-foreground">=</span>
-                      <Select value={c.showWhen.equals} onValueChange={v => updateColumn(c.key, { showWhen: { columnKey: c.showWhen!.columnKey, equals: v } })}>
-                        <SelectTrigger className="h-6 w-[100px] text-[10.5px]"><SelectValue placeholder="value" /></SelectTrigger>
-                        <SelectContent>
-                          {(columns.find(oc => oc.key === c.showWhen!.columnKey)?.options ?? []).map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </>
-                  )}
+                  {c.showWhen && (() => {
+                    const depOptions = columns.find(oc => oc.key === c.showWhen!.columnKey)?.options ?? []
+                    return (
+                      <>
+                        <span className="text-muted-foreground">=</span>
+                        {depOptions.length > 0 ? (
+                          <Select value={c.showWhen.equals || undefined} onValueChange={v => updateColumn(c.key, { showWhen: { columnKey: c.showWhen!.columnKey, equals: v } })}>
+                            <SelectTrigger className="h-6 w-[100px] text-[10.5px]"><SelectValue placeholder="value" /></SelectTrigger>
+                            <SelectContent>
+                              {depOptions.map(o => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <Input
+                            placeholder="value (add options above, or type one here)"
+                            value={c.showWhen.equals}
+                            onChange={e => updateColumn(c.key, { showWhen: { columnKey: c.showWhen!.columnKey, equals: e.target.value } })}
+                            className="h-6 w-[210px] text-[10.5px]"
+                          />
+                        )}
+                      </>
+                    )
+                  })()}
                 </div>
+              ) : (
+                <p className="text-[10.5px] text-muted-foreground italic">Add a Status or single-choice field to make other fields conditional on it — same as Movies' Rating only showing once Status reaches “Watched.”</p>
               )}
             </div>
           ))}

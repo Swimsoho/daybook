@@ -279,6 +279,17 @@ export function daysSince(d?: string): number {
   if (!d) return 9999
   return daysBetween(d, today())
 }
+// For a recurring yearly date (birthdays, anniversaries) stored as any YYYY-MM-DD — the year
+// on file might be a birth year, not "this year" — this returns the next real occurrence:
+// this year's date if it hasn't passed yet, otherwise next year's. Non-recurring dates pass
+// through unchanged, so the same "days until" math works for both.
+export function nextOccurrence(d: string, recurring: boolean): string {
+  if (!recurring) return d
+  const [, m, day] = d.split('-')
+  const y = new Date().getFullYear()
+  const thisYear = `${y}-${m}-${day}`
+  return daysBetween(today(), thisYear) < 0 ? `${y + 1}-${m}-${day}` : thisYear
+}
 export function fmtDate(d?: string): string {
   if (!d) return '—'
   const dt = new Date(d + 'T12:00:00')

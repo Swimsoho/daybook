@@ -102,8 +102,20 @@ export function seedState(): AppState {
     collections: [
       { id: 'col_ent', name: 'Entertainment', description: 'Things to watch and read', color: 'hsl(280 25% 45%)', active: true },
       { id: 'col_fin', name: 'Financial', description: 'Subscriptions and policies', color: 'hsl(152 25% 32%)', active: true },
+      { id: 'col_personal', name: 'Personal', description: 'Dates and things worth not forgetting', color: 'hsl(340 45% 45%)', active: true },
     ],
     trackers: [
+      {
+        id: 'trk_dates', collectionId: 'col_personal', name: 'Dates to Remember', description: 'Birthdays, anniversaries, and other dates worth a nudge — export to your calendar from Collections',
+        defaultView: 'table', active: true,
+        columns: [
+          { key: 'name', name: 'Name', type: 'text', isTitle: true, required: true },
+          { key: 'date', name: 'Date', type: 'date', required: true },
+          { key: 'recurring', name: 'Repeats every year', type: 'checkbox' },
+          { key: 'type', name: 'Type', type: 'select', options: ['Birthday', 'Anniversary', 'Other'] },
+          { key: 'notes', name: 'Notes', type: 'longtext' },
+        ],
+      },
       {
         id: 'trk_movies', collectionId: 'col_ent', name: 'Movies', description: 'The watch-list', defaultView: 'board', active: true,
         columns: [
@@ -147,6 +159,10 @@ export function seedState(): AppState {
       { id: 'e8', trackerId: 'trk_subs', created: daysAgo(90), values: { service: 'Amazon Prime', cost: 8.99, renewal: addDays(T, 21), status: 'Active' } },
       { id: 'e9', trackerId: 'trk_subs', created: daysAgo(90), values: { service: 'Gym membership', cost: 42, renewal: addDays(T, 5), status: 'Active', notes: 'Barely used — candidate to cancel' } },
       { id: 'e10', trackerId: 'trk_subs', created: daysAgo(90), values: { service: 'Old cloud storage', cost: 7.99, status: 'Cancelling', notes: 'No renewal date on file' } },
+      { id: 'e11', trackerId: 'trk_dates', created: daysAgo(200), values: { name: 'Mum’s birthday', date: '1958-08-02', recurring: true, type: 'Birthday' } },
+      { id: 'e12', trackerId: 'trk_dates', created: daysAgo(200), values: { name: 'Wedding anniversary', date: '2015-07-29', recurring: true, type: 'Anniversary' } },
+      { id: 'e13', trackerId: 'trk_dates', created: daysAgo(200), values: { name: 'Rabbi Stern’s birthday', date: '1970-09-15', recurring: true, type: 'Birthday' } },
+      { id: 'e14', trackerId: 'trk_dates', created: daysAgo(5), values: { name: 'Passport renewal due', date: addDays(T, 25), recurring: false, type: 'Other', notes: 'Apply at least 6 weeks ahead' } },
     ],
     captures: [
       { id: 'cap1', text: 'buy tickets for the shul dinner', source: 'whatsapp', created: daysAgo(0), status: 'pending', proposal: { kind: 'task', taskType: 'todo', areaId: 'a_shul', projectId: 'pr_dinner', priority: 'P1', title: 'Buy tickets for the shul dinner', due: addDays(T, 3), explanation: '“shul dinner” matched Shul › Annual Dinner' } },

@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Download, Plus, Upload } from 'lucide-react'
+import { CalendarPlus, Download, Plus, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -66,6 +66,11 @@ export default function CollectionsPage() {
             <button key={v} onClick={() => setView(v)} className={cn('px-2 py-1 text-[11.5px] border rounded-sm capitalize', activeView === v ? 'bg-secondary border-input' : 'border-transparent hover:border-border')}>{v}</button>
           ))}
           <Button size="sm" variant="outline" className="h-7 ml-1" onClick={() => downloadTrackerTemplate(tracker)}><Download className="h-3.5 w-3.5 mr-1" />Excel template</Button>
+          {tracker.columns.some(c => c.type === 'date') && (
+            <Button size="sm" variant="outline" className="h-7" onClick={() => downloadTrackerIcs(tracker, entries)}>
+              <CalendarPlus className="h-3.5 w-3.5 mr-1" />Add to Calendar
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="h-7" onClick={() => setImporting(true)}><Upload className="h-3.5 w-3.5 mr-1" />Import</Button>
           <Button size="sm" className="h-7" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5 mr-1" />Entry</Button>
         </div>
@@ -302,6 +307,49 @@ function downloadTrackerTemplate(tracker: Tracker) {
   const rows = [header, exampleRow, instructionsRow]
   downloadXlsxTemplate(`daybook-${tracker.name.toLowerCase().replace(/\s+/g, '-')}-template.xlsx`, tracker.name, rows)
   toast.success('Excel template downloaded - matches this tracker’s own columns')
+}
+
+// ---------- Export any date-bearing tracker as a standard .ics calendar file ----------
+// This is the realistic version of "sync with calendar" without needing Google/Outlook OAuth:
+// a real iCalendar file any calendar app can import (or subscribe to, if hosted) — recurring
+// entries (birthdays, anniversaries) carry a yearly RRULE so they repeat every year from here on.
+
+function icsEscape(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;')
+}
+
+function downloadTrackerIcs(tracker: Tracker, entries: Entry[]) {
+  const dateCol = tracker.columns.find(c => c.type === 'date')
+  if (!dateCol) { toast.error('This tracker has no date field to export'); return }
+  const titleCol = tracker.columns.find(c => c.isTitle) ?? tracker.columns[0]
+  const recurCol = tracker.columns.find(c => c.type === 'checkbox' && /recur|repeat/i.test(c.name + ' ' + c.key))
+  const notesCol = tracker.columns.find(c => c.type === 'longtext')
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+  const lines: string[] = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Daybook//Collections Export//EN', 'CALSCALE:GREGORIAN']
+  let count = 0
+  for (const e of entries) {
+    const raw = e.values[dateCol.key]
+    if (!raw) continue
+    const dateStr = String(raw).replace(/-/g, '')
+    if (!/^\d{8}$/.test(dateStr)) continue
+    const title = String(e.values[titleCol.key] ?? tracker.name)
+    const recurring = recurCol ? !!e.values[recurCol.key] : false
+    lines.push('BEGIN:VEVENT', `UID:${e.id}@daybook.app`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${dateStr}`, `SUMMARY:${icsEscape(title)}`)
+    if (notesCol && e.values[notesCol.key]) lines.push(`DESCRIPTION:${icsEscape(String(e.values[notesCol.key]))}`)
+    if (recurring) lines.push('RRULE:FREQ=YEARLY')
+    lines.push('END:VEVENT')
+    count++
+  }
+  lines.push('END:VCALENDAR')
+  if (count === 0) { toast.error('No entries with a date to export yet'); return }
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `daybook-${tracker.name.toLowerCase().replace(/\s+/g, '-')}.ics`
+  a.click()
+  URL.revokeObjectURL(url)
+  toast.success(`Exported ${count} date${count === 1 ? '' : 's'} — import the file into Google/Outlook/Apple Calendar`)
 }
 
 interface ParsedEntry {
