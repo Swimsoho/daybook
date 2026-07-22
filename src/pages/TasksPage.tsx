@@ -13,8 +13,9 @@ import {
   Priority, PRIORITY_LABELS, STATUS_LABELS, Task, TaskStatus, TYPE_LABELS, daysSince, fmtDate, today,
 } from '@/lib/model'
 import { useStore } from '@/lib/store'
-import { AreaDot, ClearFiltersButton, DueChip, EmptyNote, PriorityChip } from '@/components/bits'
+import { ClearFiltersButton, DueChip, EmptyNote, PriorityChip } from '@/components/bits'
 import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
+import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
 type View = 'today' | 'week' | 'area' | 'waiting' | 'someday' | 'done' | 'all' | 'list'
 
@@ -516,7 +517,25 @@ const TEMPLATE_COLUMNS = [
   'Category', 'Person', 'Vendor', 'Call about', 'Waiting on', 'Notes',
 ] as const
 
-function downloadTemplate(state: ReturnType<typeof useStore>['state']) {
+// Column indexes into TEMPLATE_COLUMNS that get a real in-cell dropdown, built from whatever's
+// actually set up right now — areas, categories, people, vendors, projects — plus the fixed
+// Type/Priority/Status enums. Anyone editing the sheet sees exactly the valid choices instead of
+// having to remember them from an instructions row.
+function taskTemplateDropdowns(state: ReturnType<typeof useStore>['state']): ColumnDropdown[] {
+  const scheme = state.settings.priorityScheme
+  return [
+    { col: 1, values: ['todo', 'call', 'followup'] }, // Type
+    { col: 2, values: state.areas.filter(a => a.active).map(a => a.name) }, // Area
+    { col: 3, values: state.projects.filter(p => p.status === 'active' || p.status === 'on-hold').map(p => p.name) }, // Project
+    { col: 4, values: (['P0', 'P1', 'P2', 'P3'] as Priority[]).map(p => PRIORITY_LABELS[scheme][p]) }, // Priority
+    { col: 5, values: ['inbox', 'next', 'in-progress', 'waiting'] }, // Status (the literal values the importer accepts)
+    { col: 8, values: state.categories.filter(c => c.active).map(c => c.name) }, // Category
+    { col: 9, values: state.people.map(p => p.name) }, // Person
+    { col: 10, values: state.vendors.map(v => v.name) }, // Vendor
+  ].filter(d => d.values.length > 0)
+}
+
+async function downloadTemplate(state: ReturnType<typeof useStore>['state']) {
   const areaNames = state.areas.filter(a => a.active).map(a => a.name).join(' | ')
   const rows = [
     [...TEMPLATE_COLUMNS],
@@ -525,37 +544,8 @@ function downloadTemplate(state: ReturnType<typeof useStore>['state']) {
     ['Chase the caterer', 'followup', '', '', 'P1', 'waiting', '', '2026-08-05', 'Follow-up', '', '', '', 'Caterer', 'They owe us final menu'],
     ['— DELETE THIS ROW — allowed values → Type: todo | call | followup · Priority: P0 P1 P2 P3 (or High/Medium/Low/1-4) · Status: next | in-progress | waiting · Dates: YYYY-MM-DD · Areas: ' + areaNames, '', '', '', '', '', '', '', '', '', '', '', '', ''],
   ]
-  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }))
-  const a = document.createElement('a')
-  a.href = url; a.download = 'daybook-tasks-template.csv'; a.click()
-  URL.revokeObjectURL(url)
-  toast.success('Template downloaded — fill it in Excel or Sheets, save as CSV, then import')
-}
-
-// small CSV parser that handles quoted fields, commas and newlines
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = []
-  let row: string[] = [], cur = '', inQ = false
-  const src = text.replace(/^﻿/, '')
-  for (let i = 0; i < src.length; i++) {
-    const ch = src[i]
-    if (inQ) {
-      if (ch === '"') {
-        if (src[i + 1] === '"') { cur += '"'; i++ } else inQ = false
-      } else cur += ch
-    } else if (ch === '"') inQ = true
-    else if (ch === ',') { row.push(cur); cur = '' }
-    else if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && src[i + 1] === '\n') i++
-      row.push(cur); cur = ''
-      if (row.some(c => c.trim() !== '')) rows.push(row)
-      row = []
-    } else cur += ch
-  }
-  row.push(cur)
-  if (row.some(c => c.trim() !== '')) rows.push(row)
-  return rows
+  await downloadXlsxTemplateWithDropdowns('daybook-tasks-template.xlsx', 'Tasks', rows, taskTemplateDropdowns(state))
+  toast.success('Template downloaded — Area/Project/Priority/Status/Category/Person/Vendor are real dropdowns, built from what you have set up')
 }
 
 interface ParsedRow {
@@ -573,8 +563,7 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
 
   function handleFile(f: File) {
     setFileName(f.name)
-    f.text().then(text => {
-      const rows = parseCsv(text)
+    parseSpreadsheetFile(f).then(rows => {
       if (rows.length < 2) { toast.error('No data rows found — is this the filled template?'); return }
       const header = rows[0].map(h => h.trim().toLowerCase())
       const col = (name: string) => header.indexOf(name.toLowerCase())
@@ -595,7 +584,7 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
         const priority = prMap[prRaw] ?? 'P2'
         if (prRaw && !prMap[prRaw]) warnings.push(`priority “${prRaw}” → P2`)
         const stRaw = get(r, 'status').toLowerCase()
-        const stMap: Record<string, Task['status']> = { 'next': 'next', 'in-progress': 'in-progress', 'in progress': 'in-progress', 'waiting': 'waiting', 'inbox': 'inbox' }
+        const stMap: Record<string, Task['status']> = { 'next': 'next', 'in-progress': 'in-progress', 'in progress': 'in-progress', 'waiting': 'waiting', 'waiting on': 'waiting', 'inbox': 'inbox' }
         const status = stMap[stRaw] ?? 'next'
         if (stRaw && !stMap[stRaw]) warnings.push(`status “${stRaw}” → next`)
         const area = byName(state.areas.filter(a => a.active), get(r, 'area'))
@@ -633,7 +622,7 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
       }
       if (!out.length) { toast.error('No importable rows found'); return }
       setParsed(out)
-    })
+    }).catch(() => toast.error('Couldn’t read that file — make sure it’s the .xlsx or .csv you exported/filled in'))
   }
 
   function commit() {
@@ -656,21 +645,21 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">1</span>
               <div>
-                Download the template — it has every field, example rows, and the allowed values.
-                <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={() => downloadTemplate(state)}><Download className="h-3 w-3 mr-1.5" />Download template (.csv)</Button></div>
+                Download the template — Area, Project, Priority, Status, Category, Person and Vendor are real dropdowns built from what you've already set up, so you're picking from a list rather than retyping names.
+                <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={() => downloadTemplate(state)}><Download className="h-3 w-3 mr-1.5" />Download template (.xlsx)</Button></div>
               </div>
             </div>
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">2</span>
-              <span>Fill it in Excel or Google Sheets — one task per row, only <b>Title</b> is required. Save/export as CSV.</span>
+              <span>Fill it in Excel or Google Sheets — one task per row, only <b>Title</b> is required. Save it as .xlsx or .csv, either works.</span>
             </div>
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">3</span>
               <div className="flex-1">
-                Upload it — you'll get a preview before anything is created.
+                Upload it — you'll get a preview before anything is created. Anything that doesn't match an existing area/project/category/person/vendor is flagged in the preview and imported anyway with that bit left blank — nothing ever fails the whole row.
                 <label className="mt-1.5 border border-dashed border-input rounded-sm p-5 text-center text-[13px] text-muted-foreground cursor-pointer hover:bg-accent/50 block">
-                  {fileName || 'Click to choose your filled CSV'}
-                  <input type="file" accept=".csv,text/csv" className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                  {fileName || 'Click to choose your filled .xlsx or .csv'}
+                  <input type="file" accept={SPREADSHEET_ACCEPT} className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
                 </label>
               </div>
             </div>

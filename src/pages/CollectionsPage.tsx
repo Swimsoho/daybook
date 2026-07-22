@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 import { Entry, Tracker, TrackerColumn, fmtDate, today } from '@/lib/model'
 import { useStore } from '@/lib/store'
 import { EmptyNote, Stars } from '@/components/bits'
-import { SPREADSHEET_ACCEPT, downloadXlsxTemplate, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
+import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
 function visibleColumns(trk: Tracker, values: Entry['values']): TrackerColumn[] {
   return trk.columns.filter(c => !c.showWhen || values[c.showWhen.columnKey] === c.showWhen.equals)
@@ -279,7 +279,7 @@ function ColumnInput({ col, value, onChange }: { col: TrackerColumn; value: Entr
 
 // ---------- Collections bulk import: per-tracker template + preview ----------
 
-function downloadTrackerTemplate(tracker: Tracker) {
+async function downloadTrackerTemplate(tracker: Tracker) {
   const titleCol = tracker.columns.find(c => c.isTitle) ?? tracker.columns[0]
   const header = tracker.columns.map(c => c.name)
   const exampleRow = tracker.columns.map(c => {
@@ -305,8 +305,17 @@ function downloadTrackerTemplate(tracker: Tracker) {
   })
   const instructionsRow = header.map((_h, i) => i === 0 ? `- DELETE THIS ROW - allowed values: ${notes.join(' ')}` : '')
   const rows = [header, exampleRow, instructionsRow]
-  downloadXlsxTemplate(`daybook-${tracker.name.toLowerCase().replace(/\s+/g, '-')}-template.xlsx`, tracker.name, rows)
-  toast.success('Excel template downloaded - matches this tracker’s own columns')
+  // Single-choice columns (Status, and any select field) get a real in-cell dropdown built from
+  // that field's own option list; a checkbox gets a yes/no dropdown. Multi-select isn't a great
+  // fit for a single-value Excel dropdown, so it stays a free-text ";"-separated field with the
+  // instructions row spelling out the valid options, same as before.
+  const dropdowns: ColumnDropdown[] = tracker.columns.map((c, i) => {
+    if (c.type === 'select' || c.type === 'status') return { col: i, values: c.options ?? [] }
+    if (c.type === 'checkbox') return { col: i, values: ['yes', 'no'] }
+    return { col: i, values: [] }
+  })
+  await downloadXlsxTemplateWithDropdowns(`daybook-${tracker.name.toLowerCase().replace(/\s+/g, '-')}-template.xlsx`, tracker.name, rows, dropdowns)
+  toast.success('Excel template downloaded - matches this tracker’s own columns, with dropdowns for its Status/single-choice/checkbox fields')
 }
 
 // ---------- Export any date-bearing tracker as a standard .ics calendar file ----------

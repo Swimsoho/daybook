@@ -11,7 +11,7 @@ import { Person, Tier, TIER_LABELS, daysSince, fmtDate, personCadence, personOve
 import { buildCallList, useStore } from '@/lib/store'
 import { ClearFiltersButton, EmptyNote, SectionTitle, TierBadge } from '@/components/bits'
 import { LogCallDialog, PersonDetail, SentimentDot } from '@/components/people'
-import { SPREADSHEET_ACCEPT, downloadXlsxTemplate, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
+import { SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
 export default function PeoplePage() {
   const { state, addPerson } = useStore()
@@ -170,7 +170,7 @@ function AddPersonDialog({ open, onClose, onAdd }: { open: boolean; onClose: () 
 
 // ---------- Contacts bulk import: template + preview + merge ----------
 
-function downloadContactsTemplate() {
+async function downloadContactsTemplate() {
   const rows = [
     ['Name', 'Phone / WhatsApp', 'Email', 'Tier', 'Cadence days', 'How you know them', 'Topics', 'VIP', 'Notes'],
     ['David Feldman', '+44 7700 900010', 'david@feldman.co', 'active', '', 'Old colleague', 'Consulting, governors', 'yes', 'Owes me an intro'],
@@ -178,8 +178,11 @@ function downloadContactsTemplate() {
     ['Ella Rosen', '', 'ella.rosen@gmail.com', 'dormant', '', 'Former client', 'Marketing', '', ''],
     ['- DELETE THIS ROW - allowed values: Tier = inner | active | network | dormant. Cadence days = number (blank = tier default). VIP = yes/no. Only Name is required.', '', '', '', '', '', '', '', ''],
   ]
-  downloadXlsxTemplate('daybook-contacts-template.xlsx', 'Contacts', rows)
-  toast.success('Excel template downloaded — fill it in and upload it back here')
+  await downloadXlsxTemplateWithDropdowns('daybook-contacts-template.xlsx', 'Contacts', rows, [
+    { col: 3, values: ['inner', 'active', 'network', 'dormant'] }, // Tier
+    { col: 7, values: ['yes', 'no'] }, // VIP
+  ])
+  toast.success('Excel template downloaded — Tier and VIP are real dropdowns now')
 }
 
 interface ParsedPerson {
