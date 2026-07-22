@@ -36,6 +36,7 @@ export interface Cloud {
   setTelegramChatId: (id: string) => Promise<string | null>
   setSlackUserId: (id: string) => Promise<string | null>
   sendTestMessage: (channel: 'telegram' | 'slack', text?: string) => Promise<string | null>
+  shareTask: (task: { id: string; title: string; notes?: string; due?: string }) => Promise<{ token?: string; error?: string }>
   admin: {
     listUsers: () => Promise<AdminUser[]>
     invite: (u: { name: string; email: string; role: Role }) => Promise<string | null>
@@ -301,6 +302,17 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
       if (error) return error.message
       if (data?.error) return data.error as string
       return null
+    },
+    // "Share a task with someone to do, and get it back from them" (task detail > Share). Snap-
+    // shots the task into a `task_shares` row via the shared-task Edge Function and returns a
+    // token to build a public, no-login link from — see shared-task/index.ts for the full flow.
+    shareTask: async task => {
+      const { data, error } = await supabase!.functions.invoke('shared-task', {
+        body: { action: 'create', workspaceId: activeWs.id, taskId: task.id, title: task.title, notes: task.notes, due: task.due },
+      })
+      if (error) return { error: error.message }
+      if (data?.error) return { error: data.error as string }
+      return { token: data.token as string }
     },
     admin: {
       async listUsers() {

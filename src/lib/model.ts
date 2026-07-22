@@ -64,6 +64,12 @@ export interface Task {
   created: string
   completedAt?: string
   droppedReason?: string
+  // "Share a task with someone to do, and get it back from them" — a public, no-login link
+  // (see the `shared-task` Edge Function and `task_shares` table). `token` is the URL slug;
+  // status flips to 'done' the moment the recipient clicks "Mark as done" on their end, which
+  // is also what sets the task's own `status`/`completedAt` — this field just remembers it
+  // came back via a shared link rather than Craig checking it off himself.
+  shared?: { token: string; status: 'pending' | 'done'; createdAt: string; respondedAt?: string }
 }
 
 export interface Person {

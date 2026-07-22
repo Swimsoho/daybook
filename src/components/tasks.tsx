@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, ChevronDown, ChevronRight, Clock, Loader2, MoreHorizontal, Paperclip, Phone, Trash2, User } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, Loader2, MoreHorizontal, Paperclip, Phone, Send, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -201,6 +201,7 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
             {task.type === 'call' && <Phone className="h-3 w-3 shrink-0 text-[hsl(215_45%_42%)]" />}
             {task.type === 'followup' && <Clock className="h-3 w-3 shrink-0 text-[hsl(17_63%_47%)]" />}
             <span className={cn('truncate text-[13.5px]', done && 'line-through text-muted-foreground')}>{task.title}</span>
+            {task.shared?.status === 'pending' && <Send className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Shared — awaiting response" />}
             {roll && (
               <span className="shrink-0 text-[10.5px] tabular text-muted-foreground border border-border rounded-sm px-1 py-px">
                 {roll.done}/{roll.total}{roll.overdue > 0 && <span className="text-[hsl(8_60%_41%)]"> · {roll.overdue} late</span>}
@@ -613,6 +614,73 @@ function TaskAttachments({ task }: { task: Task }) {
   )
 }
 
+// ---------- Delegate a task: a public, no-login link — "share it, get it back" ----------
+
+function TaskShare({ task }: { task: Task }) {
+  const cloud = useCloud()
+  const { updateTask } = useStore()
+  const [creating, setCreating] = useState(false)
+
+  // A share is only useful while the task isn't done yet; once it's confirmed via the link (or
+  // finished any other way), there's nothing left to share.
+  if (task.status === 'done' || task.status === 'dropped') return null
+  if (!cloud) return <p className="text-[12px] text-muted-foreground italic">Sign in to a real account to share a task by link.</p>
+
+  const shared = task.shared
+  const shareUrl = shared ? `${window.location.origin}/share/${shared.token}` : null
+
+  async function createLink() {
+    if (!cloud) return
+    setCreating(true)
+    const { token, error } = await cloud.shareTask({ id: task.id, title: task.title, notes: task.notes, due: task.due })
+    setCreating(false)
+    if (error || !token) { toast.error(error ?? 'Could not create a share link'); return }
+    updateTask(task.id, { shared: { token, status: 'pending', createdAt: new Date().toISOString() } }, 'shared via link')
+    toast.success('Link created — copy it to whoever you’re handing this to')
+  }
+
+  async function copyLink() {
+    if (!shareUrl) return
+    await navigator.clipboard.writeText(shareUrl)
+    toast.success('Link copied')
+  }
+
+  return (
+    <div className="text-[13px] border border-border bg-accent/30 rounded-sm p-2.5">
+      <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground mb-1 flex items-center gap-1.5">
+        <Send className="h-3 w-3" />Share this task
+      </div>
+      {!shared ? (
+        <>
+          <p className="text-[12px] text-muted-foreground mb-1.5">
+            Get a link you can text, email, or WhatsApp to anyone — no Daybook account needed on their end. They see just this task, with a "Mark as done" button; when they click it, it comes back here as done automatically.
+          </p>
+          <Button size="sm" className="h-7 px-2.5 text-[12px]" disabled={creating} onClick={createLink}>
+            {creating ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1" />}
+            {creating ? 'Creating…' : 'Create share link'}
+          </Button>
+        </>
+      ) : shared.status === 'done' ? (
+        <p className="text-[12.5px] text-[hsl(152_35%_30%)]">
+          <Check className="h-3.5 w-3.5 inline mr-1" />Confirmed done via shared link{shared.respondedAt ? ` on ${fmtDate(shared.respondedAt.slice(0, 10))}` : ''}.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 gap-1.5">
+          <p className="text-[12px] text-muted-foreground">Sent — waiting for them to mark it done.</p>
+          <div className="flex items-center gap-1.5">
+            <code className="flex-1 min-w-0 truncate border border-border bg-card rounded-sm px-2 py-1 text-[11.5px]">{shareUrl}</code>
+            <Button size="sm" variant="outline" className="h-7 px-2 shrink-0" onClick={copyLink} title="Copy link"><Copy className="h-3.5 w-3.5" /></Button>
+            <Button size="sm" variant="outline" className="h-7 px-2 shrink-0" onClick={() => shareUrl && window.open(shareUrl, '_blank', 'noopener')} title="Open in new tab"><ExternalLink className="h-3.5 w-3.5" /></Button>
+          </div>
+          <button className="text-[11px] text-muted-foreground hover:text-foreground text-left" disabled={creating} onClick={createLink}>
+            Create a new link instead
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---------- Task detail sheet (with per-item history) ----------
 
 export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClose: () => void; onEdit: (t: Task) => void }) {
@@ -786,6 +854,7 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
           {task.notes && <p className="text-[13px] text-foreground/80 border-l-2 border-border pl-3">{task.notes}</p>}
           {task.droppedReason && <p className="text-[13px] text-muted-foreground italic">Dropped: {task.droppedReason}</p>}
           <TaskAttachments task={task} />
+          <TaskShare task={task} />
           {kids.length > 0 && (
             <div className="text-[13px]">
               <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground mb-1">Subtasks</div>

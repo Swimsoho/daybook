@@ -91,7 +91,11 @@ This is the part that involves creating a bot on Telegram's or Slack's own site 
 
 ---
 
-## 4. Where does X live?
+## 4. Handing a task to someone else
+
+Open the task, click **Share** in its detail view, then **Create share link**. Copy the link it gives you and send it however you like — text, email, WhatsApp. Whoever opens it sees just that one task and a **"Mark as done"** button — no Daybook account needed on their end. The moment they click it, it comes back to you automatically: the task flips to Done in your own list, no follow-up needed.
+
+## 5. Where does X live?
 
 A few quick answers to questions that come up early:
 
