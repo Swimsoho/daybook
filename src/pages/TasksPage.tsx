@@ -163,7 +163,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       {/* View tabs */}
       <div className="flex flex-wrap items-center gap-1">
         {VIEWS.map(v => (
@@ -178,7 +178,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
             {v.label}
           </button>
         ))}
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
           <Button variant="outline" size="sm" className="h-8" onClick={() => setExpandAll(v => !v)}>{expandAll ? 'Collapse all' : 'Expand all'}</Button>
           <Button variant="outline" size="sm" className="h-8" onClick={exportCsv}><Download className="h-3.5 w-3.5 mr-1.5" />Export</Button>
           <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}><FileUp className="h-3.5 w-3.5 mr-1.5" />Import</Button>
@@ -360,7 +360,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       {view === 'list' ? (
         <TaskListTable tasks={sorted} selected={selected} onToggleSelect={toggleSelect} onOpen={setOpenTask} />
       ) : groupedByArea ? (
-        <div className="grid gap-4">
+        <div className="grid grid-cols-1 gap-4">
           {groupedByArea.map(({ area, tasks }) => (
             <section
               key={area.id}
@@ -676,7 +676,7 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
           <DialogTitle className="font-display text-lg">Bulk import tasks</DialogTitle>
         </DialogHeader>
         {!parsed ? (
-          <div className="grid gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">1</span>
               <div>
@@ -700,7 +700,7 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
             </div>
           </div>
         ) : (
-          <div className="grid gap-2.5">
+          <div className="grid grid-cols-1 gap-2.5">
             <p className="text-[13px]">
               <b>{parsed.length}</b> tasks ready from <span className="text-muted-foreground">{fileName}</span>
               {warnCount > 0 && <span className="text-[hsl(28_60%_32%)]"> · {warnCount} with notes (imported anyway, minus the flagged bits)</span>}

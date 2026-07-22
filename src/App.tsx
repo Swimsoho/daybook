@@ -73,7 +73,7 @@ function SidebarContent({
           </button>
         )}
       </div>
-      <nav className="flex-1 px-2 grid gap-0.5 content-start overflow-y-auto">
+      <nav className="flex-1 px-2 grid grid-cols-1 gap-0.5 content-start overflow-y-auto">
         {nav.map(n => (
           <button
             key={n.id}
@@ -93,7 +93,7 @@ function SidebarContent({
         ))}
       </nav>
       {cloud && !impersonation && (
-        <div className="px-3 py-3 border-t border-[hsl(var(--nav-text)_/_0.1)] grid gap-2">
+        <div className="px-3 py-3 border-t border-[hsl(var(--nav-text)_/_0.1)] grid grid-cols-1 gap-2">
           <div className="text-[10.5px] opacity-70 truncate">{cloud.profile.email}</div>
           <div className="flex border border-[hsl(var(--nav-text)_/_0.3)] rounded-sm overflow-hidden text-[11px]">
             {(['real', 'sample'] as const).map(m => (

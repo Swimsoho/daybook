@@ -25,8 +25,8 @@ export default function InboxPage() {
   const [reassignAction, setReassignAction] = useState<Record<string, string>>({})
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
-      <div className="grid gap-4 content-start">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
+      <div className="grid grid-cols-1 gap-4 content-start">
         <section className="border border-border bg-card shadow-sm rise-in">
           <div className="px-4 pt-3.5 pb-1 flex items-baseline justify-between">
             <SectionTitle className="mb-0">One inbox, cleared lightly</SectionTitle>
@@ -46,7 +46,7 @@ export default function InboxPage() {
             const action = state.actions.find(act => act.id === actionId)
             return (
               <div key={c.id} className="border-b border-border/70 last:border-0 px-4 py-3">
-                <div className="flex items-start gap-2.5">
+                <div className="flex flex-wrap items-start gap-2.5">
                   <span className="mt-0.5">{SOURCE_ICON[c.source]}</span>
                   <div className="min-w-0 flex-1">
                     <p className="text-[13.5px]">“{c.text}”</p>
@@ -73,15 +73,15 @@ export default function InboxPage() {
                     </div>
                     <p className="mt-1 text-[11px] text-muted-foreground italic">{p.explanation}</p>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto sm:shrink-0 pl-[26px] sm:pl-0">
                     <Select value={reassign[c.id] ?? p.areaId ?? ''} onValueChange={v => setReassign(r => ({ ...r, [c.id]: v }))}>
-                      <SelectTrigger className="h-7 w-[110px] text-[11px] bg-background"><SelectValue placeholder="area" /></SelectTrigger>
+                      <SelectTrigger className="h-7 w-[100px] sm:w-[110px] text-[11px] bg-background"><SelectValue placeholder="area" /></SelectTrigger>
                       <SelectContent>
                         {state.areas.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <Select value={reassignCategory[c.id] ?? p.categoryIds?.[0] ?? ''} onValueChange={v => setReassignCategory(r => ({ ...r, [c.id]: v }))}>
-                      <SelectTrigger className="h-7 w-[130px] text-[11px] bg-background"><SelectValue placeholder="category" /></SelectTrigger>
+                      <SelectTrigger className="h-7 w-[110px] sm:w-[130px] text-[11px] bg-background"><SelectValue placeholder="category" /></SelectTrigger>
                       <SelectContent>
                         {categoriesForArea(state.categories, effectiveAreaId, categoryId).map(cat => (
                           <SelectItem key={cat.id} value={cat.id}>{cat.level > 0 ? '› ' : ''}{cat.name}</SelectItem>
@@ -89,7 +89,7 @@ export default function InboxPage() {
                       </SelectContent>
                     </Select>
                     <Select value={reassignAction[c.id] ?? p.actionIds?.[0] ?? ''} onValueChange={v => setReassignAction(r => ({ ...r, [c.id]: v }))}>
-                      <SelectTrigger className="h-7 w-[116px] text-[11px] bg-background"><SelectValue placeholder="action" /></SelectTrigger>
+                      <SelectTrigger className="h-7 w-[100px] sm:w-[116px] text-[11px] bg-background"><SelectValue placeholder="action" /></SelectTrigger>
                       <SelectContent>
                         {state.actions.filter(act => act.active || act.id === actionId).map(act => (
                           <SelectItem key={act.id} value={act.id}>{act.name}</SelectItem>
@@ -167,7 +167,7 @@ function WhatsAppPanel({ onSend }: { onSend: (text: string, source: Source) => v
           <div className="text-[10px] opacity-70 leading-tight">placeholder — Business API connects in a later phase</div>
         </div>
       </div>
-      <div className="p-3 grid gap-2 bg-[hsl(42_30%_90%)] min-h-[180px] content-start">
+      <div className="p-3 grid grid-cols-1 gap-2 bg-[hsl(42_30%_90%)] min-h-[180px] content-start">
         <div className="justify-self-start max-w-[85%] bg-card border border-border rounded-md rounded-tl-none px-3 py-2 text-[12.5px]">
           Send anything on your mind — no forms, no menus. Try:<br />
           <span className="text-muted-foreground italic">“call David re school urgent”<br />“idea: build a sukkah shed”<br />“add Dune Part Two to my movies list”<br />“t: renew the car insurance this week”</span>

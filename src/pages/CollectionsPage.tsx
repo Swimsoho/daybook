@@ -49,7 +49,7 @@ export default function CollectionsPage() {
   if (!tracker) return <EmptyNote>Collections are switched off in Settings.</EmptyNote>
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       {/* Collection / tracker picker */}
       <div className="flex flex-wrap items-center gap-1.5">
         {state.collections.filter(c => c.active).map(col => (
@@ -71,7 +71,7 @@ export default function CollectionsPage() {
             ))}
           </React.Fragment>
         ))}
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
           {(['table', 'board', 'gallery'] as const).map(v => (
             <button key={v} onClick={() => setView(v)} className={cn('px-2 py-1 text-[11.5px] border rounded-sm capitalize', activeView === v ? 'bg-secondary border-input' : 'border-transparent hover:border-border')}>{v}</button>
           ))}
@@ -126,7 +126,7 @@ export default function CollectionsPage() {
 
       {/* BOARD */}
       {activeView === 'board' && statusCol && (
-        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${statusCol.options?.length ?? 3}, minmax(0,1fr))` }}>
+        <div className="grid grid-cols-1 gap-3" style={{ gridTemplateColumns: `repeat(${statusCol.options?.length ?? 3}, minmax(0,1fr))` }}>
           {statusCol.options?.map(stage => (
             <div
               key={stage}
@@ -147,7 +147,7 @@ export default function CollectionsPage() {
                 {stage}
                 <span className="tabular">{entries.filter(e => e.values[statusCol.key] === stage).length}</span>
               </div>
-              <div className="p-2 grid gap-2 min-h-[80px] content-start">
+              <div className="p-2 grid grid-cols-1 gap-2 min-h-[80px] content-start">
                 {entries.filter(e => e.values[statusCol.key] === stage).map(e => (
                   <button
                     key={e.id}
@@ -238,9 +238,9 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
         <DialogHeader>
           <DialogTitle className="font-display text-lg">{entry ? `Edit — ${tracker.name}` : `New ${tracker.name.replace(/s$/, '').toLowerCase()}`}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {vis.map(col => (
-            <div key={col.key} className="grid gap-1.5">
+            <div key={col.key} className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">
                 {col.name}{col.required && ' *'}
                 {col.showWhen && <span className="text-muted-foreground"> — appears because {tracker.columns.find(c => c.key === col.showWhen!.columnKey)?.name} = {col.showWhen.equals}</span>}
@@ -468,7 +468,7 @@ function ImportEntriesDialog({ tracker, open, onClose }: { tracker: Tracker; ope
       <DialogContent className="sm:max-w-[620px] max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-lg">Import into {tracker.name}</DialogTitle></DialogHeader>
         {!parsed ? (
-          <div className="grid gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">1</span>
               <div>
@@ -492,7 +492,7 @@ function ImportEntriesDialog({ tracker, open, onClose }: { tracker: Tracker; ope
             </div>
           </div>
         ) : (
-          <div className="grid gap-2.5">
+          <div className="grid grid-cols-1 gap-2.5">
             <p className="text-[13px]">
               <b>{parsed.length}</b> {tracker.name.toLowerCase()} entries from <span className="text-muted-foreground">{fileName}</span>
               {parsed.some(p => p.duplicateOf) && <span> - <b>{parsed.filter(p => p.duplicateOf).length}</b> share a name with an existing entry (added as new, not merged)</span>}

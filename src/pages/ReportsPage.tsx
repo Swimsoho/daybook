@@ -49,7 +49,7 @@ export default function ReportsPage() {
   const noRenewal = state.entries.filter(e => e.trackerId === 'trk_subs' && e.values['status'] !== 'Cancelled' && !e.values['renewal'])
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <div className="flex items-center gap-1">
         {(['exception', 'standard'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} className={cn('px-3 py-1.5 text-[12.5px] border rounded-sm capitalize', tab === t ? 'bg-primary text-primary-foreground border-primary' : 'border-transparent hover:border-border hover:bg-accent')}>
@@ -60,7 +60,7 @@ export default function ReportsPage() {
       </div>
 
       {tab === 'exception' ? (
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <ExceptionCard title={`Tasks overdue (${overdueTasks.length})`} tone="bad" rows={overdueTasks.map(t => [t.title, `${daysSince(t.due!)}d late`])} empty="Nothing overdue." />
           <ExceptionCard title={`Contacts past cadence (${overdueContacts.length})`} tone="bad" rows={overdueContacts.map(p => [p.name, `${personOverdueBy(p, state.settings)}d past target`])} empty="Everyone within cadence." />
           <ExceptionCard title={`Waiting-on gone quiet (${waitingQuiet.length})`} rows={waitingQuiet.map(t => [t.title, `${t.waitingOn} · ${daysSince(t.waitingSince)}d silent`])} empty="No chases needed." />
@@ -71,10 +71,10 @@ export default function ReportsPage() {
           {subsTracker && <ExceptionCard title={`Policies with no renewal date (${noRenewal.length})`} rows={noRenewal.map(e => [String(e.values['service']), 'no date on file'])} empty="All dated." />}
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <section className="border border-border bg-card shadow-sm p-4">
             <SectionTitle>Open tasks by area</SectionTitle>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               {byArea.map(({ a, n }) => (
                 <div key={a.id} className="flex items-center gap-2.5 text-[12.5px]">
                   <span className="w-28 truncate">{a.name}</span>
@@ -104,7 +104,7 @@ export default function ReportsPage() {
           </section>
           <section className="border border-border bg-card shadow-sm p-4">
             <SectionTitle>Tasks by priority</SectionTitle>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               {byPriority.map(({ p, n }) => (
                 <div key={p} className="flex items-center gap-2.5 text-[12.5px]">
                   <span className="w-10">{p}</span>
@@ -118,7 +118,7 @@ export default function ReportsPage() {
           </section>
           <section className="border border-border bg-card shadow-sm p-4">
             <SectionTitle>Contacts by tier</SectionTitle>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               {byTier.map(({ t, n }) => (
                 <div key={t} className="flex items-center gap-2.5 text-[12.5px]">
                   <span className="w-20 capitalize">{t}</span>

@@ -33,7 +33,7 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
         <h2 className="font-display text-[15px] font-semibold">{title}</h2>
         {sub && <p className="text-[11.5px] text-muted-foreground mt-0.5">{sub}</p>}
       </div>
-      <div className="px-4 py-3.5 grid gap-3">{children}</div>
+      <div className="px-4 py-3.5 grid grid-cols-1 gap-3">{children}</div>
     </section>
   )
 }
@@ -99,9 +99,9 @@ function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
         </button>
       </div>
       {expanded && (
-        <div className="border-t border-border p-2 grid gap-2">
+        <div className="border-t border-border p-2 grid grid-cols-1 gap-2">
           {columns.map(c => (
-            <div key={c.key} className="grid gap-1.5 border border-border/70 rounded-sm p-2 bg-accent/20">
+            <div key={c.key} className="grid grid-cols-1 gap-1.5 border border-border/70 rounded-sm p-2 bg-accent/20">
               <div className="flex items-center gap-1.5">
                 <Input value={c.name} onChange={e => updateColumn(c.key, { name: e.target.value })} className="h-7 flex-1 text-[12px]" />
                 <Select
@@ -262,7 +262,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
   ]
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border border-border bg-card shadow-sm px-4 py-2 rounded-sm">
         <span className="text-[12px] text-muted-foreground">
           {saving ? 'Saving…' : `Everything on this page autosaves as you type — last saved ${savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
@@ -277,8 +277,8 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           <Check className="h-3.5 w-3.5 mr-1" />Save
         </Button>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2 items-start">
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 items-start">
+      <div className="grid grid-cols-1 gap-4">
         <Section title="Appearance" sub="Pick a color palette for the whole app — takes effect immediately, everywhere.">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {THEMES.map(t => {
@@ -346,12 +346,12 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
         </Section>
 
         <Section title="Categories — main / sub / secondary" sub="Rename, retire, or bring back — archiving preserves all history. Cross-cutting labels used on tasks, contacts and vendors; every one is reportable. Tag a category to specific focus areas and it only shows up there — leave it untagged to keep it everywhere.">
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             {sortedCategories.map(c => {
               const tagged = c.areaIds ?? []
               const usage = categoryUsage(state, c.id)
               return (
-                <div key={c.id} className={cn('grid gap-1', c.parentId && 'pl-5')}>
+                <div key={c.id} className={cn('grid grid-cols-1 gap-1', c.parentId && 'pl-5')}>
                   <div className="flex items-center gap-2">
                     {c.parentId && <span className="text-muted-foreground text-[11px] shrink-0">›</span>}
                     {c.color && <span className="h-2 w-2 rounded-full shrink-0" style={{ background: c.color }} />}
@@ -442,7 +442,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
         </Section>
 
         <Section title="Actions" sub="What kind of action a task is — Call, Meeting, Decide, Email… A flat, separate list from Category (the sub-topic under a focus area) and from the task's Type field, which it supplements rather than replaces.">
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             {state.actions.map(a => {
               const usage = actionUsage(state, a.id)
               return (
@@ -494,7 +494,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
         <Section title="Contacts & cadence" sub="Targets, not rules — override per person on their detail page.">
           <div className="grid grid-cols-2 gap-3">
             {(Object.keys(TIER_LABELS) as Tier[]).map(t => (
-              <div key={t} className="grid gap-1">
+              <div key={t} className="grid grid-cols-1 gap-1">
                 <Label className="text-xs">{TIER_LABELS[t]} — every N days</Label>
                 <Input type="number" value={s.tierCadence[t]} className="h-8"
                   onChange={e => updateSettings({ tierCadence: { ...s.tierCadence, [t]: Number(e.target.value) || 1 } })} />
@@ -502,11 +502,11 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
             ))}
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1">
+            <div className="grid grid-cols-1 gap-1">
               <Label className="text-xs">Daily call goal</Label>
               <Input type="number" value={s.callGoal} className="h-8" onChange={e => updateSettings({ callGoal: Number(e.target.value) || 1 })} />
             </div>
-            <div className="grid gap-1">
+            <div className="grid grid-cols-1 gap-1">
               <Label className="text-xs">Default follow-up interval (days)</Label>
               <Input type="number" value={s.followUpDays} className="h-8" onChange={e => updateSettings({ followUpDays: Number(e.target.value) || 1 })} />
             </div>
@@ -514,7 +514,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
         </Section>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <Section title="Turn features on and off" sub="The switchboard — off hides its fields and menus everywhere.">
           {features.map(f => (
             <label key={f.key} className="flex items-center gap-3 cursor-pointer">
@@ -526,7 +526,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
 
         {s.features.collections && (
           <Section title="Notes & Collections — set up your own trackers" sub="Build whatever custom lists you want — movies, subscriptions, vendors to compare — with your own fields on each. Every field you add here shows up automatically in that tracker's table/board/gallery views and its Excel import/export template.">
-            <div className="grid gap-3">
+            <div className="grid grid-cols-1 gap-3">
               {state.collections.map(col => (
                 <div key={col.id} className="border border-border rounded-sm">
                   <div className="flex items-center gap-2 px-2.5 py-2 bg-accent/30">
@@ -543,7 +543,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                       {col.active ? 'Archive' : 'Restore'}
                     </Button>
                   </div>
-                  <div className="grid gap-1.5 p-2">
+                  <div className="grid grid-cols-1 gap-1.5 p-2">
                     {state.trackers.filter(t => t.collectionId === col.id).map(trk => (
                       <TrackerSetupRow
                         key={trk.id}
@@ -623,8 +623,8 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
 
         <Section title="Telegram & Slack (new in v28)" sub="Two-way messaging: send either one a message and it lands in your Inbox like text/WhatsApp capture; Daybook can also push the morning brief and nudges there instead of (or alongside) WhatsApp/email.">
           {cloud ? (
-            <div className="grid gap-4">
-              <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-1.5">
                 <Label className="text-xs">Telegram chat ID</Label>
                 <div className="flex gap-2">
                   <Input
@@ -657,7 +657,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                   Message your Daybook bot on Telegram once (anything — "hi" works) and it'll reply with your chat ID to paste here. Setup Daybook still needs from you: create a bot via @BotFather, add its token as the <code>TELEGRAM_BOT_TOKEN</code> Edge Function secret, and point the bot's webhook at the deployed <code>telegram-inbound</code> function.
                 </p>
               </div>
-              <div className="grid gap-1.5 border-t border-border pt-3">
+              <div className="grid grid-cols-1 gap-1.5 border-t border-border pt-3">
                 <Label className="text-xs">Slack member ID</Label>
                 <div className="flex gap-2">
                   <Input
@@ -701,15 +701,15 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
 
         <Section title="Daily capacity & rebalancing" sub="When a day overflows, the lowest-priority non-time-critical items move to the next open day — and you’re told exactly what shifted.">
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1">
+            <div className="grid grid-cols-1 gap-1">
               <Label className="text-xs">Tasks per day before overflow</Label>
               <Input type="number" value={s.dailyCapacity} className="h-8" onChange={e => updateSettings({ dailyCapacity: Number(e.target.value) || 1 })} />
             </div>
-            <div className="grid gap-1">
+            <div className="grid grid-cols-1 gap-1">
               <Label className="text-xs">Project stall threshold (days)</Label>
               <Input type="number" value={s.stallDays} className="h-8" onChange={e => updateSettings({ stallDays: Number(e.target.value) || 1 })} />
             </div>
-            <div className="grid gap-1">
+            <div className="grid grid-cols-1 gap-1">
               <Label className="text-xs">Active projects per area (WIP guardrail)</Label>
               <Input type="number" value={s.projectWipLimit} className="h-8" onChange={e => updateSettings({ projectWipLimit: Number(e.target.value) || 1 })} />
             </div>
@@ -718,7 +718,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
 
         <Section title="Morning brief & nudges">
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1">
+            <div className="grid grid-cols-1 gap-1">
               <Label className="text-xs">Channel</Label>
               <Select value={s.briefChannel} onValueChange={v => updateSettings({ briefChannel: v as never })}>
                 <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
@@ -728,7 +728,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-1">
+            <div className="grid grid-cols-1 gap-1">
               <Label className="text-xs">Send time</Label>
               <Input type="time" value={s.briefTime} className="h-8" onChange={e => updateSettings({ briefTime: e.target.value })} />
             </div>

@@ -37,14 +37,14 @@ export default function PeoplePage() {
   }, [state.people, state.settings, tierFilter, search, sortBy])
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       {/* Call list strip */}
       <section className="border border-border bg-card shadow-sm rise-in">
         <div className="px-4 pt-3 pb-2 flex items-baseline gap-3">
           <SectionTitle className="mb-0">Today’s suggested calls</SectionTitle>
           <span className="text-[11px] text-muted-foreground">overdue cadence · follow-ups due · flags · one reconnect</span>
         </div>
-        <div className="grid sm:grid-cols-3 gap-px bg-border">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-px bg-border">
           {calls.map(c => (
             <div key={c.person.id} className="bg-card px-4 py-2.5">
               <button onClick={() => setViewPerson(c.person)} className="text-[13.5px] font-medium hover:text-[hsl(17_63%_47%)]">{c.person.name}</button>
@@ -74,7 +74,7 @@ export default function PeoplePage() {
           </SelectContent>
         </Select>
         <ClearFiltersButton active={!!search || tierFilter !== 'all' || sortBy !== 'overdue'} onClear={() => { setSearch(''); setTierFilter('all'); setSortBy('overdue') }} />
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
           <Button variant="outline" size="sm" className="h-8" onClick={downloadContactsTemplate}><Download className="h-3.5 w-3.5 mr-1.5" />Excel template</Button>
           <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}><Upload className="h-3.5 w-3.5 mr-1.5" />Import contacts</Button>
           <Button size="sm" className="h-8" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Add person</Button>
@@ -145,18 +145,18 @@ function AddPersonDialog({ open, onClose, onAdd }: { open: boolean; onClose: () 
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader><DialogTitle className="font-display text-lg">Add a person</DialogTitle></DialogHeader>
-        <div className="grid gap-3">
-          <div className="grid gap-1.5"><Label className="text-xs">Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
-          <div className="grid gap-1.5"><Label className="text-xs">Phone / WhatsApp</Label><Input value={phone} onChange={e => setPhone(e.target.value)} /></div>
+        <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
+          <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Phone / WhatsApp</Label><Input value={phone} onChange={e => setPhone(e.target.value)} /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Tier</Label>
               <Select value={tier} onValueChange={v => setTier(v as Tier)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{(Object.keys(TIER_LABELS) as Tier[]).map(t => <SelectItem key={t} value={t}>{TIER_LABELS[t]}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="grid gap-1.5"><Label className="text-xs">How you know them</Label><Input value={how} onChange={e => setHow(e.target.value)} /></div>
+            <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">How you know them</Label><Input value={how} onChange={e => setHow(e.target.value)} /></div>
           </div>
         </div>
         <DialogFooter>
@@ -261,7 +261,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
       <DialogContent className="sm:max-w-[620px] max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-lg">Import contacts</DialogTitle></DialogHeader>
         {!parsed ? (
-          <div className="grid gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">1</span>
               <div>
@@ -285,7 +285,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
             </div>
           </div>
         ) : (
-          <div className="grid gap-2.5">
+          <div className="grid grid-cols-1 gap-2.5">
             <p className="text-[13px]">
               <b>{parsed.length}</b> contacts from <span className="text-muted-foreground">{fileName}</span>
               {parsed.some(p => p.mergeWith) && <span> - <b>{parsed.filter(p => p.mergeWith).length}</b> will merge into existing records</span>}

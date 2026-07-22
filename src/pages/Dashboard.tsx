@@ -96,8 +96,8 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   }, [state])
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
-      <div className="grid gap-5 content-start">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
+      <div className="grid grid-cols-1 gap-5 content-start">
         {/* Morning brief */}
         {state.settings.features.morningBrief && (
           <section className="rise-in border border-border bg-card shadow-sm">
@@ -109,7 +109,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
             {briefOpen && (
               <div className="px-4 py-3.5 text-[13.5px] leading-relaxed">
                 <p className="font-display-soft text-[15px] mb-2">{greeting()}{viewerName ? `, ${viewerName}` : ''}. A 30-second read:</p>
-                <div className="grid gap-2.5">
+                <div className="grid grid-cols-1 gap-2.5">
                   <div>
                     <span className="text-[10.5px] uppercase tracking-wide text-muted-foreground">Top three today</span>
                     {top3.length === 0 && <p className="text-muted-foreground italic">Nothing pressing — a rare quiet morning.</p>}
@@ -172,7 +172,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
       </div>
 
       {/* Right column */}
-      <div className="grid gap-5 content-start">
+      <div className="grid grid-cols-1 gap-5 content-start">
         {/* Call list */}
         <section className="rise-in border border-border bg-card shadow-sm" style={{ animationDelay: '90ms' }}>
           <div className="px-4 pt-3.5 pb-2 flex items-baseline justify-between">
@@ -295,7 +295,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
   const toggleAll = () => { setAllExpanded(v => !v); setExpandedProjects(new Set()) }
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       {/* KPI strip — every tile clicks through to its underlying data */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         <KpiTile label="Open tasks" value={open.length} sub={`across ${state.areas.filter(a => a.active).length} areas`}
@@ -312,7 +312,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
           onClick={() => setDrill({ kind: 'tasks', title: `Finished this week (${doneThisWeek.length})`, tasks: doneThisWeek })} />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
         {/* Areas / portfolio */}
         <section className="border border-border bg-card shadow-sm rise-in">
           <div className="px-4 pt-3.5 pb-1">
@@ -368,7 +368,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
                     <span className="font-display text-[14.5px] font-semibold">{a.name}</span>
                     <span className="text-[11px] text-muted-foreground tabular ml-auto">{areaOpen.length} open · review {a.reviewDay}</span>
                   </div>
-                  <div className="grid gap-0.5 pl-3">
+                  <div className="grid grid-cols-1 gap-0.5 pl-3">
                     {projs.map(p => {
                       const pt = open.filter(t => t.projectId === p.id)
                       const isStalled = stalled.includes(p)
@@ -406,7 +406,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
                     })}
                     {projs.length === 0 && <span className="text-[12px] text-muted-foreground italic">no live projects</span>}
                     {looseAreaTasks.length > 0 && (
-                      <div className="grid gap-0.5 mt-1">
+                      <div className="grid grid-cols-1 gap-0.5 mt-1">
                         {looseAreaTasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} />)}
                       </div>
                     )}
@@ -419,7 +419,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
           )}
         </section>
 
-        <div className="grid gap-5 content-start">
+        <div className="grid grid-cols-1 gap-5 content-start">
           {/* Overdue panel */}
           <section className="border border-border bg-card shadow-sm rise-in" style={{ animationDelay: '80ms' }}>
             <div className="px-4 pt-3.5 pb-1">
@@ -434,7 +434,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
             <div className="px-4 pt-3.5 pb-2">
               <SectionTitle className="mb-0" right={<button onClick={() => goTo('people')} className="text-[11.5px] text-muted-foreground hover:text-foreground">all people →</button>}>Relationship health</SectionTitle>
             </div>
-            <div className="px-4 pb-3 grid gap-1.5">
+            <div className="px-4 pb-3 grid grid-cols-1 gap-1.5">
               {(['inner', 'active', 'network', 'dormant'] as const).map(tier => {
                 const members = state.people.filter(p => p.tier === tier)
                 const od = members.filter(p => personOverdueBy(p, state.settings) > 0)

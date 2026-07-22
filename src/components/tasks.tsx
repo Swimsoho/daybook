@@ -380,7 +380,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
         <DialogHeader>
           <DialogTitle className="font-display text-lg">{editing ? 'Edit task' : 'Detailed entry'}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-3.5">
+        <div className="grid grid-cols-1 gap-3.5">
           {/* type selector drives visible fields */}
           <div className="flex gap-1.5">
             {(Object.keys(TYPE_LABELS) as TaskType[]).map(tt => (
@@ -398,13 +398,13 @@ export function TaskDialog({ open, onClose, task, defaults }: {
             <span className="text-[10.5px] text-muted-foreground self-center ml-1">fields follow the type</span>
           </div>
 
-          <div className="grid gap-1.5">
+          <div className="grid grid-cols-1 gap-1.5">
             <Label className="text-xs">Title</Label>
             <Input value={f.title ?? ''} onChange={e => set({ title: e.target.value })} placeholder={f.type === 'call' ? 'Call…' : 'Book the hall…'} />
           </div>
 
           {(f.type === 'call' || f.type === 'followup') && (
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Contact {f.type === 'call' && <span className="text-muted-foreground">(one-tap dial shortcut shown on the task)</span>}</Label>
               <Select value={f.personId ?? ''} onValueChange={v => set({ personId: v })}>
                 <SelectTrigger><SelectValue placeholder="Choose a person" /></SelectTrigger>
@@ -415,14 +415,14 @@ export function TaskDialog({ open, onClose, task, defaults }: {
             </div>
           )}
           {f.type === 'call' && (
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">What this call is about</Label>
               <Input value={f.callAbout ?? ''} onChange={e => set({ callAbout: e.target.value })} placeholder="Final headcount and dietary list" />
             </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Area</Label>
               <Select value={f.areaId ?? ''} onValueChange={v => set({ areaId: v, projectId: undefined })}>
                 <SelectTrigger><SelectValue placeholder="Area" /></SelectTrigger>
@@ -431,7 +431,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Project <span className="text-muted-foreground">(optional)</span></Label>
               <Select value={f.projectId ?? 'none'} onValueChange={v => set({ projectId: v === 'none' ? undefined : v })}>
                 <SelectTrigger><SelectValue placeholder="None — loose one-off" /></SelectTrigger>
@@ -444,7 +444,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Priority</Label>
               <Select value={f.priority} onValueChange={v => set({ priority: v as Priority })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -455,7 +455,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">{f.type === 'followup' ? `Due (default +${state.settings.followUpDays}d)` : 'Due date'}</Label>
               <Input type="date" value={f.due ?? (f.type === 'followup' ? addDays(today(), state.settings.followUpDays) : '')} onChange={e => set({ due: e.target.value || undefined })} />
             </div>
@@ -463,7 +463,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
 
           {f.type === 'todo' && (
             <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-1.5">
+              <div className="grid grid-cols-1 gap-1.5">
                 <Label className="text-xs">Category</Label>
                 <Select value={f.categoryIds?.[0] ?? 'none'} onValueChange={v => set({ categoryIds: v === 'none' ? [] : [v] })}>
                   <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
@@ -473,7 +473,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-1.5">
+              <div className="grid grid-cols-1 gap-1.5">
                 <Label className="text-xs">Vendor <span className="text-muted-foreground">(optional)</span></Label>
                 <Select value={f.vendorId ?? 'none'} onValueChange={v => set({ vendorId: v === 'none' ? undefined : v })}>
                   <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
@@ -486,7 +486,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
             </div>
           )}
 
-          <div className="grid gap-1.5">
+          <div className="grid grid-cols-1 gap-1.5">
             <Label className="text-xs">Action <span className="text-muted-foreground">(optional — what kind of action this is)</span></Label>
             <Select value={f.actionIds?.[0] ?? 'none'} onValueChange={v => set({ actionIds: v === 'none' ? [] : [v] })}>
               <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
@@ -497,7 +497,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
             </Select>
           </div>
 
-          <div className="grid gap-1.5">
+          <div className="grid grid-cols-1 gap-1.5">
             <Label className="text-xs">Notes</Label>
             <Textarea rows={2} value={f.notes ?? ''} onChange={e => set({ notes: e.target.value })} />
           </div>
@@ -552,7 +552,7 @@ function TaskAttachments({ task }: { task: Task }) {
         <Paperclip className="h-3 w-3" />Attachments{attachments.length > 0 && ` (${attachments.length})`}
       </div>
       {attachments.length > 0 && (
-        <div className="grid gap-1 mb-1.5">
+        <div className="grid grid-cols-1 gap-1 mb-1.5">
           {attachments.map(a => (
             <div key={a.id} className="flex items-center gap-2 border border-border bg-accent/30 rounded-sm px-2 py-1.5">
               <button className="min-w-0 flex-1 text-left truncate hover:underline" title="Open" onClick={() => openAttachment(a.path, a.name)}>
@@ -612,7 +612,7 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
 
         {/* One-tap action bar — no digging through menus */}
         {!done && (
-          <div className="grid gap-2 border border-border bg-accent/40 rounded-sm p-2.5">
+          <div className="grid grid-cols-1 gap-2 border border-border bg-accent/40 rounded-sm p-2.5">
             <div className="flex flex-wrap gap-1.5">
               <Button size="sm" className="h-7 px-2.5 text-[12px]" onClick={() => {
                 const prev = task.status
@@ -718,7 +718,7 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
             </div>
           </div>
         )}
-        <div className="grid gap-2 text-sm">
+        <div className="grid grid-cols-1 gap-2 text-sm">
           <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-[13px]">
             <span><PriorityChip p={task.priority} /></span>
             {area && <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: area.color }} />{area.name}</span>}

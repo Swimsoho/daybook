@@ -62,9 +62,9 @@ export function LogCallDialog({ person, open, onClose }: { person: Person | null
             Last time ({fmtDate(last.date)}): {last.purpose} — {last.outcome}
           </div>
         )}
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Channel</Label>
               <Select value={channel} onValueChange={v => setChannel(v as Channel)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -76,7 +76,7 @@ export function LogCallDialog({ person, open, onClose }: { person: Person | null
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Sentiment</Label>
               <Select value={sentiment} onValueChange={v => setSentiment(v as Sentiment)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -88,11 +88,11 @@ export function LogCallDialog({ person, open, onClose }: { person: Person | null
               </Select>
             </div>
           </div>
-          <div className="grid gap-1.5">
+          <div className="grid grid-cols-1 gap-1.5">
             <Label className="text-xs">What was it about?</Label>
             <Input value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="Catch-up / dinner numbers / the intro…" />
           </div>
-          <div className="grid gap-1.5">
+          <div className="grid grid-cols-1 gap-1.5">
             <Label className="text-xs">Outcome — in your own words</Label>
             <Textarea rows={2} value={outcome} onChange={e => setOutcome(e.target.value)} placeholder="Spoke to David, catching up next month, send him the article" />
           </div>

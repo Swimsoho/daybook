@@ -28,7 +28,7 @@ export default function ProjectsPage() {
     const tasks = state.tasks.filter(t => t.projectId === openProject.id && !t.parentId)
     const area = state.areas.find(a => a.id === openProject.areaId)
     return (
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-4">
         <div>
           <button onClick={() => setOpenProjectId(null)} className="text-[12px] text-muted-foreground hover:text-foreground">← All projects</button>
           <div className="mt-2 flex items-start justify-between gap-3">
@@ -63,7 +63,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       <div className="flex items-center justify-between">
         <p className="text-[13px] text-muted-foreground">Areas hold projects; projects hold tasks. WIP guardrail: keep ~{state.settings.projectWipLimit} active projects per area (edit in Settings).</p>
         <Button size="sm" className="h-8" onClick={() => setAddingProject(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />New project</Button>
@@ -90,7 +90,7 @@ export default function ProjectsPage() {
               )}
               <span className="text-[11px] text-muted-foreground tabular ml-auto">review {a.reviewDay}</span>
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border">
               {projs.map(p => {
                 const pt = open.filter(t => t.projectId === p.id)
                 const done = state.tasks.filter(t => t.projectId === p.id && t.status === 'done').length
@@ -145,16 +145,16 @@ function NewProjectDialog({ open, onClose, onAdd }: { open: boolean; onClose: ()
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
       <DialogContent className="sm:max-w-[420px]">
         <DialogHeader><DialogTitle className="font-display text-lg">New project</DialogTitle></DialogHeader>
-        <div className="grid gap-3">
-          <div className="grid gap-1.5"><Label className="text-xs">Name</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Run the shul dinner" /></div>
-          <div className="grid gap-1.5">
+        <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Name</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Run the shul dinner" /></div>
+          <div className="grid grid-cols-1 gap-1.5">
             <Label className="text-xs">Area</Label>
             <Select value={areaId} onValueChange={setAreaId}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{state.areas.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}</SelectContent>
             </Select>
           </div>
-          <div className="grid gap-1.5"><Label className="text-xs">Desired outcome — the finish line</Label><Input value={outcome} onChange={e => setOutcome(e.target.value)} placeholder="A full hall, happy guests, budget met" /></div>
+          <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Desired outcome — the finish line</Label><Input value={outcome} onChange={e => setOutcome(e.target.value)} placeholder="A full hall, happy guests, budget met" /></div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>

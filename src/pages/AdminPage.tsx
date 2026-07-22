@@ -75,7 +75,7 @@ export default function AdminPage({ onViewPortal, cloud }: { onViewPortal: (user
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 border border-[hsl(40_50%_60%)] bg-[hsl(40_65%_42%_/_0.1)] px-3 py-1.5 rounded-sm">
           <ShieldCheck className="h-4 w-4 text-[hsl(40_65%_36%)]" />
@@ -237,10 +237,10 @@ function ResendInviteDialog({ user, onClose, onConfirm }: {
           Fix the name, email, or role below — this cancels the old pending invite and sends a fresh one.
           Only available while they haven't yet signed in.
         </p>
-        <div className="grid gap-3">
-          <div className="grid gap-1.5"><Label className="text-xs">Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
-          <div className="grid gap-1.5"><Label className="text-xs">Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
-          <div className="grid gap-1.5">
+        <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
+          <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
+          <div className="grid grid-cols-1 gap-1.5">
             <Label className="text-xs">Role</Label>
             <Select value={role} onValueChange={v => setRole(v as Role)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -279,12 +279,12 @@ function InviteDialog({ open, onClose, onInvite }: {
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
       <DialogContent className="sm:max-w-[440px]">
         <DialogHeader><DialogTitle className="font-display text-lg">Invite a user</DialogTitle></DialogHeader>
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3">
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-1.5"><Label className="text-xs">Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
-            <div className="grid gap-1.5"><Label className="text-xs">Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
+            <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
+            <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Email</Label><Input type="email" value={email} onChange={e => setEmail(e.target.value)} /></div>
           </div>
-          <div className="grid gap-1.5">
+          <div className="grid grid-cols-1 gap-1.5">
             <Label className="text-xs">Role</Label>
             <Select value={role} onValueChange={v => setRole(v as Role)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
@@ -295,7 +295,7 @@ function InviteDialog({ open, onClose, onInvite }: {
               </SelectContent>
             </Select>
           </div>
-          <div className="grid gap-2 border border-border rounded-sm p-3 bg-accent/30">
+          <div className="grid grid-cols-1 gap-2 border border-border rounded-sm p-3 bg-accent/30">
             <span className="text-[10.5px] uppercase tracking-wide text-muted-foreground">Accounts to provision</span>
             <label className="flex items-start gap-2.5 text-[13px] cursor-pointer">
               <input type="checkbox" checked={hasReal} onChange={e => setHasReal(e.target.checked)} className="mt-0.5 accent-[hsl(152_22%_23%)]" />

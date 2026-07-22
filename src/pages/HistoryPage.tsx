@@ -15,7 +15,7 @@ export default function HistoryPage() {
   const entities = Array.from(new Set(state.audit.map(a => a.entity)))
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Input placeholder="Search the trail…" value={search} onChange={e => setSearch(e.target.value)} className="h-8 w-56 bg-card" />
         <Select value={entity} onValueChange={setEntity}>
@@ -31,12 +31,12 @@ export default function HistoryPage() {
       <section className="border border-border bg-card shadow-sm">
         {events.length === 0 && <EmptyNote>No matching events.</EmptyNote>}
         {events.map(a => (
-          <div key={a.id} className="flex items-baseline gap-3 px-4 py-2 border-b border-border/60 last:border-0 text-[13px]">
-            <span className="text-muted-foreground tabular text-[11.5px] w-[118px] shrink-0">{a.ts.replace('T', ' · ')}</span>
-            <span className="w-[80px] shrink-0 font-medium text-[12px]">{a.user}</span>
-            <span className="w-[92px] shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground">{a.action}</span>
-            <span className="text-[11px] uppercase tracking-wide w-[64px] shrink-0 text-[hsl(152_25%_35%)]">{a.entity}</span>
-            <span className="min-w-0 truncate">{a.detail}</span>
+          <div key={a.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2 border-b border-border/60 last:border-0 text-[13px]">
+            <span className="text-muted-foreground tabular text-[11.5px] w-[100px] sm:w-[118px] shrink-0">{a.ts.replace('T', ' · ')}</span>
+            <span className="w-[70px] sm:w-[80px] shrink-0 font-medium text-[12px] truncate">{a.user}</span>
+            <span className="w-[78px] sm:w-[92px] shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground truncate">{a.action}</span>
+            <span className="text-[11px] uppercase tracking-wide w-[56px] sm:w-[64px] shrink-0 text-[hsl(152_25%_35%)]">{a.entity}</span>
+            <span className="min-w-0 basis-full sm:basis-0 sm:flex-1 truncate">{a.detail}</span>
           </div>
         ))}
       </section>
