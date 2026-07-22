@@ -58,7 +58,10 @@ export function TierBadge({ tier }: { tier: Tier }) {
 export function SectionTitle({ children, right, className }: { children: React.ReactNode; right?: React.ReactNode; className?: string }) {
   return (
     <div className={cn('flex items-baseline justify-between gap-3 mb-3', className)}>
-      <h2 className="font-display text-[17px] font-semibold tracking-tight">{children}</h2>
+      <h2 className="flex items-baseline gap-2">
+        <span className="inline-block w-[3px] h-[13px] rounded-full bg-primary/80 translate-y-[1.5px] shrink-0" aria-hidden="true" />
+        <span className="font-display text-[17.5px] font-semibold tracking-tight">{children}</span>
+      </h2>
       {right}
     </div>
   )

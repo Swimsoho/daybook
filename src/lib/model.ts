@@ -234,7 +234,7 @@ export type PriorityScheme = 'p' | 'hml' | 'num'
 // Color palette for the whole app — a plain CSS custom-property swap (see src/lib/themes.ts
 // and the [data-theme] blocks in index.css), not a per-page setting, so every screen and
 // component picks it up for free.
-export type ThemeId = 'sage' | 'clay' | 'ocean' | 'plum' | 'slate'
+export type ThemeId = 'sage' | 'clay' | 'ocean' | 'plum' | 'slate' | 'ink' | 'burgundy' | 'forest' | 'brass'
 
 export interface Settings {
   theme: ThemeId
@@ -277,6 +277,15 @@ export interface Settings {
   // the order of the rest split across the two columns. Optional: undefined just means "use
   // the shipped default arrangement," so accounts saved before this existed need no backfill.
   dashboardLayout?: { wide: string[]; left: string[]; right: string[] }
+  // Same idea, for the Overall/Portfolio page's panels (Portfolio, Overdue, Relationship
+  // health) — kept as a separate field since it's a distinct set of widget ids and the person
+  // may want a different arrangement per page.
+  overallLayout?: { wide: string[]; left: string[]; right: string[] }
+  // Per-widget saved height in pixels, set by dragging a widget's resize handle while
+  // arranging (Today or Overall — ids don't collide between the two id sets, so one flat map
+  // covers both). Absent/undefined means "use its natural content height," which is how every
+  // widget renders before this feature is ever touched.
+  widgetHeights?: Record<string, number>
 }
 
 export interface AppState {

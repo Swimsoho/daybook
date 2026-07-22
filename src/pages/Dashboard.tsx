@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { ArrowRight, Cake, CalendarClock, ChevronDown, ChevronRight, GripVertical, Heart, Inbox, LayoutGrid, Maximize2, MessageCircle, Minimize2, Phone, RotateCcw, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -46,70 +46,126 @@ function dateLabel(daysUntil: number, occ: string): string {
   return fmtDate(occ)
 }
 
-// ================= TODAY dashboard: drag-to-reorder / resize widgets =================
+// ================= Widget drag-to-reorder / resize framework =================
 //
-// Widgets can be dragged to reorder (within or across the two columns) and toggled between
-// their normal column width and a full-width "wide" row. The arrangement persists to
-// settings.dashboardLayout so it survives reload/devices, but only ever changes when the
-// person explicitly drags something or hits "Rearrange widgets" — the default layout renders
-// pixel-for-pixel the same as before this feature existed.
-const ALL_WIDGET_IDS = ['brief', 'today', 'attention', 'calls', 'inbox', 'dates', 'areas'] as const
-type WidgetId = typeof ALL_WIDGET_IDS[number]
-type DashboardLayout = { wide: WidgetId[]; left: WidgetId[]; right: WidgetId[] }
-const DEFAULT_DASHBOARD_LAYOUT: DashboardLayout = {
-  wide: [], left: ['brief', 'today', 'attention'], right: ['calls', 'inbox', 'dates', 'areas'],
-}
-const WIDGET_TITLE: Record<WidgetId, string> = {
-  brief: 'Morning brief', today: 'Today', attention: 'Attention needed',
-  calls: 'Today’s call list', inbox: 'Inbox', dates: 'Upcoming dates', areas: 'By area',
-}
+// Shared by both the Today dashboard and the Overall/Portfolio page. Widgets can be dragged
+// (by their grip handle) to reorder within or across the two columns, toggled between their
+// normal column width and a full-width "wide" row, and — the "true drag-resize" version of
+// what used to be just the wide toggle — resized taller/shorter by dragging their bottom-right
+// corner, the browser's native resize handle. All of it persists to settings so it survives
+// reload/devices, but only ever changes when the person explicitly drags something or hits
+// "Rearrange widgets" — the default layout renders pixel-for-pixel the same as before this
+// feature existed.
+type Layout<T extends string> = { wide: T[]; left: T[]; right: T[] }
 
 // Repairs a saved layout against the current widget set: preserves the person's chosen
 // order/placement, drops any stray id from a since-removed widget, and appends any widget
 // that shipped after the layout was saved (into its shipped default slot) instead of it
 // silently vanishing.
-function normalizeDashboardLayout(saved: { wide: string[]; left: string[]; right: string[] } | undefined): DashboardLayout {
-  if (!saved) return DEFAULT_DASHBOARD_LAYOUT
-  const isWidget = (id: string): id is WidgetId => (ALL_WIDGET_IDS as readonly string[]).includes(id)
+function normalizeLayout<T extends string>(
+  saved: { wide: string[]; left: string[]; right: string[] } | undefined,
+  allIds: readonly T[],
+  defaultLayout: Layout<T>,
+): Layout<T> {
+  if (!saved) return defaultLayout
+  const isId = (id: string): id is T => (allIds as readonly string[]).includes(id as T)
   const seen = new Set<string>()
-  const clean = (ids: string[]) => ids.filter(isWidget).filter(id => (seen.has(id) ? false : (seen.add(id), true)))
+  const clean = (ids: string[]) => ids.filter(isId).filter(id => (seen.has(id) ? false : (seen.add(id), true)))
   const wide = clean(saved.wide ?? [])
   const left = clean(saved.left ?? [])
   const right = clean(saved.right ?? [])
-  for (const id of ALL_WIDGET_IDS) {
+  for (const id of allIds) {
     if (!seen.has(id)) {
-      if (DEFAULT_DASHBOARD_LAYOUT.left.includes(id)) left.push(id)
-      else if (DEFAULT_DASHBOARD_LAYOUT.right.includes(id)) right.push(id)
+      if (defaultLayout.left.includes(id)) left.push(id)
+      else if (defaultLayout.right.includes(id)) right.push(id)
       else wide.push(id)
     }
   }
   return { wide, left, right }
 }
 
+const ALL_WIDGET_IDS = ['brief', 'today', 'attention', 'calls', 'inbox', 'dates', 'areas'] as const
+type WidgetId = typeof ALL_WIDGET_IDS[number]
+const DEFAULT_DASHBOARD_LAYOUT: Layout<WidgetId> = {
+  wide: [], left: ['brief', 'today', 'attention'], right: ['calls', 'inbox', 'dates', 'areas'],
+}
+const WIDGET_TITLE: Record<WidgetId, string> = {
+  brief: 'Morning brief', today: 'Today', attention: 'Attention needed',
+  calls: 'Today’s call list', inbox: 'Inbox', dates: 'Upcoming dates', areas: 'By area',
+}
+const normalizeDashboardLayout = (saved: { wide: string[]; left: string[]; right: string[] } | undefined) =>
+  normalizeLayout(saved, ALL_WIDGET_IDS, DEFAULT_DASHBOARD_LAYOUT)
+
+const OVERALL_WIDGET_IDS = ['portfolio', 'overdue', 'relationship'] as const
+type OverallWidgetId = typeof OVERALL_WIDGET_IDS[number]
+const DEFAULT_OVERALL_LAYOUT: Layout<OverallWidgetId> = {
+  wide: [], left: ['portfolio'], right: ['overdue', 'relationship'],
+}
+const OVERALL_WIDGET_TITLE: Record<OverallWidgetId, string> = {
+  portfolio: 'Portfolio', overdue: 'Overdue — worst first', relationship: 'Relationship health',
+}
+const normalizeOverallLayout = (saved: { wide: string[]; left: string[]; right: string[] } | undefined) =>
+  normalizeLayout(saved, OVERALL_WIDGET_IDS, DEFAULT_OVERALL_LAYOUT)
+
+// Debounced so a live drag-resize (which can fire dozens of times a second) doesn't hammer
+// settings/cloud-save on every intermediate pixel — only the settled size gets persisted.
+function useDebouncedCallback<A extends unknown[]>(fn: (...args: A) => void, delay: number): (...args: A) => void {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fnRef = useRef(fn)
+  fnRef.current = fn
+  return (...args: A) => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => fnRef.current(...args), delay)
+  }
+}
+
 function WidgetShell({
-  title, wide, customize, dragging, onDragStart, onDragOver, onDrop, onToggleWide, children,
+  title, wide, customize, dragging, height, onDragStart, onDragOver, onDrop, onToggleWide, onResize, children,
 }: {
   title: string
   wide: boolean
   customize: boolean
   dragging: boolean
+  height?: number
   onDragStart: () => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
   onToggleWide: () => void
+  onResize?: (h: number) => void
   children: React.ReactNode
 }) {
+  const resizeRef = useRef<HTMLDivElement>(null)
+  const debouncedResize = useDebouncedCallback((h: number) => onResize?.(h), 400)
+
+  useEffect(() => {
+    if (!customize || !onResize) return
+    const el = resizeRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(entries => {
+      const h = Math.round(entries[0].contentRect.height)
+      if (h > 0) debouncedResize(h)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customize])
+
   return (
     <div
-      draggable={customize}
-      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart() }}
       onDragOver={onDragOver}
       onDrop={onDrop}
       className={cn(customize && 'ring-1 ring-border/70 rounded-sm p-1', dragging && 'opacity-40')}
     >
       {customize && (
         <div className="flex items-center gap-1.5 mb-1 px-1 text-[10.5px] text-muted-foreground">
-          <GripVertical className="h-3.5 w-3.5 cursor-grab active:cursor-grabbing shrink-0" />
+          <span
+            draggable
+            onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart() }}
+            className="cursor-grab active:cursor-grabbing shrink-0"
+            title="Drag to reorder"
+          >
+            <GripVertical className="h-3.5 w-3.5" />
+          </span>
           <span className="uppercase tracking-wide truncate">{title}</span>
           <button onClick={onToggleWide} className="ml-auto flex items-center gap-1 border border-border rounded-sm px-1.5 py-0.5 hover:bg-accent shrink-0 bg-card">
             {wide ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
@@ -117,7 +173,14 @@ function WidgetShell({
           </button>
         </div>
       )}
-      {children}
+      <div
+        ref={resizeRef}
+        style={{ height: height ? `${height}px` : undefined, minHeight: customize ? 96 : undefined }}
+        className={cn('overflow-auto', customize && 'resize-y')}
+        title={customize ? 'Drag the bottom-right corner to resize' : undefined}
+      >
+        {children}
+      </div>
     </div>
   )
 }
@@ -189,7 +252,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   }
   function moveWidget(id: WidgetId, toZone: 'wide' | 'left' | 'right', beforeId?: WidgetId) {
     const strip = (arr: WidgetId[]) => arr.filter(x => x !== id)
-    const next: DashboardLayout = { wide: strip(layout.wide), left: strip(layout.left), right: strip(layout.right) }
+    const next: Layout<WidgetId> = { wide: strip(layout.wide), left: strip(layout.left), right: strip(layout.right) }
     const target = next[toZone]
     const idx = beforeId ? target.indexOf(beforeId) : -1
     if (idx === -1) target.push(id); else target.splice(idx, 0, id)
@@ -199,8 +262,13 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
     if (layout.wide.includes(id)) moveWidget(id, DEFAULT_DASHBOARD_LAYOUT.left.includes(id) ? 'left' : 'right')
     else moveWidget(id, 'wide')
   }
+  function resizeWidget(id: WidgetId, h: number) {
+    updateSettings({ widgetHeights: { ...state.settings.widgetHeights, [id]: h } })
+  }
   function resetLayout() {
-    updateSettings({ dashboardLayout: DEFAULT_DASHBOARD_LAYOUT })
+    const heights = { ...state.settings.widgetHeights }
+    for (const id of ALL_WIDGET_IDS) delete heights[id]
+    updateSettings({ dashboardLayout: DEFAULT_DASHBOARD_LAYOUT, widgetHeights: heights })
     toast.success('Dashboard layout reset to default')
   }
   const renderZone = (ids: WidgetId[], zone: 'wide' | 'left' | 'right') => ids.filter(id => available[id]).map(id => (
@@ -210,10 +278,12 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
       wide={zone === 'wide'}
       customize={customize}
       dragging={dragId === id}
+      height={state.settings.widgetHeights?.[id]}
       onDragStart={() => setDragId(id)}
       onDragOver={e => { if (customize && dragId && dragId !== id) e.preventDefault() }}
       onDrop={e => { e.preventDefault(); if (dragId && dragId !== id) moveWidget(dragId, zone, id); setDragId(null) }}
       onToggleWide={() => toggleWide(id)}
+      onResize={h => resizeWidget(id, h)}
     >
       {WIDGET_NODE[id]}
     </WidgetShell>
@@ -394,7 +464,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
       </div>
       {customize && (
         <p className="text-[11px] text-muted-foreground -mt-1">
-          Drag a widget by its grip handle to reorder, or use “Full width” to stretch it across both columns.
+          Drag a widget by its grip handle to reorder, use “Full width” to stretch it across both columns, or drag its bottom-right corner to resize it taller or shorter.
         </p>
       )}
 
@@ -434,7 +504,7 @@ type Drill =
   | { kind: 'calls'; title: string }
 
 function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; projectFilter?: string | null }) {
-  const { state, completeTask, updateTask } = useStore()
+  const { state, completeTask, updateTask, updateSettings } = useStore()
   const [openTask, setOpenTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [drill, setDrill] = useState<Drill | null>(null)
@@ -443,6 +513,8 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
   const [portfolioView, setPortfolioView] = useState<'area' | 'list'>('area')
   const [viewPerson, setViewPerson] = useState<Person | null>(null)
   const [logPerson, setLogPerson] = useState<Person | null>(null)
+  const [customize, setCustomize] = useState(false)
+  const [dragId, setDragId] = useState<OverallWidgetId | null>(null)
   const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
   const overdue = open.filter(isOverdue).sort((a, b) => (a.due ?? '').localeCompare(b.due ?? ''))
   const stalled = stalledProjects(state)
@@ -459,26 +531,53 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
   })
   const toggleAll = () => { setAllExpanded(v => !v); setExpandedProjects(new Set()) }
 
-  return (
-    <div className="grid grid-cols-1 gap-5">
-      {/* KPI strip — every tile clicks through to its underlying data */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        <KpiTile label="Open tasks" value={open.length} sub={`across ${state.areas.filter(a => a.active).length} areas`}
-          onClick={() => setDrill({ kind: 'tasks', title: `Open tasks (${open.length})`, tasks: open })} />
-        <KpiTile label="Overdue" value={overdue.length} tone={overdue.length ? 'bad' : 'good'} sub="worst first"
-          onClick={() => setDrill({ kind: 'tasks', title: `Overdue tasks (${overdue.length})`, tasks: overdue })} />
-        <KpiTile label="Projects" value={activeProjects.length} sub={`${stalled.length} stalled`} tone={stalled.length ? undefined : 'good'}
-          onClick={() => setDrill({ kind: 'projects', title: `Projects — active vs stalled` })} />
-        <KpiTile label="Calls this week" value={`${callsThisWeek}/${state.settings.callGoal * 7}`} sub="vs weekly goal"
-          onClick={() => setDrill({ kind: 'calls', title: `Calls & touches this week (${callsThisWeek})` })} />
-        <KpiTile label="Contacts overdue" value={overdueContacts.length} tone={overdueContacts.length ? 'bad' : 'good'} sub="past their cadence"
-          onClick={() => setDrill({ kind: 'people', title: `Contacts past cadence (${overdueContacts.length})`, people: overdueContacts })} />
-        <KpiTile label="Done this week" value={doneThisWeek.length} tone="good" sub="archived, not deleted"
-          onClick={() => setDrill({ kind: 'tasks', title: `Finished this week (${doneThisWeek.length})`, tasks: doneThisWeek })} />
-      </div>
+  const overallLayout = useMemo(() => normalizeOverallLayout(state.settings.overallLayout), [state.settings.overallLayout])
+  function moveOverallWidget(id: OverallWidgetId, toZone: 'wide' | 'left' | 'right', beforeId?: OverallWidgetId) {
+    const strip = (arr: OverallWidgetId[]) => arr.filter(x => x !== id)
+    const next: Layout<OverallWidgetId> = { wide: strip(overallLayout.wide), left: strip(overallLayout.left), right: strip(overallLayout.right) }
+    const target = next[toZone]
+    const idx = beforeId ? target.indexOf(beforeId) : -1
+    if (idx === -1) target.push(id); else target.splice(idx, 0, id)
+    updateSettings({ overallLayout: next })
+  }
+  function toggleOverallWide(id: OverallWidgetId) {
+    if (overallLayout.wide.includes(id)) moveOverallWidget(id, DEFAULT_OVERALL_LAYOUT.left.includes(id) ? 'left' : 'right')
+    else moveOverallWidget(id, 'wide')
+  }
+  function resizeOverallWidget(id: OverallWidgetId, h: number) {
+    updateSettings({ widgetHeights: { ...state.settings.widgetHeights, [id]: h } })
+  }
+  function resetOverallLayout() {
+    const heights = { ...state.settings.widgetHeights }
+    for (const id of OVERALL_WIDGET_IDS) delete heights[id]
+    updateSettings({ overallLayout: DEFAULT_OVERALL_LAYOUT, widgetHeights: heights })
+    toast.success('Overall layout reset to default')
+  }
+  const renderOverallZone = (ids: OverallWidgetId[], zone: 'wide' | 'left' | 'right') => ids.map(id => (
+    <WidgetShell
+      key={id}
+      title={OVERALL_WIDGET_TITLE[id]}
+      wide={zone === 'wide'}
+      customize={customize}
+      dragging={dragId === id}
+      height={state.settings.widgetHeights?.[id]}
+      onDragStart={() => setDragId(id)}
+      onDragOver={e => { if (customize && dragId && dragId !== id) e.preventDefault() }}
+      onDrop={e => { e.preventDefault(); if (dragId && dragId !== id) moveOverallWidget(dragId, zone, id); setDragId(null) }}
+      onToggleWide={() => toggleOverallWide(id)}
+      onResize={h => resizeOverallWidget(id, h)}
+    >
+      {OVERALL_WIDGET_NODE[id]}
+    </WidgetShell>
+  ))
+  const overallZoneDropProps = (zone: 'wide' | 'left' | 'right') => ({
+    active: customize,
+    onDragOver: (e: React.DragEvent) => { if (dragId) e.preventDefault() },
+    onDrop: (e: React.DragEvent) => { e.preventDefault(); if (dragId) moveOverallWidget(dragId, zone); setDragId(null) },
+  })
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
-        {/* Areas / portfolio */}
+  const OVERALL_WIDGET_NODE: Record<OverallWidgetId, React.ReactNode> = {
+    portfolio: (
         <section className="border border-border bg-card shadow-sm rise-in">
           <div className="px-4 pt-3.5 pb-1">
             <SectionTitle
@@ -583,39 +682,98 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
           </div>
           )}
         </section>
+    ),
+    overdue: (
+        <section className="border border-border bg-card shadow-sm rise-in" style={{ animationDelay: '80ms' }}>
+          <div className="px-4 pt-3.5 pb-1">
+            <SectionTitle className="mb-0">Overdue — worst first</SectionTitle>
+          </div>
+          {overdue.length === 0 && <EmptyNote>Nothing overdue. Rare and delightful.</EmptyNote>}
+          {overdue.slice(0, 7).map(t => <TaskRow key={t.id} task={t} onOpen={setOpenTask} />)}
+        </section>
+    ),
+    relationship: (
+        <section className="border border-border bg-card shadow-sm rise-in" style={{ animationDelay: '140ms' }}>
+          <div className="px-4 pt-3.5 pb-2">
+            <SectionTitle className="mb-0" right={<button onClick={() => goTo('people')} className="text-[11.5px] text-muted-foreground hover:text-foreground">all people →</button>}>Relationship health</SectionTitle>
+          </div>
+          <div className="px-4 pb-3 grid grid-cols-1 gap-1.5">
+            {(['inner', 'active', 'network', 'dormant'] as const).map(tier => {
+              const members = state.people.filter(p => p.tier === tier)
+              const od = members.filter(p => personOverdueBy(p, state.settings) > 0)
+              const pct = members.length ? Math.round(((members.length - od.length) / members.length) * 100) : 100
+              return (
+                <div key={tier} className="flex items-center gap-2.5 text-[12.5px]">
+                  <span className="w-16 capitalize">{tier}</span>
+                  <div className="flex-1 h-2 bg-muted rounded-sm overflow-hidden">
+                    <div className="h-full bg-[hsl(152_25%_38%)]" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="tabular text-muted-foreground w-24 text-right">{od.length ? `${od.length} overdue` : 'all current'}</span>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+    ),
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-5">
+      {/* KPI strip — every tile clicks through to its underlying data */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+        <KpiTile label="Open tasks" value={open.length} sub={`across ${state.areas.filter(a => a.active).length} areas`}
+          onClick={() => setDrill({ kind: 'tasks', title: `Open tasks (${open.length})`, tasks: open })} />
+        <KpiTile label="Overdue" value={overdue.length} tone={overdue.length ? 'bad' : 'good'} sub="worst first"
+          onClick={() => setDrill({ kind: 'tasks', title: `Overdue tasks (${overdue.length})`, tasks: overdue })} />
+        <KpiTile label="Projects" value={activeProjects.length} sub={`${stalled.length} stalled`} tone={stalled.length ? undefined : 'good'}
+          onClick={() => setDrill({ kind: 'projects', title: `Projects — active vs stalled` })} />
+        <KpiTile label="Calls this week" value={`${callsThisWeek}/${state.settings.callGoal * 7}`} sub="vs weekly goal"
+          onClick={() => setDrill({ kind: 'calls', title: `Calls & touches this week (${callsThisWeek})` })} />
+        <KpiTile label="Contacts overdue" value={overdueContacts.length} tone={overdueContacts.length ? 'bad' : 'good'} sub="past their cadence"
+          onClick={() => setDrill({ kind: 'people', title: `Contacts past cadence (${overdueContacts.length})`, people: overdueContacts })} />
+        <KpiTile label="Done this week" value={doneThisWeek.length} tone="good" sub="archived, not deleted"
+          onClick={() => setDrill({ kind: 'tasks', title: `Finished this week (${doneThisWeek.length})`, tasks: doneThisWeek })} />
+      </div>
+
+      <div className="flex items-center justify-end gap-2 -mb-1">
+        {customize && (
+          <button onClick={resetOverallLayout} className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+            <RotateCcw className="h-3 w-3" /> Reset layout
+          </button>
+        )}
+        <button
+          onClick={() => setCustomize(v => !v)}
+          className={cn(
+            'text-[11px] flex items-center gap-1.5 border border-border rounded-sm px-2 py-1 hover:bg-accent',
+            customize && 'bg-[hsl(152_22%_23%)] text-white border-[hsl(152_22%_23%)] hover:bg-[hsl(152_22%_23%)]',
+          )}
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />
+          {customize ? 'Done arranging' : 'Rearrange panels'}
+        </button>
+      </div>
+      {customize && (
+        <p className="text-[11px] text-muted-foreground -mt-3">
+          Drag a panel by its grip handle to reorder, use “Full width” to stretch it across both columns, or drag its bottom-right corner to resize it taller or shorter.
+        </p>
+      )}
+
+      {(overallLayout.wide.length > 0 || customize) && (
+        <div className="grid grid-cols-1 gap-5">
+          {renderOverallZone(overallLayout.wide, 'wide')}
+          <DropZone {...overallZoneDropProps('wide')} />
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
+        <div className="grid grid-cols-1 gap-5 content-start">
+          {renderOverallZone(overallLayout.left, 'left')}
+          <DropZone {...overallZoneDropProps('left')} />
+        </div>
 
         <div className="grid grid-cols-1 gap-5 content-start">
-          {/* Overdue panel */}
-          <section className="border border-border bg-card shadow-sm rise-in" style={{ animationDelay: '80ms' }}>
-            <div className="px-4 pt-3.5 pb-1">
-              <SectionTitle className="mb-0">Overdue — worst first</SectionTitle>
-            </div>
-            {overdue.length === 0 && <EmptyNote>Nothing overdue. Rare and delightful.</EmptyNote>}
-            {overdue.slice(0, 7).map(t => <TaskRow key={t.id} task={t} onOpen={setOpenTask} />)}
-          </section>
-
-          {/* Relationship health */}
-          <section className="border border-border bg-card shadow-sm rise-in" style={{ animationDelay: '140ms' }}>
-            <div className="px-4 pt-3.5 pb-2">
-              <SectionTitle className="mb-0" right={<button onClick={() => goTo('people')} className="text-[11.5px] text-muted-foreground hover:text-foreground">all people →</button>}>Relationship health</SectionTitle>
-            </div>
-            <div className="px-4 pb-3 grid grid-cols-1 gap-1.5">
-              {(['inner', 'active', 'network', 'dormant'] as const).map(tier => {
-                const members = state.people.filter(p => p.tier === tier)
-                const od = members.filter(p => personOverdueBy(p, state.settings) > 0)
-                const pct = members.length ? Math.round(((members.length - od.length) / members.length) * 100) : 100
-                return (
-                  <div key={tier} className="flex items-center gap-2.5 text-[12.5px]">
-                    <span className="w-16 capitalize">{tier}</span>
-                    <div className="flex-1 h-2 bg-muted rounded-sm overflow-hidden">
-                      <div className="h-full bg-[hsl(152_25%_38%)]" style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className="tabular text-muted-foreground w-24 text-right">{od.length ? `${od.length} overdue` : 'all current'}</span>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
+          {renderOverallZone(overallLayout.right, 'right')}
+          <DropZone {...overallZoneDropProps('right')} />
         </div>
       </div>
 

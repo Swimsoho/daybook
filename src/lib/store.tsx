@@ -162,6 +162,21 @@ export function routeCapture(text: string, state: AppState): RoutingProposal {
     }
   }
 
+  // explicit "i:"/"idea:" prefix — files straight into the Ideas tracker (Collections > Ideas)
+  // rather than becoming a P3 task under the old "New Ideas" focus area. Matched by name, same
+  // reasoning as Notes above: if the tracker's been renamed or removed, this falls through to
+  // the old area-tagged-task behavior further down instead of failing outright.
+  if (kind === 'idea') {
+    const ideasTracker = state.trackers.find(t => t.active && t.name.toLowerCase() === 'ideas')
+    if (ideasTracker) {
+      return {
+        kind: 'entry', taskType: 'todo', trackerId: ideasTracker.id, priority: 'P3',
+        title: body || text.trim(),
+        explanation: `“i:”/“idea:” → ${ideasTracker.name} tracker`,
+      }
+    }
+  }
+
   // person match
   const person = state.people.find(p => {
     const first = p.name.split(' ')[0].toLowerCase().replace(/[^a-z]/g, '')

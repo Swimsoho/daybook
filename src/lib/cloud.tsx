@@ -73,6 +73,16 @@ const SETTINGS_BACKFILL: Partial<AppState['settings']> = {
   projectWipLimit: 3, theme: 'sage', timezone: 'Europe/London', lunchTime: '12:30',
 }
 
+// Appends any seeded item (by name, case-insensitive) missing from an existing list — used to
+// backfill collections/trackers that shipped after some accounts were already saved. Existing
+// items are never modified or reordered; a missing name is simply appended once.
+function backfillByName<T extends { name: string }>(existing: T[] | undefined, seeded: T[], namesLower: string[]): T[] {
+  const list = existing ?? []
+  const have = new Set(list.map(x => x.name.toLowerCase()))
+  const missing = seeded.filter(s => namesLower.includes(s.name.toLowerCase()) && !have.has(s.name.toLowerCase()))
+  return missing.length ? [...list, ...missing] : list
+}
+
 async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<AppState> {
   const { data } = await supabase!.from('workspace_state').select('data').eq('workspace_id', ws.id).maybeSingle()
   if (data?.data && Object.keys(data.data).length > 0) {
@@ -94,6 +104,13 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
       // call across the app would throw on undefined. Backfill the standard starter set once;
       // it behaves exactly like a freshly seeded account from here on.
       actions: loaded.actions ?? seedState().actions,
+      // Notes (v33) and Ideas trackers shipped after some accounts were already saved — a blob
+      // saved before either existed has no matching collection/tracker at all, so the
+      // "n:"/"note:"/"i:"/"idea:" capture prefixes would silently do nothing (no tracker to
+      // find by name) even though the code fully supports them. Backfill each by name only if
+      // it's actually missing — never touches anything the person's already renamed/added.
+      collections: backfillByName(loaded.collections, seedState().collections, ['notes', 'ideas']),
+      trackers: backfillByName(loaded.trackers, seedState().trackers, ['notes', 'ideas']),
     }
   }
   const fresh = ws.kind === 'sample' ? seedState() : emptyState(ownerName || 'there')

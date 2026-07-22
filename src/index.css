@@ -39,7 +39,11 @@
     --secondary: 42 30% 88%;
     --secondary-foreground: 96 10% 13%;
     --muted: 42 28% 89%;
-    --muted-foreground: 75 6% 40%;
+    /* Darkened from 40% → 34% lightness for the "refined editorial" legibility pass — secondary
+       text (dates, meta lines, captions) reads noticeably more confidently at a glance without
+       tipping into the same weight as primary body text. Shared across every palette on purpose
+       (see the per-palette blocks below), so this one change lifts contrast everywhere at once. */
+    --muted-foreground: 75 8% 34%;
     --accent: 42 30% 87%;
     --accent-foreground: 96 10% 13%;
     --destructive: 8 60% 41%;
@@ -131,6 +135,79 @@
     --nav-to: 210 22% 11%;
     --nav-border: 210 18% 15%;
     --nav-text: 210 20% 92%;
+  }
+
+  /* Refined editorial/executive additions: a near-monochrome broadsheet option (Ink), and
+     three deeper, more saturated "study" palettes (Burgundy, Forest, Brass) — each meant to
+     read as more formal/considered than the original five, for anyone who wants the app to
+     feel less like a paper notebook and more like a bound ledger. */
+  :root[data-theme='ink'] {
+    --background: 45 20% 96%;
+    --card: 45 28% 98%;
+    --popover: 45 28% 98%;
+    --primary: 222 18% 15%;
+    --primary-foreground: 45 28% 97%;
+    --secondary: 45 10% 90%;
+    --muted: 45 10% 90%;
+    --accent: 45 10% 88%;
+    --border: 45 8% 81%;
+    --input: 45 8% 78%;
+    --ring: 222 18% 15%;
+    --nav-from: 222 16% 15%;
+    --nav-to: 222 18% 9%;
+    --nav-border: 222 14% 14%;
+    --nav-text: 45 25% 90%;
+  }
+  :root[data-theme='burgundy'] {
+    --background: 350 24% 95%;
+    --card: 350 34% 97%;
+    --popover: 350 34% 97%;
+    --primary: 350 48% 30%;
+    --primary-foreground: 350 34% 97%;
+    --secondary: 350 16% 89%;
+    --muted: 350 14% 90%;
+    --accent: 350 16% 88%;
+    --border: 350 14% 82%;
+    --input: 350 14% 79%;
+    --ring: 350 48% 30%;
+    --nav-from: 350 32% 18%;
+    --nav-to: 350 38% 12%;
+    --nav-border: 350 28% 17%;
+    --nav-text: 350 30% 92%;
+  }
+  :root[data-theme='forest'] {
+    --background: 90 22% 95%;
+    --card: 92 30% 97%;
+    --popover: 92 30% 97%;
+    --primary: 145 42% 20%;
+    --primary-foreground: 92 30% 97%;
+    --secondary: 95 16% 89%;
+    --muted: 95 14% 90%;
+    --accent: 95 16% 88%;
+    --border: 95 14% 81%;
+    --input: 95 14% 78%;
+    --ring: 145 42% 20%;
+    --nav-from: 145 30% 16%;
+    --nav-to: 145 36% 10%;
+    --nav-border: 145 26% 15%;
+    --nav-text: 95 28% 91%;
+  }
+  :root[data-theme='brass'] {
+    --background: 40 34% 94%;
+    --card: 42 44% 97%;
+    --popover: 42 44% 97%;
+    --primary: 40 55% 32%;
+    --primary-foreground: 42 44% 97%;
+    --secondary: 38 22% 89%;
+    --muted: 38 20% 89%;
+    --accent: 38 22% 87%;
+    --border: 38 18% 80%;
+    --input: 38 18% 77%;
+    --ring: 40 55% 32%;
+    --nav-from: 40 30% 17%;
+    --nav-to: 40 35% 11%;
+    --nav-border: 40 26% 16%;
+    --nav-text: 42 38% 91%;
   }
 }
 

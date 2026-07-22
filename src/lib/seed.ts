@@ -111,13 +111,22 @@ export function seedState(): AppState {
       { id: 'col_fin', name: 'Financial', description: 'Subscriptions and policies', color: 'hsl(152 25% 32%)', active: true },
       { id: 'col_personal', name: 'Personal', description: 'Dates and things worth not forgetting', color: 'hsl(340 45% 45%)', active: true },
       { id: 'col_notes', name: 'Notes', description: 'A catch-all for anything jotted down that isn’t a task, call, or specific list', color: 'hsl(35 45% 42%)', active: true },
+      { id: 'col_ideas', name: 'Ideas', description: 'Things to explore — not a task yet, don’t want to lose it', color: 'hsl(40 65% 42%)', active: true },
     ],
     trackers: [
       {
-        id: 'trk_notes', collectionId: 'col_notes', name: 'Notes', description: 'Quick jottings — ideas, one-liners, things worth remembering that aren’t a task', defaultView: 'table', active: true,
+        id: 'trk_notes', collectionId: 'col_notes', name: 'Notes', description: 'Quick jottings — one-liners, things worth remembering that aren’t a task', defaultView: 'table', active: true,
         columns: [
           { key: 'text', name: 'Note', type: 'longtext', isTitle: true, required: true },
           { key: 'tag', name: 'Tag', type: 'select', options: ['Idea', 'Reminder', 'Quote', 'Other'] },
+        ],
+      },
+      {
+        id: 'trk_ideas', collectionId: 'col_ideas', name: 'Ideas', description: 'A holding pen for things worth exploring later — separate from your to-do list', defaultView: 'board', active: true,
+        columns: [
+          { key: 'idea', name: 'Idea', type: 'longtext', isTitle: true, required: true },
+          { key: 'status', name: 'Status', type: 'status', options: ['New', 'Exploring', 'Parked', 'Acted on'] },
+          { key: 'notes', name: 'Notes', type: 'longtext' },
         ],
       },
       {

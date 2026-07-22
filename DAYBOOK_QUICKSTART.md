@@ -99,9 +99,10 @@ Open the task, click **Share** in its detail view, then **Create share link**. C
 
 A few quick answers to questions that come up early:
 
-- **Where do general ideas go?** Type `i:` or `idea:` before it when you capture it, or just let Daybook guess — ideas land under **New Ideas**, a Focus area meant exactly for "not a task yet, don't want to lose it."
+- **Where do general ideas go?** Type `i:` or `idea:` before it when you capture it, or just let Daybook guess — ideas land in **Collections → Ideas**, a board (New / Exploring / Parked / Acted on) meant exactly for "not a task yet, don't want to lose it."
 - **Where do freeform notes go?** Same idea — `n:` or `note:`, or redirect from the Inbox's "File as" dropdown to the **Notes** collection.
-- **What's the difference between Collections and Notes?** Collections page now has two tabs — **Collections** (your structured trackers: Movies, Books, Dates to remember, etc.) and **Notes** (a plain catch-all for anything that isn't its own tracker yet).
+- **What's the difference between Collections and Notes?** Collections page now has two tabs — **Collections** (your structured trackers: Movies, Books, Dates to remember, Ideas, etc.) and **Notes** (a plain catch-all for anything that isn't its own tracker yet).
+- **Can I rearrange or resize the Today / Overall page?** Click **Rearrange widgets** (Today) or **Rearrange panels** (Overall), top-right. While it's on, drag a widget by its grip handle to reorder it, click **Full width** to stretch it, or drag its bottom-right corner to resize it taller or shorter. **Reset layout** puts everything back. Nothing changes until you turn that mode on.
 
 ---
 

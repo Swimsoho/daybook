@@ -70,6 +70,46 @@ function isoDate(d: Date) { return d.toISOString().slice(0, 10) }
 function todayStr() { return isoDate(new Date()) }
 function addDaysStr(n: number) { return isoDate(new Date(Date.now() + n * 86400000)) }
 
+// Notes and Ideas trackers shipped after some real accounts were already saved to Supabase — a
+// stored blob from before either existed has no matching tracker at all, so "note:"/"idea:"
+// would silently do nothing here even though the client-side app knows to backfill them on
+// next load. This function is called directly by Slack though (server-to-server, no browser
+// involved), so it can't wait for that — it backfills the same two trackers itself, in-memory
+// here and merged into what gets written back below, so it self-heals the first time either bot
+// receives a message rather than requiring the person to open the app first.
+function backfillNotesAndIdeas(collections: Record<string, unknown>[], trackers: Record<string, unknown>[]) {
+  const haveTracker = (name: string) => trackers.some(t => String(t.name ?? '').toLowerCase() === name)
+  const haveCollection = (name: string) => collections.some(c => String(c.name ?? '').toLowerCase() === name)
+  const nextCollections = [...collections]
+  const nextTrackers = [...trackers]
+  if (!haveCollection('notes')) {
+    nextCollections.push({ id: 'col_notes', name: 'Notes', description: 'A catch-all for anything jotted down that isn’t a task, call, or specific list', color: 'hsl(35 45% 42%)', active: true })
+  }
+  if (!haveTracker('notes')) {
+    nextTrackers.push({
+      id: 'trk_notes', collectionId: 'col_notes', name: 'Notes', description: 'Quick jottings — one-liners, things worth remembering that aren’t a task', defaultView: 'table', active: true,
+      columns: [
+        { key: 'text', name: 'Note', type: 'longtext', isTitle: true, required: true },
+        { key: 'tag', name: 'Tag', type: 'select', options: ['Idea', 'Reminder', 'Quote', 'Other'] },
+      ],
+    })
+  }
+  if (!haveCollection('ideas')) {
+    nextCollections.push({ id: 'col_ideas', name: 'Ideas', description: 'Things to explore — not a task yet, don’t want to lose it', color: 'hsl(40 65% 42%)', active: true })
+  }
+  if (!haveTracker('ideas')) {
+    nextTrackers.push({
+      id: 'trk_ideas', collectionId: 'col_ideas', name: 'Ideas', description: 'A holding pen for things worth exploring later — separate from your to-do list', defaultView: 'board', active: true,
+      columns: [
+        { key: 'idea', name: 'Idea', type: 'longtext', isTitle: true, required: true },
+        { key: 'status', name: 'Status', type: 'status', options: ['New', 'Exploring', 'Parked', 'Acted on'] },
+        { key: 'notes', name: 'Notes', type: 'longtext' },
+      ],
+    })
+  }
+  return { collections: nextCollections, trackers: nextTrackers }
+}
+
 function routeCaptureServer(text: string, state: RouterState) {
   const lower = text.toLowerCase().trim()
   const reasons: string[] = []
@@ -90,6 +130,19 @@ function routeCaptureServer(text: string, state: RouterState) {
         kind: 'entry' as const, taskType: 'todo', trackerId: notesTracker.id, priority: 'P3' as const,
         title: body || text.trim(),
         explanation: `“n:”/“note:” → ${notesTracker.name} tracker`,
+      }
+    }
+  }
+
+  // explicit "i:"/"idea:" prefix — files straight into the Ideas tracker (Collections > Ideas)
+  // instead of a P3 task under the old "New Ideas" area, same as the in-app quick-capture box.
+  if (kind === 'idea') {
+    const ideasTracker = state.trackers.find(t => t.active !== false && t.name.toLowerCase() === 'ideas')
+    if (ideasTracker) {
+      return {
+        kind: 'entry' as const, taskType: 'todo', trackerId: ideasTracker.id, priority: 'P3' as const,
+        title: body || text.trim(),
+        explanation: `“i:”/“idea:” → ${ideasTracker.name} tracker`,
       }
     }
   }
@@ -231,6 +284,10 @@ Deno.serve(async (req) => {
     const { data: row } = await admin.from('workspace_state').select('data').eq('workspace_id', ws.id).maybeSingle()
     const state = (row?.data ?? {}) as Record<string, unknown>
     const captures = Array.isArray(state.captures) ? state.captures as unknown[] : []
+    const { collections: backfilledCollections, trackers: backfilledTrackers } = backfillNotesAndIdeas(
+      Array.isArray(state.collections) ? state.collections as Record<string, unknown>[] : [],
+      Array.isArray(state.trackers) ? state.trackers as Record<string, unknown>[] : [],
+    )
 
     const routerState: RouterState = {
       areas: Array.isArray(state.areas) ? state.areas as RouterState['areas'] : [],
@@ -238,7 +295,7 @@ Deno.serve(async (req) => {
       people: Array.isArray(state.people) ? state.people as RouterState['people'] : [],
       categories: Array.isArray(state.categories) ? state.categories as RouterState['categories'] : [],
       actions: Array.isArray(state.actions) ? state.actions as RouterState['actions'] : [],
-      trackers: Array.isArray(state.trackers) ? state.trackers as RouterState['trackers'] : [],
+      trackers: backfilledTrackers as RouterState['trackers'],
     }
     const proposal = routeCaptureServer(text, routerState)
     const capture = {
@@ -250,7 +307,7 @@ Deno.serve(async (req) => {
       proposal: { ...proposal, explanation: `${proposal.explanation} — via Slack` },
     }
 
-    const nextState = { ...state, captures: [capture, ...captures] }
+    const nextState = { ...state, collections: backfilledCollections, trackers: backfilledTrackers, captures: [capture, ...captures] }
     const { error: updateErr } = await admin
       .from('workspace_state')
       .update({ data: nextState, updated_at: new Date().toISOString() })

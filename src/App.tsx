@@ -241,8 +241,9 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
 
       {/* Main */}
       <div className="flex-1 min-w-0 flex flex-col">
-        {/* Top bar */}
-        <header className="sticky top-0 z-20 border-b border-border bg-[hsl(var(--background)_/_0.92)] backdrop-blur px-4 md:px-6 py-3 flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
+        {/* Top bar — a thin primary-colored rule along the top edge gives every page a small
+            "masthead" moment, in keeping with the more editorial/executive visual direction. */}
+        <header className="sticky top-0 z-20 border-b border-border bg-[hsl(var(--background)_/_0.92)] backdrop-blur px-4 md:px-6 py-3 flex flex-col gap-3 md:flex-row md:items-center md:gap-4 relative before:absolute before:inset-x-0 before:top-0 before:h-[2.5px] before:bg-primary">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setNavOpen(true)}
@@ -252,7 +253,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
             </button>
             <div className="min-w-0">
               <div className="flex items-baseline gap-3 flex-wrap">
-                <h1 className="font-display text-[19px] md:text-[21px] font-semibold tracking-tight truncate">{title}</h1>
+                <h1 className="font-display text-[20px] md:text-[22px] font-semibold tracking-tight truncate">{title}</h1>
                 {(page === 'today' || page === 'overall') && (
                   <div className="flex border border-border rounded-sm overflow-hidden text-[11.5px] shrink-0">
                     <button onClick={() => setPage('today')} className={cn('px-2 py-0.5', page === 'today' ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-accent')}>Today</button>
