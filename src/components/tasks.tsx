@@ -12,12 +12,15 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
   Priority, PRIORITY_DESC, PRIORITY_LABELS, STATUS_LABELS, Task, TaskStatus, TaskType, TYPE_LABELS, fmtDate, today, addDays, daysSince,
 } from '@/lib/model'
-import { categoriesForArea, rollup, subtasksOf, useStore } from '@/lib/store'
+import {
+  actionUsage, areaUsage, categoriesForArea, categoryUsage, personUsage, projectUsage, rollup, subtasksOf, useStore, vendorUsage, withPopularFirst,
+} from '@/lib/store'
 import { useCloud } from '@/lib/cloud'
 import { attachmentsAvailable, deleteAttachmentFile, fmtBytes, getAttachmentUrl, uploadAttachment } from '@/lib/attachments'
 import { AreaDot, DueChip, PriorityChip } from './bits'
@@ -37,6 +40,12 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
   const area = state.areas.find(a => a.id === areaId)
   const projectsInArea = areaId ? state.projects.filter(p => p.areaId === areaId && (p.status === 'active' || p.status === 'on-hold')) : []
   const projectId = fixedProjectId ?? (pickedProjectId || undefined)
+  const areaOptionsBase = withPopularFirst(state.areas.filter(a => a.active), a => areaUsage(state, a.id), a => a.name)
+  const projectOptionsBase = withPopularFirst(projectsInArea, p => projectUsage(state, p.id), p => p.name)
+  const categoryOptionsBase = withPopularFirst(
+    categoriesForArea(state.categories, areaId, pickedCategoryId), c => categoryUsage(state, c.id), c => c.name,
+  )
+  const actionOptionsBase = withPopularFirst(state.actions.filter(a => a.active), a => actionUsage(state, a.id), a => a.name)
 
   function add() {
     if (!text.trim()) return
@@ -64,37 +73,41 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
         className="flex-1 min-w-[140px] h-8 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/50"
       />
       {!fixedAreaId && (
-        <Select value={pickedAreaId || '__none__'} onValueChange={v => { setPickedAreaId(v === '__none__' ? '' : v); setPickedProjectId('') }}>
-          <SelectTrigger className="h-7 w-[112px] text-[11.5px] bg-card shrink-0"><SelectValue placeholder="Area" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">No area</SelectItem>
-            {state.areas.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          value={pickedAreaId || '__none__'}
+          onValueChange={v => { setPickedAreaId(v === '__none__' ? '' : v); setPickedProjectId('') }}
+          options={[{ value: '__none__', label: 'No area' }, ...areaOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))]}
+          popularCount={areaOptionsBase.popularCount}
+          placeholder="Area" searchPlaceholder="Search areas…"
+          className="h-7 w-[112px] text-[11.5px] bg-card shrink-0"
+        />
       )}
       {!fixedProjectId && areaId && projectsInArea.length > 0 && (
-        <Select value={pickedProjectId || '__none__'} onValueChange={v => setPickedProjectId(v === '__none__' ? '' : v)}>
-          <SelectTrigger className="h-7 w-[128px] text-[11.5px] bg-card shrink-0"><SelectValue placeholder="Project" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">No project</SelectItem>
-            {projectsInArea.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          value={pickedProjectId || '__none__'}
+          onValueChange={v => setPickedProjectId(v === '__none__' ? '' : v)}
+          options={[{ value: '__none__', label: 'No project' }, ...projectOptionsBase.ordered.map(p => ({ value: p.id, label: p.name }))]}
+          popularCount={projectOptionsBase.popularCount}
+          placeholder="Project" searchPlaceholder="Search projects…"
+          className="h-7 w-[128px] text-[11.5px] bg-card shrink-0"
+        />
       )}
-      <Select value={pickedCategoryId || '__none__'} onValueChange={v => setPickedCategoryId(v === '__none__' ? '' : v)}>
-        <SelectTrigger className="h-7 w-[112px] text-[11.5px] bg-card shrink-0"><SelectValue placeholder="Category" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__none__">No category</SelectItem>
-          {categoriesForArea(state.categories, areaId, pickedCategoryId).map(c => <SelectItem key={c.id} value={c.id}>{c.level > 0 ? '› ' : ''}{c.name}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      <Select value={pickedActionId || '__none__'} onValueChange={v => setPickedActionId(v === '__none__' ? '' : v)}>
-        <SelectTrigger className="h-7 w-[104px] text-[11.5px] bg-card shrink-0"><SelectValue placeholder="Action" /></SelectTrigger>
-        <SelectContent>
-          <SelectItem value="__none__">No action</SelectItem>
-          {state.actions.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-        </SelectContent>
-      </Select>
+      <SearchableSelect
+        value={pickedCategoryId || '__none__'}
+        onValueChange={v => setPickedCategoryId(v === '__none__' ? '' : v)}
+        options={[{ value: '__none__', label: 'No category' }, ...categoryOptionsBase.ordered.map(c => ({ value: c.id, label: `${c.level > 0 ? '› ' : ''}${c.name}` }))]}
+        popularCount={categoryOptionsBase.popularCount}
+        placeholder="Category" searchPlaceholder="Search categories…"
+        className="h-7 w-[112px] text-[11.5px] bg-card shrink-0"
+      />
+      <SearchableSelect
+        value={pickedActionId || '__none__'}
+        onValueChange={v => setPickedActionId(v === '__none__' ? '' : v)}
+        options={[{ value: '__none__', label: 'No action' }, ...actionOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))]}
+        popularCount={actionOptionsBase.popularCount}
+        placeholder="Action" searchPlaceholder="Search actions…"
+        className="h-7 w-[104px] text-[11.5px] bg-card shrink-0"
+      />
       <button onClick={add} className="h-7 px-2.5 text-[11.5px] border border-input rounded-sm bg-card hover:bg-accent shrink-0">Add</button>
     </div>
   )
@@ -360,6 +373,12 @@ export function TaskDialog({ open, onClose, task, defaults }: {
   const projects = state.projects.filter(p => p.status === 'active' && (!f.areaId || p.areaId === f.areaId))
   const mainCats = categoriesForArea(state.categories, f.areaId, f.categoryIds?.[0])
   const activeActions = state.actions.filter(a => a.active || a.id === f.actionIds?.[0])
+  const personOptionsBase = withPopularFirst(state.people, p => personUsage(state, p.id), p => p.name)
+  const areaOptionsBase = withPopularFirst(state.areas.filter(a => a.active), a => areaUsage(state, a.id), a => a.name)
+  const projectOptionsBase = withPopularFirst(projects, p => projectUsage(state, p.id), p => p.name)
+  const categoryOptionsBase = withPopularFirst(mainCats, c => categoryUsage(state, c.id), c => c.name)
+  const vendorOptionsBase = withPopularFirst(state.vendors, v => vendorUsage(state, v.id), v => v.name)
+  const actionOptionsBase = withPopularFirst(activeActions, a => actionUsage(state, a.id), a => a.name)
 
   function save() {
     if (!f.title?.trim()) { toast.error('A title is all that’s required'); return }
@@ -406,12 +425,14 @@ export function TaskDialog({ open, onClose, task, defaults }: {
           {(f.type === 'call' || f.type === 'followup') && (
             <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Contact {f.type === 'call' && <span className="text-muted-foreground">(one-tap dial shortcut shown on the task)</span>}</Label>
-              <Select value={f.personId ?? ''} onValueChange={v => set({ personId: v })}>
-                <SelectTrigger><SelectValue placeholder="Choose a person" /></SelectTrigger>
-                <SelectContent>
-                  {state.people.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={f.personId ?? ''}
+                onValueChange={v => set({ personId: v })}
+                options={personOptionsBase.ordered.map(p => ({ value: p.id, label: p.name }))}
+                popularCount={personOptionsBase.popularCount}
+                placeholder="Choose a person" searchPlaceholder="Search people…"
+                className="w-full"
+              />
             </div>
           )}
           {f.type === 'call' && (
@@ -424,22 +445,25 @@ export function TaskDialog({ open, onClose, task, defaults }: {
           <div className="grid grid-cols-2 gap-3">
             <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Area</Label>
-              <Select value={f.areaId ?? ''} onValueChange={v => set({ areaId: v, projectId: undefined })}>
-                <SelectTrigger><SelectValue placeholder="Area" /></SelectTrigger>
-                <SelectContent>
-                  {state.areas.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={f.areaId ?? ''}
+                onValueChange={v => set({ areaId: v, projectId: undefined })}
+                options={areaOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))}
+                popularCount={areaOptionsBase.popularCount}
+                placeholder="Area" searchPlaceholder="Search areas…"
+                className="w-full"
+              />
             </div>
             <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Project <span className="text-muted-foreground">(optional)</span></Label>
-              <Select value={f.projectId ?? 'none'} onValueChange={v => set({ projectId: v === 'none' ? undefined : v })}>
-                <SelectTrigger><SelectValue placeholder="None — loose one-off" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None — loose one-off</SelectItem>
-                  {projects.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                value={f.projectId ?? 'none'}
+                onValueChange={v => set({ projectId: v === 'none' ? undefined : v })}
+                options={[{ value: 'none', label: 'None — loose one-off' }, ...projectOptionsBase.ordered.map(p => ({ value: p.id, label: p.name }))]}
+                popularCount={projectOptionsBase.popularCount}
+                placeholder="None — loose one-off" searchPlaceholder="Search projects…"
+                className="w-full"
+              />
             </div>
           </div>
 
@@ -465,36 +489,39 @@ export function TaskDialog({ open, onClose, task, defaults }: {
             <div className="grid grid-cols-2 gap-3">
               <div className="grid grid-cols-1 gap-1.5">
                 <Label className="text-xs">Category</Label>
-                <Select value={f.categoryIds?.[0] ?? 'none'} onValueChange={v => set({ categoryIds: v === 'none' ? [] : [v] })}>
-                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {mainCats.map(c => <SelectItem key={c.id} value={c.id}>{c.level > 0 ? '› ' : ''}{c.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={f.categoryIds?.[0] ?? 'none'}
+                  onValueChange={v => set({ categoryIds: v === 'none' ? [] : [v] })}
+                  options={[{ value: 'none', label: 'None' }, ...categoryOptionsBase.ordered.map(c => ({ value: c.id, label: `${c.level > 0 ? '› ' : ''}${c.name}` }))]}
+                  popularCount={categoryOptionsBase.popularCount}
+                  placeholder="None" searchPlaceholder="Search categories…"
+                  className="w-full"
+                />
               </div>
               <div className="grid grid-cols-1 gap-1.5">
                 <Label className="text-xs">Vendor <span className="text-muted-foreground">(optional)</span></Label>
-                <Select value={f.vendorId ?? 'none'} onValueChange={v => set({ vendorId: v === 'none' ? undefined : v })}>
-                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {state.vendors.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  value={f.vendorId ?? 'none'}
+                  onValueChange={v => set({ vendorId: v === 'none' ? undefined : v })}
+                  options={[{ value: 'none', label: 'None' }, ...vendorOptionsBase.ordered.map(v => ({ value: v.id, label: v.name }))]}
+                  popularCount={vendorOptionsBase.popularCount}
+                  placeholder="None" searchPlaceholder="Search vendors…"
+                  className="w-full"
+                />
               </div>
             </div>
           )}
 
           <div className="grid grid-cols-1 gap-1.5">
             <Label className="text-xs">Action <span className="text-muted-foreground">(optional — what kind of action this is)</span></Label>
-            <Select value={f.actionIds?.[0] ?? 'none'} onValueChange={v => set({ actionIds: v === 'none' ? [] : [v] })}>
-              <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {activeActions.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={f.actionIds?.[0] ?? 'none'}
+              onValueChange={v => set({ actionIds: v === 'none' ? [] : [v] })}
+              options={[{ value: 'none', label: 'None' }, ...actionOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))]}
+              popularCount={actionOptionsBase.popularCount}
+              placeholder="None" searchPlaceholder="Search actions…"
+              className="w-full"
+            />
           </div>
 
           <div className="grid grid-cols-1 gap-1.5">
@@ -667,54 +694,77 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-0.5">Move to</span>
-              <Select value={task.areaId ?? '__none__'} onValueChange={v => {
-                const a = state.areas.find(x => x.id === v)
-                updateTask(task.id, { areaId: v === '__none__' ? undefined : v, projectId: undefined }, a ? `moved to ${a.name}` : 'area cleared')
-                toast(a ? `Moved to ${a.name}` : 'Area cleared')
-              }}>
-                <SelectTrigger className="h-7 w-[130px] text-[11.5px] bg-card"><SelectValue placeholder="Area" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No area</SelectItem>
-                  {state.areas.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {task.areaId && (
-                <Select value={task.projectId ?? '__none__'} onValueChange={v => {
-                  const p = state.projects.find(x => x.id === v)
-                  updateTask(task.id, { projectId: v === '__none__' ? undefined : v, areaId: p ? p.areaId : task.areaId }, p ? `moved to project ${p.name}` : 'project cleared')
-                  toast(p ? `Moved to ${p.name}` : 'No longer tied to a project')
-                }}>
-                  <SelectTrigger className="h-7 w-[150px] text-[11.5px] bg-card"><SelectValue placeholder="Project" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No project</SelectItem>
-                    {state.projects.filter(p => p.areaId === task.areaId && (p.status === 'active' || p.status === 'on-hold')).map(p => (
-                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-              <Select value={task.categoryIds[0] ?? '__none__'} onValueChange={v => {
-                const c = state.categories.find(x => x.id === v)
-                updateTask(task.id, { categoryIds: v === '__none__' ? [] : [v] }, c ? `re-categorized as ${c.name}` : 'category cleared')
-                toast(c ? `Re-categorized as ${c.name}` : 'Category cleared')
-              }}>
-                <SelectTrigger className="h-7 w-[130px] text-[11.5px] bg-card"><SelectValue placeholder="Category" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No category</SelectItem>
-                  {categoriesForArea(state.categories, task.areaId, task.categoryIds[0]).map(c => <SelectItem key={c.id} value={c.id}>{c.level > 0 ? '› ' : ''}{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={task.actionIds?.[0] ?? '__none__'} onValueChange={v => {
-                const a = state.actions.find(x => x.id === v)
-                updateTask(task.id, { actionIds: v === '__none__' ? [] : [v] }, a ? `action → ${a.name}` : 'action cleared')
-                toast(a ? `Action set to ${a.name}` : 'Action cleared')
-              }}>
-                <SelectTrigger className="h-7 w-[120px] text-[11.5px] bg-card"><SelectValue placeholder="Action" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">No action</SelectItem>
-                  {state.actions.filter(a => a.active || a.id === task.actionIds?.[0]).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {(() => {
+                const b = withPopularFirst(state.areas.filter(a => a.active), a => areaUsage(state, a.id), a => a.name)
+                return (
+                  <SearchableSelect
+                    value={task.areaId ?? '__none__'}
+                    onValueChange={v => {
+                      const a = state.areas.find(x => x.id === v)
+                      updateTask(task.id, { areaId: v === '__none__' ? undefined : v, projectId: undefined }, a ? `moved to ${a.name}` : 'area cleared')
+                      toast(a ? `Moved to ${a.name}` : 'Area cleared')
+                    }}
+                    options={[{ value: '__none__', label: 'No area' }, ...b.ordered.map(a => ({ value: a.id, label: a.name }))]}
+                    popularCount={b.popularCount}
+                    placeholder="Area" searchPlaceholder="Search areas…"
+                    className="h-7 w-[130px] text-[11.5px] bg-card"
+                  />
+                )
+              })()}
+              {task.areaId && (() => {
+                const projectsHere = state.projects.filter(p => p.areaId === task.areaId && (p.status === 'active' || p.status === 'on-hold'))
+                const b = withPopularFirst(projectsHere, p => projectUsage(state, p.id), p => p.name)
+                return (
+                  <SearchableSelect
+                    value={task.projectId ?? '__none__'}
+                    onValueChange={v => {
+                      const p = state.projects.find(x => x.id === v)
+                      updateTask(task.id, { projectId: v === '__none__' ? undefined : v, areaId: p ? p.areaId : task.areaId }, p ? `moved to project ${p.name}` : 'project cleared')
+                      toast(p ? `Moved to ${p.name}` : 'No longer tied to a project')
+                    }}
+                    options={[{ value: '__none__', label: 'No project' }, ...b.ordered.map(p => ({ value: p.id, label: p.name }))]}
+                    popularCount={b.popularCount}
+                    placeholder="Project" searchPlaceholder="Search projects…"
+                    className="h-7 w-[150px] text-[11.5px] bg-card"
+                  />
+                )
+              })()}
+              {(() => {
+                const catsHere = categoriesForArea(state.categories, task.areaId, task.categoryIds[0])
+                const b = withPopularFirst(catsHere, c => categoryUsage(state, c.id), c => c.name)
+                return (
+                  <SearchableSelect
+                    value={task.categoryIds[0] ?? '__none__'}
+                    onValueChange={v => {
+                      const c = state.categories.find(x => x.id === v)
+                      updateTask(task.id, { categoryIds: v === '__none__' ? [] : [v] }, c ? `re-categorized as ${c.name}` : 'category cleared')
+                      toast(c ? `Re-categorized as ${c.name}` : 'Category cleared')
+                    }}
+                    options={[{ value: '__none__', label: 'No category' }, ...b.ordered.map(c => ({ value: c.id, label: `${c.level > 0 ? '› ' : ''}${c.name}` }))]}
+                    popularCount={b.popularCount}
+                    placeholder="Category" searchPlaceholder="Search categories…"
+                    className="h-7 w-[130px] text-[11.5px] bg-card"
+                  />
+                )
+              })()}
+              {(() => {
+                const actionsHere = state.actions.filter(a => a.active || a.id === task.actionIds?.[0])
+                const b = withPopularFirst(actionsHere, a => actionUsage(state, a.id), a => a.name)
+                return (
+                  <SearchableSelect
+                    value={task.actionIds?.[0] ?? '__none__'}
+                    onValueChange={v => {
+                      const a = state.actions.find(x => x.id === v)
+                      updateTask(task.id, { actionIds: v === '__none__' ? [] : [v] }, a ? `action → ${a.name}` : 'action cleared')
+                      toast(a ? `Action set to ${a.name}` : 'Action cleared')
+                    }}
+                    options={[{ value: '__none__', label: 'No action' }, ...b.ordered.map(a => ({ value: a.id, label: a.name }))]}
+                    popularCount={b.popularCount}
+                    placeholder="Action" searchPlaceholder="Search actions…"
+                    className="h-7 w-[120px] text-[11.5px] bg-card"
+                  />
+                )
+              })()}
             </div>
           </div>
         )}

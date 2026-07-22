@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v32 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v33 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -269,3 +269,13 @@ None of these are things the rest of the app depends on to function — they're 
     *A note on the shared secret*: the cron job authenticates to the Edge Function with a hardcoded default token baked into the function (documented in its top comment) rather than requiring you to set up a Supabase secret by hand — this is a low-stakes anti-spam token (stops a random internet request from triggering mass pushes), not a real credential like your bot tokens, and can be rotated any time by setting a `DIGEST_CRON_SECRET` Edge Function secret and updating the header in the pg_cron job to match.
 
     All of this is already live on the backend (Supabase Edge Functions + the cron job) regardless of whether you've redeployed the frontend yet — the frontend zip just adds the Settings UI (timezone field, Send-now buttons) and the classifier import used by the in-app capture box for consistency.
+
+21. **v33** — Two changes: captures can now file into any Collection, not just tasks, and the pickers that grow over time (areas, categories, actions, people, projects, trackers) are searchable instead of plain scrolling dropdowns.
+
+    First, **"File as" on every pending capture**. v32 taught Telegram/Slack messages to recognize phrases like "add Dune Part Two to my movies list" — but a message like "Tv series - warrior" (no tracker name, no trigger verb) still had nowhere to go but a generic task, with no way to redirect it from the Inbox. Every pending capture in the Inbox now has a **File as** picker next to the area/category/action fields — pick "Task", or any tracker across any Collection (Movies, Books, Subscriptions, Dates to Remember, or the new Notes tracker below), and it overrides whatever the router guessed, regardless of the original proposal. A title field next to it lets you fix up the filed text too (useful since the router's title-extraction isn't always exact, especially once you're redirecting a task-shaped guess into a tracker entry). This works the same whether the capture came from Telegram, Slack, SMS, email, voice, or the in-app quick-capture box — the override happens once, at confirm time, in the Inbox.
+
+    Second, a new seeded **Notes** collection and tracker (Collections > Notes) — a catch-all table (Note + Tag columns) for quick jottings that aren't a task, a call, or a fit for Movies/Books/Subscriptions/Dates. A new **"n:" / "note:"** capture prefix (in-app and Telegram/Slack) files straight into it — e.g. texting your bot "note: check if the warranty covers this" lands as a Notes entry instead of a to-do, no manual redirect needed. The tracker-name keyword matcher (from v32) was also broadened from "the tracker's name's first 5 characters" to whole-word matching, so a multi-word tracker name like "TV Shows" now matches on either word.
+
+    Third, **searchable dropdowns**. Area, category, action, person, project, vendor and tracker pickers only grow over time, and a plain scrolling `<select>` gets unwieldy well before a real account's taxonomy settles. Replaced with a new `SearchableSelect` component (Inbox reassign fields, quick-add, the detailed task dialog, and the task detail sheet's "Move to" row): click to open, type to filter by name, and the list orders "frequently used first" (by how many live tasks/entries actually reference that item) then everything else alphabetically — so the few areas/categories/people you actually use daily surface before a long tail of one-off entries. Fixed small option sets (Priority, Status, and similar 3–5-option pickers) were deliberately left as plain dropdowns, since search adds nothing there.
+
+    Both changes are entirely client-side plus the matching Telegram/Slack Edge Function updates (already deployed) — no new Settings fields, no migration, nothing to reconfigure.

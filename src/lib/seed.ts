@@ -110,8 +110,16 @@ export function seedState(): AppState {
       { id: 'col_ent', name: 'Entertainment', description: 'Things to watch and read', color: 'hsl(280 25% 45%)', active: true },
       { id: 'col_fin', name: 'Financial', description: 'Subscriptions and policies', color: 'hsl(152 25% 32%)', active: true },
       { id: 'col_personal', name: 'Personal', description: 'Dates and things worth not forgetting', color: 'hsl(340 45% 45%)', active: true },
+      { id: 'col_notes', name: 'Notes', description: 'A catch-all for anything jotted down that isn’t a task, call, or specific list', color: 'hsl(35 45% 42%)', active: true },
     ],
     trackers: [
+      {
+        id: 'trk_notes', collectionId: 'col_notes', name: 'Notes', description: 'Quick jottings — ideas, one-liners, things worth remembering that aren’t a task', defaultView: 'table', active: true,
+        columns: [
+          { key: 'text', name: 'Note', type: 'longtext', isTitle: true, required: true },
+          { key: 'tag', name: 'Tag', type: 'select', options: ['Idea', 'Reminder', 'Quote', 'Other'] },
+        ],
+      },
       {
         id: 'trk_dates', collectionId: 'col_personal', name: 'Dates to Remember', description: 'Birthdays, anniversaries, and other dates worth a nudge — export to your calendar from Collections',
         defaultView: 'table', active: true,

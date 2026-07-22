@@ -38,6 +38,44 @@ export function actionUsage(s: AppState, id: string): number {
   return inTasks + inCaptures
 }
 
+// Popularity signals for the other pickers that grow over time — same idea as
+// categoryUsage/actionUsage above (how many live tasks reference this thing), just for
+// areas, people, projects and trackers. Used only for ordering dropdowns (see
+// withPopularFirst), never for delete-safety.
+export function areaUsage(s: AppState, id: string): number {
+  return s.tasks.filter(t => t.areaId === id).length
+}
+export function projectUsage(s: AppState, id: string): number {
+  return s.tasks.filter(t => t.projectId === id).length
+}
+export function personUsage(s: AppState, id: string): number {
+  return s.tasks.filter(t => t.personId === id).length + s.interactions.filter(i => i.personId === id).length
+}
+export function trackerUsage(s: AppState, id: string): number {
+  return s.entries.filter(e => e.trackerId === id).length
+}
+export function vendorUsage(s: AppState, id: string): number {
+  return s.tasks.filter(t => t.vendorId === id).length
+}
+
+// Orders a picker's options "frequently used first, then everything else alphabetically" —
+// the shape SearchableSelect (components/ui/searchable-select.tsx) expects. `topN` caps how
+// many items can count as "frequent" (only items with usage > 0 ever qualify), so a picker
+// with nothing used yet just falls straight through to a plain A–Z list.
+export function withPopularFirst<T>(
+  items: T[], usage: (item: T) => number, label: (item: T) => string, topN = 4,
+): { ordered: T[]; popularCount: number } {
+  const withUsage = items.map(item => ({ item, u: usage(item) }))
+  const popular = withUsage
+    .filter(x => x.u > 0)
+    .sort((a, b) => b.u - a.u || label(a.item).localeCompare(label(b.item)))
+    .slice(0, topN)
+    .map(x => x.item)
+  const popularSet = new Set(popular)
+  const rest = items.filter(item => !popularSet.has(item)).sort((a, b) => label(a).localeCompare(label(b)))
+  return { ordered: [...popular, ...rest], popularCount: popular.length }
+}
+
 export interface Store {
   state: AppState
   // audit-aware mutators
@@ -51,7 +89,13 @@ export interface Store {
   updatePerson: (id: string, patch: Partial<Person>, auditLabel?: string) => void
   logInteraction: (i: Omit<Interaction, 'id'>, opts?: { followUpTitle?: string }) => void
   capture: (text: string, source: Capture['source']) => Capture
-  acceptCapture: (id: string, overrides?: { areaId?: string; projectId?: string; categoryIds?: string[]; actionIds?: string[] }) => void
+  // `trackerId` lets the Inbox redirect a pending capture to a different destination than
+  // whatever the router guessed, regardless of its original proposal.kind: '' forces it to file
+  // as a plain task (even if the router had proposed a tracker entry), any tracker id forces it
+  // into that tracker/collection instead (even if the router had proposed a task) — this is the
+  // manual safety net for whenever the keyword router doesn't recognize the tracker/collection a
+  // message was really meant for. `title` optionally corrects the filed title before saving.
+  acceptCapture: (id: string, overrides?: { areaId?: string; projectId?: string; categoryIds?: string[]; actionIds?: string[]; trackerId?: string; title?: string }) => void
   dismissCapture: (id: string) => void
   addEntry: (trackerId: string, values: Entry['values']) => void
   updateEntry: (id: string, values: Entry['values']) => void
@@ -100,7 +144,23 @@ export function routeCapture(text: string, state: AppState): RoutingProposal {
   if (lower.startsWith('t:')) { kind = 'task'; body = body.slice(2).trim(); reasons.push('prefix t: → task') }
   else if (lower.startsWith('c:')) { kind = 'call'; body = body.slice(2).trim(); reasons.push('prefix c: → call log') }
   else if (lower.startsWith('i:') || lower.startsWith('idea:')) { kind = 'idea'; body = body.replace(/^i(dea)?:/i, '').trim(); reasons.push('prefix → idea') }
+  else if (lower.startsWith('n:') || lower.startsWith('note:')) { kind = 'note'; body = body.replace(/^n(ote)?:/i, '').trim(); reasons.push('prefix → note') }
   else if (lower.startsWith('?')) { kind = 'question'; body = body.slice(1).trim(); reasons.push('“?” → question for the assistant') }
+
+  // explicit "n:"/"note:" prefix — files straight into the Notes tracker (Collections > Notes)
+  // rather than becoming a task, if that tracker still exists (it's seeded by default, but
+  // someone could rename or delete it, so this degrades to a generic note-kind task instead
+  // of failing outright).
+  if (kind === 'note') {
+    const notesTracker = state.trackers.find(t => t.active && t.name.toLowerCase() === 'notes')
+    if (notesTracker) {
+      return {
+        kind: 'entry', taskType: 'todo', trackerId: notesTracker.id, priority: 'P3',
+        title: body || text.trim(),
+        explanation: `“n:”/“note:” → ${notesTracker.name} tracker`,
+      }
+    }
+  }
 
   // person match
   const person = state.people.find(p => {
@@ -113,9 +173,16 @@ export function routeCapture(text: string, state: AppState): RoutingProposal {
   const isCall = kind === 'call' || /\b(call|phone|ring)\b/.test(lower)
   if (isCall && kind === 'task') { kind = 'call'; reasons.push('“call” → to-call task') }
 
-  // tracker match ("add X to my movies list")
-  const tracker = state.trackers.find(t => lower.includes(t.name.toLowerCase().slice(0, 5)))
-  if (tracker && /\b(add|to my|list|watch|read)\b/.test(lower)) {
+  // tracker match — either explicit "add X to my movies list" phrasing, or any word (4+
+  // letters, so "to"/"my" etc. never accidentally match) from a tracker's own name mentioned
+  // alongside a jotting/listing verb. Word-based rather than "first 5 characters of the
+  // tracker's name" so multi-word tracker names (e.g. "TV Shows") match on either word.
+  const tracker = state.trackers.find(t => {
+    if (!t.active) return false
+    const words = t.name.toLowerCase().split(/\s+/).filter(w => w.length >= 4)
+    return words.length ? words.some(w => new RegExp(`\\b${w}\\b`).test(lower)) : lower.includes(t.name.toLowerCase())
+  })
+  if (tracker && /\b(add|to my|list|watch|read|track)\b/.test(lower)) {
     const m = text.match(/add (.+?) to/i)
     return {
       kind: 'entry', taskType: 'todo', trackerId: tracker.id, priority: 'P3',
@@ -323,25 +390,33 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         const projectId = overrides?.projectId ?? p.projectId
         const categoryIds = overrides?.categoryIds ?? p.categoryIds ?? []
         const actionIds = overrides?.actionIds ?? p.actionIds
-        if (p.kind === 'entry' && p.trackerId) {
-          const trk = state.trackers.find(t => t.id === p.trackerId)
+        const title = overrides?.title?.trim() || p.title
+        // A manual "File as" override always wins over the router's guess — '' means "file as a
+        // task no matter what the router thought", any tracker id means "file into this
+        // tracker/collection no matter what the router thought". Only when no override was
+        // given at all do we fall back to the router's own proposal.
+        const trackerId = overrides?.trackerId !== undefined
+          ? (overrides.trackerId || undefined)
+          : (p.kind === 'entry' ? p.trackerId : undefined)
+        if (trackerId) {
+          const trk = state.trackers.find(t => t.id === trackerId)
           const titleCol = trk?.columns.find(c => c.isTitle)?.key ?? 'name'
           const statusCol = trk?.columns.find(c => c.type === 'status')
-          const entry: Entry = { id: uid('e'), trackerId: p.trackerId, created: today(), values: { [titleCol]: p.title, ...(statusCol ? { [statusCol.key]: statusCol.options?.[0] ?? '' } : {}) } }
+          const entry: Entry = { id: uid('e'), trackerId, created: today(), values: { [titleCol]: title, ...(statusCol ? { [statusCol.key]: statusCol.options?.[0] ?? '' } : {}) } }
           withAudit(
             s => ({ ...s, entries: [...s.entries, entry], captures: s.captures.map(c => c.id === id ? { ...c, status: 'accepted' as const } : c) }),
-            auditEvent('filed', 'entry', entry.id, `${p.title} → ${trk?.name}`, 'AI router'),
+            auditEvent('filed', 'entry', entry.id, `${title} → ${trk?.name}${overrides?.trackerId !== undefined ? ' (manually redirected)' : ''}`, overrides?.trackerId !== undefined ? 'Craig' : 'AI router'),
           )
           return
         }
         const task: Task = {
-          id: uid('t'), title: p.title, type: p.taskType, areaId, projectId,
+          id: uid('t'), title, type: p.taskType, areaId, projectId,
           personId: p.personId, categoryIds, actionIds, priority: p.priority, status: 'next', due: p.due,
           source: cap.source, created: today(),
         }
         withAudit(
           s => ({ ...s, tasks: [...s.tasks, task], captures: s.captures.map(c => c.id === id ? { ...c, status: 'accepted' as const } : c) }),
-          auditEvent('filed', 'task', task.id, `${p.title} → ${state.areas.find(a => a.id === areaId)?.name ?? 'no area'}`, 'AI router'),
+          auditEvent('filed', 'task', task.id, `${title} → ${state.areas.find(a => a.id === areaId)?.name ?? 'no area'}`, 'AI router'),
         )
       },
       dismissCapture(id) {

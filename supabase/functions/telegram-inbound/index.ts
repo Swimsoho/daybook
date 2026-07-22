@@ -17,7 +17,10 @@
 // in-app quick-capture box uses (see routeCaptureServer below), so it isn't always filed as
 // a plain to-do — e.g. "add Dune Part Two to my movies list" lands as an entry on your Movies
 // tracker, "call David re school urgent" becomes a to-call, "idea: build a sukkah shed" a P3
-// idea. Whatever it can't confidently classify still lands as a to-do, pending in the Inbox.
+// idea, "note: check the warranty" lands in the Notes tracker (Collections > Notes). Whatever
+// it can't confidently classify still lands as a to-do, pending in the Inbox — and from there,
+// the Inbox's "File as" picker always lets you redirect it to any tracker/Collection (or back
+// to a task) by hand, regardless of what the router guessed.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -43,7 +46,7 @@ type RouterState = {
   people: { id: string; name: string }[]
   categories: { id: string; name: string; active?: boolean }[]
   actions: { id: string; name: string; active?: boolean }[]
-  trackers: { id: string; name: string }[]
+  trackers: { id: string; name: string; active?: boolean }[]
 }
 
 function isoDate(d: Date) { return d.toISOString().slice(0, 10) }
@@ -58,7 +61,21 @@ function routeCaptureServer(text: string, state: RouterState) {
   if (lower.startsWith('t:')) { kind = 'task'; body = body.slice(2).trim(); reasons.push('prefix t: → task') }
   else if (lower.startsWith('c:')) { kind = 'call'; body = body.slice(2).trim(); reasons.push('prefix c: → call log') }
   else if (lower.startsWith('i:') || lower.startsWith('idea:')) { kind = 'idea'; body = body.replace(/^i(dea)?:/i, '').trim(); reasons.push('prefix → idea') }
+  else if (lower.startsWith('n:') || lower.startsWith('note:')) { kind = 'note'; body = body.replace(/^n(ote)?:/i, '').trim(); reasons.push('prefix → note') }
   else if (lower.startsWith('?')) { kind = 'question'; body = body.slice(1).trim(); reasons.push('“?” → question for the assistant') }
+
+  // explicit "n:"/"note:" prefix — files straight into the Notes tracker (Collections > Notes)
+  // instead of becoming a task, same as the in-app quick-capture box.
+  if (kind === 'note') {
+    const notesTracker = state.trackers.find(t => t.active !== false && t.name.toLowerCase() === 'notes')
+    if (notesTracker) {
+      return {
+        kind: 'entry' as const, taskType: 'todo', trackerId: notesTracker.id, priority: 'P3' as const,
+        title: body || text.trim(),
+        explanation: `“n:”/“note:” → ${notesTracker.name} tracker`,
+      }
+    }
+  }
 
   const person = state.people.find(p => {
     const first = p.name.split(' ')[0].toLowerCase().replace(/[^a-z]/g, '')
@@ -70,9 +87,15 @@ function routeCaptureServer(text: string, state: RouterState) {
   if (isCall && kind === 'task') { kind = 'call'; reasons.push('“call” → to-call task') }
 
   // tracker match ("add X to my movies list") — this is what lets a Telegram/Slack message
-  // land in a Collections tracker (e.g. Movies) instead of always becoming a task.
-  const tracker = state.trackers.find(t => lower.includes(t.name.toLowerCase().slice(0, 5)))
-  if (tracker && /\b(add|to my|list|watch|read)\b/.test(lower)) {
+  // land in a Collections tracker (e.g. Movies) instead of always becoming a task. Word-based
+  // (any 4+ letter word from the tracker's own name) rather than "first 5 characters", so
+  // multi-word tracker names (e.g. "TV Shows") match on either word.
+  const tracker = state.trackers.find(t => {
+    if (t.active === false) return false
+    const words = t.name.toLowerCase().split(/\s+/).filter(w => w.length >= 4)
+    return words.length ? words.some(w => new RegExp(`\\b${w}\\b`).test(lower)) : lower.includes(t.name.toLowerCase())
+  })
+  if (tracker && /\b(add|to my|list|watch|read|track)\b/.test(lower)) {
     const m = text.match(/add (.+?) to/i)
     return {
       kind: 'entry' as const, taskType: 'todo', trackerId: tracker.id, priority: 'P3' as const,
