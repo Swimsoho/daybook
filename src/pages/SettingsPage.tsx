@@ -60,14 +60,17 @@ function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
   }
   const setTitle = (key: string) => setColumns(columns.map(c => ({ ...c, isTitle: c.key === key })))
 
-  // A single-choice or status column is a valid conditional-visibility target as soon as it
-  // exists — it doesn't need its options filled in first. Requiring that up front was the bug:
-  // a freshly-added Status field with no options typed in yet couldn't be picked as a
-  // dependency at all, so "Only show when" looked entirely missing on any new tracker
+  // A single-choice, status, or checkbox column is a valid conditional-visibility target as
+  // soon as it exists — it doesn't need its options filled in first. Requiring that up front
+  // was the bug: a freshly-added Status field with no options typed in yet couldn't be picked
+  // as a dependency at all, so "Only show when" looked entirely missing on any new tracker
   // (built-in ones like Movies only ever look "complete" because their Status field already
   // has options saved). The value picker below falls back to free text when the target
   // doesn't have options yet, so setting this up never has to happen in a fixed order.
-  const optionColumns = columns.filter(c => c.type === 'select' || c.type === 'status')
+  // Multi-select is deliberately excluded — a multi-value field doesn't have a single "equals"
+  // to compare against, so it can't gate another field the way a single choice/status/checkbox
+  // can (a task can be tagged several platforms at once; there's no one value to match on).
+  const optionColumns = columns.filter(c => c.type === 'select' || c.type === 'status' || c.type === 'checkbox')
 
   return (
     <div className={cn('border border-border rounded-sm bg-background', !tracker.active && 'opacity-60')}>
@@ -142,7 +145,8 @@ function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
                     onValueChange={v => {
                       if (v === 'none') { updateColumn(c.key, { showWhen: undefined }); return }
                       const depCol = columns.find(oc => oc.key === v)
-                      updateColumn(c.key, { showWhen: { columnKey: v, equals: depCol?.options?.[0] ?? '' } })
+                      const defaultEquals = depCol?.type === 'checkbox' ? 'yes' : (depCol?.options?.[0] ?? '')
+                      updateColumn(c.key, { showWhen: { columnKey: v, equals: defaultEquals } })
                     }}
                   >
                     <SelectTrigger className="h-6 w-[110px] text-[10.5px]"><SelectValue placeholder="none" /></SelectTrigger>
@@ -152,7 +156,8 @@ function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
                     </SelectContent>
                   </Select>
                   {c.showWhen && (() => {
-                    const depOptions = columns.find(oc => oc.key === c.showWhen!.columnKey)?.options ?? []
+                    const depCol = columns.find(oc => oc.key === c.showWhen!.columnKey)
+                    const depOptions = depCol?.type === 'checkbox' ? ['yes', 'no'] : (depCol?.options ?? [])
                     return (
                       <>
                         <span className="text-muted-foreground">=</span>
@@ -176,7 +181,7 @@ function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
                   })()}
                 </div>
               ) : (
-                <p className="text-[10.5px] text-muted-foreground italic">Add a Status or single-choice field to make other fields conditional on it — same as Movies' Rating only showing once Status reaches “Watched.”</p>
+                <p className="text-[10.5px] text-muted-foreground italic">Add a Status, single-choice, or checkbox field to make other fields conditional on it — same as Movies' Rating only showing once Status reaches “Watched.” (Multiple choice fields can't be a dependency — there's no single value to match on.)</p>
               )}
             </div>
           ))}

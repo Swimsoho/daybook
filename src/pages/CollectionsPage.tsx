@@ -13,8 +13,18 @@ import { useStore } from '@/lib/store'
 import { EmptyNote, Stars } from '@/components/bits'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
+// A dependency can be a Status/single-choice column (compared as plain strings) or, as of the
+// checkbox-gating support, a Checkbox column — those store real booleans in `values`, not the
+// 'yes'/'no' strings `showWhen.equals` holds, so they need converting before the comparison.
+function showWhenMet(trk: Tracker, values: Entry['values'], showWhen: NonNullable<TrackerColumn['showWhen']>): boolean {
+  const depCol = trk.columns.find(c => c.key === showWhen.columnKey)
+  const raw = values[showWhen.columnKey]
+  if (depCol?.type === 'checkbox') return (raw ? 'yes' : 'no') === showWhen.equals
+  return raw === showWhen.equals
+}
+
 function visibleColumns(trk: Tracker, values: Entry['values']): TrackerColumn[] {
-  return trk.columns.filter(c => !c.showWhen || values[c.showWhen.columnKey] === c.showWhen.equals)
+  return trk.columns.filter(c => !c.showWhen || showWhenMet(trk, values, c.showWhen))
 }
 
 function titleOf(trk: Tracker, e: Entry): string {
