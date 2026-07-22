@@ -135,6 +135,14 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
   const compactNav = navW < 168
   const viewerFirstName = (impersonation ? impersonation.user.name : cloud ? (cloud.profile.name || cloud.profile.email) : 'Craig').split(' ')[0]
 
+  // Settings → Appearance picks a palette; applying it is just this one attribute, which the
+  // [data-theme] CSS blocks in index.css key off. Runs on every render of the theme value so
+  // switching accounts (impersonation) or loading a saved theme from Supabase both take effect
+  // immediately, not just on the first mount.
+  React.useEffect(() => {
+    document.documentElement.dataset.theme = state.settings.theme
+  }, [state.settings.theme])
+
   function startNavResize(e: React.PointerEvent) {
     e.preventDefault()
     const move = (ev: PointerEvent) => setNavW(Math.min(340, Math.max(120, ev.clientX)))

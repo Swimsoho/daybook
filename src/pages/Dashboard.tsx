@@ -13,6 +13,7 @@ import {
 import { EmptyNote, KpiTile, SectionTitle, TierBadge } from '@/components/bits'
 import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { LogCallDialog, PersonDetail } from '@/components/people'
+import { TaskListTable } from '@/pages/TasksPage'
 
 export default function Dashboard({ mode, goTo, projectFilter, viewerName }: { mode: 'today' | 'overall'; goTo: (page: string) => void; projectFilter?: string | null; viewerName?: string }) {
   return mode === 'today' ? <TodayDash goTo={goTo} projectFilter={projectFilter} viewerName={viewerName} /> : <OverallDash goTo={goTo} projectFilter={projectFilter} />
@@ -274,6 +275,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
   const [drill, setDrill] = useState<Drill | null>(null)
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
   const [allExpanded, setAllExpanded] = useState(false)
+  const [portfolioView, setPortfolioView] = useState<'area' | 'list'>('area')
   const [viewPerson, setViewPerson] = useState<Person | null>(null)
   const [logPerson, setLogPerson] = useState<Person | null>(null)
   const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
@@ -318,15 +320,40 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
               className="mb-1"
               right={
                 <span className="flex items-center gap-3">
-                  <button onClick={toggleAll} className="text-[11.5px] border border-border rounded-sm px-2 py-0.5 hover:bg-accent">{allExpanded ? 'Collapse all' : 'Expand all'}</button>
+                  <span className="flex border border-border rounded-sm overflow-hidden">
+                    <button
+                      onClick={() => setPortfolioView('area')}
+                      className={cn('text-[11.5px] px-2 py-0.5', portfolioView === 'area' ? 'bg-[hsl(152_22%_23%)] text-white' : 'hover:bg-accent')}
+                    >
+                      By Area
+                    </button>
+                    <button
+                      onClick={() => setPortfolioView('list')}
+                      className={cn('text-[11.5px] px-2 py-0.5 border-l border-border', portfolioView === 'list' ? 'bg-[hsl(152_22%_23%)] text-white' : 'hover:bg-accent')}
+                    >
+                      List
+                    </button>
+                  </span>
+                  {portfolioView === 'area' && (
+                    <button onClick={toggleAll} className="text-[11.5px] border border-border rounded-sm px-2 py-0.5 hover:bg-accent">{allExpanded ? 'Collapse all' : 'Expand all'}</button>
+                  )}
                   <button onClick={() => goTo('projects')} className="text-[11.5px] text-muted-foreground hover:text-foreground">all projects →</button>
                 </span>
               }
             >
               Portfolio
             </SectionTitle>
-            <p className="text-[10.5px] text-muted-foreground -mt-1 mb-1">expand a project to tick tasks off inline · drop a task on a project to move it · click status to change it</p>
+            <p className="text-[10.5px] text-muted-foreground -mt-1 mb-1">
+              {portfolioView === 'area'
+                ? 'expand a project to tick tasks off inline · drop a task on a project to move it · click status to change it'
+                : `every open task (${open.length}) in one sortable table · click a header to sort · click a title to open it`}
+            </p>
           </div>
+          {portfolioView === 'list' ? (
+            <div className="px-4 pb-4">
+              <TaskListTable tasks={open} onOpen={setOpenTask} />
+            </div>
+          ) : (
           <div className="pb-2">
             {state.areas.filter(a => a.active).map(a => {
               const projs = state.projects.filter(p => p.areaId === a.id && p.status !== 'archived' && p.status !== 'done')
@@ -389,6 +416,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
               )
             })}
           </div>
+          )}
         </section>
 
         <div className="grid gap-5 content-start">

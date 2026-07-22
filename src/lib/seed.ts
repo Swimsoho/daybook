@@ -189,6 +189,7 @@ export function seedState(): AppState {
       { id: 'u_moshe', name: 'Moshe B', email: 'moshe@example.com', role: 'view-only', status: 'invited', hasSample: true, hasReal: false },
     ],
     settings: {
+      theme: 'sage',
       priorityScheme: 'p',
       eisenhower: false,
       dailyCapacity: 6,

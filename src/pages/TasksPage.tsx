@@ -429,10 +429,10 @@ const SORT_LABELS: Record<SortKey, string> = {
   title: 'Title', type: 'Type', area: 'Area', project: 'Project', category: 'Category', action: 'Action', priority: 'Priority', status: 'Status', due: 'Due',
 }
 
-function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
+export function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
   tasks: Task[]
-  selected: Set<string>
-  onToggleSelect: (id: string) => void
+  selected?: Set<string>
+  onToggleSelect?: (id: string) => void
   onOpen: (t: Task) => void
 }) {
   const { state, updateTask } = useStore()
@@ -471,7 +471,7 @@ function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
       <table className="w-full text-[12.5px] border-collapse min-w-[820px]">
         <thead className="border-b border-border bg-accent/30">
           <tr>
-            <th className="px-2.5 py-2 w-8" />
+            {onToggleSelect && <th className="px-2.5 py-2 w-8" />}
             {(['title', 'type', 'area', 'project', 'category', 'action', 'priority', 'status', 'due'] as SortKey[]).map(k => (
               <th
                 key={k}
@@ -493,15 +493,17 @@ function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
             const category = state.categories.find(c => t.categoryIds.includes(c.id))
             const action = state.actions.find(a => (t.actionIds ?? []).includes(a.id))
             return (
-              <tr key={t.id} className={cn('border-b border-border/60 last:border-0 hover:bg-accent/40 transition-colors', selected.has(t.id) && 'bg-[hsl(17_63%_47%_/_0.06)]')}>
-                <td className="px-2.5 py-1.5">
-                  <input
-                    type="checkbox"
-                    className="h-3.5 w-3.5 accent-[hsl(152_22%_23%)] cursor-pointer"
-                    checked={selected.has(t.id)}
-                    onChange={() => onToggleSelect(t.id)}
-                  />
-                </td>
+              <tr key={t.id} className={cn('border-b border-border/60 last:border-0 hover:bg-accent/40 transition-colors', selected?.has(t.id) && 'bg-[hsl(17_63%_47%_/_0.06)]')}>
+                {onToggleSelect && (
+                  <td className="px-2.5 py-1.5">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 accent-[hsl(152_22%_23%)] cursor-pointer"
+                      checked={!!selected?.has(t.id)}
+                      onChange={() => onToggleSelect(t.id)}
+                    />
+                  </td>
+                )}
                 <td className="px-2.5 py-1.5 max-w-[260px]">
                   <button onClick={() => onOpen(t)} className="truncate text-left hover:underline block w-full">{t.title}</button>
                 </td>

@@ -25,6 +25,8 @@
 }
 
 @layer base {
+  /* Default palette ("Sage") — also the fallback before the theme setting loads and when
+     data-theme is absent/unrecognized, so the app never renders unstyled. */
   :root {
     --background: 42 44% 94%;
     --foreground: 96 10% 13%;
@@ -46,6 +48,63 @@
     --input: 42 22% 78%;
     --ring: 152 22% 23%;
     --radius: 0.375rem;
+  }
+
+  /* Palette variants (Settings → Appearance). Each only swaps the paper/accent colors —
+     foreground text and destructive/error colors stay shared across palettes so contrast
+     and "something's wrong" cues read the same everywhere. Applied via
+     document.documentElement.dataset.theme, set from settings.theme (see Shell in App.tsx). */
+  :root[data-theme='clay'] {
+    --background: 32 46% 95%;
+    --card: 34 55% 97%;
+    --popover: 34 55% 97%;
+    --primary: 17 63% 40%;
+    --primary-foreground: 34 55% 97%;
+    --secondary: 28 32% 89%;
+    --muted: 28 28% 90%;
+    --accent: 28 32% 88%;
+    --border: 28 24% 82%;
+    --input: 28 24% 79%;
+    --ring: 17 63% 40%;
+  }
+  :root[data-theme='ocean'] {
+    --background: 205 40% 95%;
+    --card: 205 55% 97%;
+    --popover: 205 55% 97%;
+    --primary: 205 45% 28%;
+    --primary-foreground: 205 55% 97%;
+    --secondary: 205 25% 89%;
+    --muted: 205 22% 90%;
+    --accent: 205 25% 88%;
+    --border: 205 20% 82%;
+    --input: 205 20% 79%;
+    --ring: 205 45% 28%;
+  }
+  :root[data-theme='plum'] {
+    --background: 320 28% 95%;
+    --card: 320 40% 97%;
+    --popover: 320 40% 97%;
+    --primary: 320 35% 30%;
+    --primary-foreground: 320 40% 97%;
+    --secondary: 320 18% 89%;
+    --muted: 320 16% 90%;
+    --accent: 320 18% 88%;
+    --border: 320 15% 82%;
+    --input: 320 15% 79%;
+    --ring: 320 35% 30%;
+  }
+  :root[data-theme='slate'] {
+    --background: 210 15% 95%;
+    --card: 210 20% 97%;
+    --popover: 210 20% 97%;
+    --primary: 210 25% 25%;
+    --primary-foreground: 210 20% 97%;
+    --secondary: 210 12% 89%;
+    --muted: 210 10% 90%;
+    --accent: 210 12% 88%;
+    --border: 210 10% 82%;
+    --input: 210 10% 79%;
+    --ring: 210 25% 25%;
   }
 }
 

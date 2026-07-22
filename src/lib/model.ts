@@ -225,7 +225,13 @@ export interface AdminUser {
 
 export type PriorityScheme = 'p' | 'hml' | 'num'
 
+// Color palette for the whole app — a plain CSS custom-property swap (see src/lib/themes.ts
+// and the [data-theme] blocks in index.css), not a per-page setting, so every screen and
+// component picks it up for free.
+export type ThemeId = 'sage' | 'clay' | 'ocean' | 'plum' | 'slate'
+
 export interface Settings {
+  theme: ThemeId
   priorityScheme: PriorityScheme
   eisenhower: boolean
   dailyCapacity: number

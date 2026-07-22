@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { ColumnType, PriorityScheme, Tier, TIER_LABELS, Tracker, TrackerColumn } from '@/lib/model'
 import { actionUsage, categoryUsage, useStore } from '@/lib/store'
 import { Cloud } from '@/lib/cloud'
+import { THEMES } from '@/lib/themes'
 
 const COLUMN_TYPE_LABELS: Record<ColumnType, string> = {
   text: 'Text', longtext: 'Long text', number: 'Number', currency: 'Currency (£)', date: 'Date',
@@ -275,6 +276,34 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
       </div>
       <div className="grid gap-4 lg:grid-cols-2 items-start">
       <div className="grid gap-4">
+        <Section title="Appearance" sub="Pick a color palette for the whole app — takes effect immediately, everywhere.">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+            {THEMES.map(t => {
+              const active = s.theme === t.id
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => updateSettings({ theme: t.id })}
+                  className={cn(
+                    'text-left border rounded-sm px-2.5 py-2 transition-colors',
+                    active ? 'border-[hsl(152_22%_23%)] ring-1 ring-[hsl(152_22%_23%)]' : 'border-border hover:bg-accent',
+                  )}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="flex -space-x-1 shrink-0">
+                      {t.swatch.map((c, i) => (
+                        <span key={i} className="h-4 w-4 rounded-full border border-black/10" style={{ background: c }} />
+                      ))}
+                    </span>
+                    <span className="text-[12.5px] font-medium flex-1">{t.name}</span>
+                    {active && <Check className="h-3.5 w-3.5 shrink-0 text-[hsl(152_22%_23%)]" />}
+                  </div>
+                  <p className="text-[10.5px] text-muted-foreground leading-snug">{t.blurb}</p>
+                </button>
+              )
+            })}
+          </div>
+        </Section>
         <Section title="Focus areas" sub="Add, rename, colour, retire — archiving preserves all history. Keep to 3–6.">
           {state.areas.map(a => (
             <div key={a.id} className="flex items-center gap-2.5">
