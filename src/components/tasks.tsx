@@ -77,7 +77,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
           value={pickedAreaId || '__none__'}
           onValueChange={v => { setPickedAreaId(v === '__none__' ? '' : v); setPickedProjectId('') }}
           options={[{ value: '__none__', label: 'No area' }, ...areaOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))]}
-          popularCount={areaOptionsBase.popularCount}
+          popularCount={areaOptionsBase.popularCount > 0 ? areaOptionsBase.popularCount + 1 : 0}
           placeholder="Area" searchPlaceholder="Search areas…"
           className="h-7 w-[112px] text-[11.5px] bg-card shrink-0"
         />
@@ -87,7 +87,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
           value={pickedProjectId || '__none__'}
           onValueChange={v => setPickedProjectId(v === '__none__' ? '' : v)}
           options={[{ value: '__none__', label: 'No project' }, ...projectOptionsBase.ordered.map(p => ({ value: p.id, label: p.name }))]}
-          popularCount={projectOptionsBase.popularCount}
+          popularCount={projectOptionsBase.popularCount > 0 ? projectOptionsBase.popularCount + 1 : 0}
           placeholder="Project" searchPlaceholder="Search projects…"
           className="h-7 w-[128px] text-[11.5px] bg-card shrink-0"
         />
@@ -96,7 +96,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
         value={pickedCategoryId || '__none__'}
         onValueChange={v => setPickedCategoryId(v === '__none__' ? '' : v)}
         options={[{ value: '__none__', label: 'No category' }, ...categoryOptionsBase.ordered.map(c => ({ value: c.id, label: `${c.level > 0 ? '› ' : ''}${c.name}` }))]}
-        popularCount={categoryOptionsBase.popularCount}
+        popularCount={categoryOptionsBase.popularCount > 0 ? categoryOptionsBase.popularCount + 1 : 0}
         placeholder="Category" searchPlaceholder="Search categories…"
         className="h-7 w-[112px] text-[11.5px] bg-card shrink-0"
       />
@@ -104,7 +104,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
         value={pickedActionId || '__none__'}
         onValueChange={v => setPickedActionId(v === '__none__' ? '' : v)}
         options={[{ value: '__none__', label: 'No action' }, ...actionOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))]}
-        popularCount={actionOptionsBase.popularCount}
+        popularCount={actionOptionsBase.popularCount > 0 ? actionOptionsBase.popularCount + 1 : 0}
         placeholder="Action" searchPlaceholder="Search actions…"
         className="h-7 w-[104px] text-[11.5px] bg-card shrink-0"
       />
@@ -427,9 +427,9 @@ export function TaskDialog({ open, onClose, task, defaults }: {
               <Label className="text-xs">Contact {f.type === 'call' && <span className="text-muted-foreground">(one-tap dial shortcut shown on the task)</span>}</Label>
               <SearchableSelect
                 value={f.personId ?? ''}
-                onValueChange={v => set({ personId: v })}
-                options={personOptionsBase.ordered.map(p => ({ value: p.id, label: p.name }))}
-                popularCount={personOptionsBase.popularCount}
+                onValueChange={v => set({ personId: v || undefined })}
+                options={[{ value: '', label: 'No contact' }, ...personOptionsBase.ordered.map(p => ({ value: p.id, label: p.name }))]}
+                popularCount={personOptionsBase.popularCount > 0 ? personOptionsBase.popularCount + 1 : 0}
                 placeholder="Choose a person" searchPlaceholder="Search people…"
                 className="w-full"
               />
@@ -447,9 +447,9 @@ export function TaskDialog({ open, onClose, task, defaults }: {
               <Label className="text-xs">Area</Label>
               <SearchableSelect
                 value={f.areaId ?? ''}
-                onValueChange={v => set({ areaId: v, projectId: undefined })}
-                options={areaOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))}
-                popularCount={areaOptionsBase.popularCount}
+                onValueChange={v => set({ areaId: v || undefined, projectId: undefined })}
+                options={[{ value: '', label: 'No area' }, ...areaOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))]}
+                popularCount={areaOptionsBase.popularCount > 0 ? areaOptionsBase.popularCount + 1 : 0}
                 placeholder="Area" searchPlaceholder="Search areas…"
                 className="w-full"
               />
@@ -493,7 +493,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
                   value={f.categoryIds?.[0] ?? 'none'}
                   onValueChange={v => set({ categoryIds: v === 'none' ? [] : [v] })}
                   options={[{ value: 'none', label: 'None' }, ...categoryOptionsBase.ordered.map(c => ({ value: c.id, label: `${c.level > 0 ? '› ' : ''}${c.name}` }))]}
-                  popularCount={categoryOptionsBase.popularCount}
+                  popularCount={categoryOptionsBase.popularCount > 0 ? categoryOptionsBase.popularCount + 1 : 0}
                   placeholder="None" searchPlaceholder="Search categories…"
                   className="w-full"
                 />
@@ -504,7 +504,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
                   value={f.vendorId ?? 'none'}
                   onValueChange={v => set({ vendorId: v === 'none' ? undefined : v })}
                   options={[{ value: 'none', label: 'None' }, ...vendorOptionsBase.ordered.map(v => ({ value: v.id, label: v.name }))]}
-                  popularCount={vendorOptionsBase.popularCount}
+                  popularCount={vendorOptionsBase.popularCount > 0 ? vendorOptionsBase.popularCount + 1 : 0}
                   placeholder="None" searchPlaceholder="Search vendors…"
                   className="w-full"
                 />
@@ -518,7 +518,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
               value={f.actionIds?.[0] ?? 'none'}
               onValueChange={v => set({ actionIds: v === 'none' ? [] : [v] })}
               options={[{ value: 'none', label: 'None' }, ...actionOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))]}
-              popularCount={actionOptionsBase.popularCount}
+              popularCount={actionOptionsBase.popularCount > 0 ? actionOptionsBase.popularCount + 1 : 0}
               placeholder="None" searchPlaceholder="Search actions…"
               className="w-full"
             />
@@ -705,7 +705,7 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
                       toast(a ? `Moved to ${a.name}` : 'Area cleared')
                     }}
                     options={[{ value: '__none__', label: 'No area' }, ...b.ordered.map(a => ({ value: a.id, label: a.name }))]}
-                    popularCount={b.popularCount}
+                    popularCount={b.popularCount > 0 ? b.popularCount + 1 : 0}
                     placeholder="Area" searchPlaceholder="Search areas…"
                     className="h-7 w-[130px] text-[11.5px] bg-card"
                   />
@@ -723,7 +723,7 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
                       toast(p ? `Moved to ${p.name}` : 'No longer tied to a project')
                     }}
                     options={[{ value: '__none__', label: 'No project' }, ...b.ordered.map(p => ({ value: p.id, label: p.name }))]}
-                    popularCount={b.popularCount}
+                    popularCount={b.popularCount > 0 ? b.popularCount + 1 : 0}
                     placeholder="Project" searchPlaceholder="Search projects…"
                     className="h-7 w-[150px] text-[11.5px] bg-card"
                   />
@@ -741,7 +741,7 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
                       toast(c ? `Re-categorized as ${c.name}` : 'Category cleared')
                     }}
                     options={[{ value: '__none__', label: 'No category' }, ...b.ordered.map(c => ({ value: c.id, label: `${c.level > 0 ? '› ' : ''}${c.name}` }))]}
-                    popularCount={b.popularCount}
+                    popularCount={b.popularCount > 0 ? b.popularCount + 1 : 0}
                     placeholder="Category" searchPlaceholder="Search categories…"
                     className="h-7 w-[130px] text-[11.5px] bg-card"
                   />
@@ -759,7 +759,7 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
                       toast(a ? `Action set to ${a.name}` : 'Action cleared')
                     }}
                     options={[{ value: '__none__', label: 'No action' }, ...b.ordered.map(a => ({ value: a.id, label: a.name }))]}
-                    popularCount={b.popularCount}
+                    popularCount={b.popularCount > 0 ? b.popularCount + 1 : 0}
                     placeholder="Action" searchPlaceholder="Search actions…"
                     className="h-7 w-[120px] text-[11.5px] bg-card"
                   />

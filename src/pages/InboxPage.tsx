@@ -44,10 +44,12 @@ export default function InboxPage() {
   const trackerPopularCount = trackerOptionsBase.popularCount > 0 ? trackerOptionsBase.popularCount + 1 : 0
 
   const areaOptionsBase = withPopularFirst(state.areas.filter(a => a.active), a => areaUsage(state, a.id), a => a.name)
-  const areaOptions = areaOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))
+  const areaOptions = [{ value: '', label: 'No area' }, ...areaOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))]
+  const areaPopularCount = areaOptionsBase.popularCount > 0 ? areaOptionsBase.popularCount + 1 : 0
 
   const actionOptionsBase = withPopularFirst(state.actions.filter(a => a.active), a => actionUsage(state, a.id), a => a.name)
-  const actionOptions = actionOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))
+  const actionOptions = [{ value: '', label: 'No action' }, ...actionOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))]
+  const actionPopularCount = actionOptionsBase.popularCount > 0 ? actionOptionsBase.popularCount + 1 : 0
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
@@ -74,9 +76,13 @@ export default function InboxPage() {
             const categoryOptionsBase = withPopularFirst(
               categoriesForArea(state.categories, effectiveAreaId, categoryId), cat => categoryUsage(state, cat.id), cat => cat.name,
             )
-            const categoryOptions = categoryOptionsBase.ordered.map(cat => ({
-              value: cat.id, label: cat.name, hint: cat.level > 0 ? state.categories.find(x => x.id === cat.parentId)?.name : undefined,
-            }))
+            const categoryOptions = [
+              { value: '', label: 'No category' },
+              ...categoryOptionsBase.ordered.map(cat => ({
+                value: cat.id, label: cat.name, hint: cat.level > 0 ? state.categories.find(x => x.id === cat.parentId)?.name : undefined,
+              })),
+            ]
+            const categoryPopularCount = categoryOptionsBase.popularCount > 0 ? categoryOptionsBase.popularCount + 1 : 0
             return (
               <div key={c.id} className="border-b border-border/70 last:border-0 px-4 py-3">
                 <div className="flex flex-wrap items-start gap-2.5">
@@ -128,7 +134,7 @@ export default function InboxPage() {
                           value={reassign[c.id] ?? p.areaId ?? ''}
                           onValueChange={v => setReassign(r => ({ ...r, [c.id]: v }))}
                           options={areaOptions}
-                          popularCount={areaOptionsBase.popularCount}
+                          popularCount={areaPopularCount}
                           placeholder="area"
                           searchPlaceholder="Search areas…"
                           className="h-7 w-[100px] sm:w-[110px] text-[11px] bg-background"
@@ -137,7 +143,7 @@ export default function InboxPage() {
                           value={categoryId ?? ''}
                           onValueChange={v => setReassignCategory(r => ({ ...r, [c.id]: v }))}
                           options={categoryOptions}
-                          popularCount={categoryOptionsBase.popularCount}
+                          popularCount={categoryPopularCount}
                           placeholder="category"
                           searchPlaceholder="Search categories…"
                           className="h-7 w-[110px] sm:w-[130px] text-[11px] bg-background"
@@ -146,7 +152,7 @@ export default function InboxPage() {
                           value={actionId ?? ''}
                           onValueChange={v => setReassignAction(r => ({ ...r, [c.id]: v }))}
                           options={actionOptions}
-                          popularCount={actionOptionsBase.popularCount}
+                          popularCount={actionPopularCount}
                           placeholder="action"
                           searchPlaceholder="Search actions…"
                           className="h-7 w-[100px] sm:w-[116px] text-[11px] bg-background"

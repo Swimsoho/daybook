@@ -32,15 +32,39 @@ function titleOf(trk: Tracker, e: Entry): string {
   return String(e.values[col.key] ?? '—')
 }
 
+// Notes gets its own top-level tab rather than being lumped in with the structured
+// Collections (Movies, Books, Subscriptions, ...) — it's a different kind of thing (an
+// unstructured catch-all vs. a purpose-built list), and sitting in the same flat row of pills
+// made it easy to miss or mistake for just another tracker. Matched by name rather than a
+// hardcoded id so it still works if the seeded "Notes" collection is ever recreated.
+function isNotesCollectionId(state: { collections: { id: string; name: string }[] }, collectionId: string | undefined): boolean {
+  return state.collections.find(c => c.id === collectionId)?.name.trim().toLowerCase() === 'notes'
+}
+
 export default function CollectionsPage() {
   const { state, updateEntry } = useStore()
   const trackers = state.trackers.filter(t => t.active)
-  const [trackerId, setTrackerId] = useState(trackers[0]?.id ?? '')
-  const tracker = trackers.find(t => t.id === trackerId) ?? trackers[0]
+  const notesTrackers = trackers.filter(t => isNotesCollectionId(state, t.collectionId))
+  const collectionTrackers = trackers.filter(t => !isNotesCollectionId(state, t.collectionId))
+  const hasNotesTab = notesTrackers.length > 0
+
+  const [topTab, setTopTab] = useState<'collections' | 'notes'>(collectionTrackers.length ? 'collections' : 'notes')
+  const groupTrackers = topTab === 'notes' ? notesTrackers : collectionTrackers
+  const groupCollections = state.collections.filter(c => c.active && isNotesCollectionId(state, c.id) === (topTab === 'notes'))
+
+  const [trackerId, setTrackerId] = useState(groupTrackers[0]?.id ?? '')
+  const tracker = groupTrackers.find(t => t.id === trackerId) ?? groupTrackers[0]
   const [view, setView] = useState<'table' | 'board' | 'gallery' | null>(null)
   const [adding, setAdding] = useState(false)
   const [editEntry, setEditEntry] = useState<Entry | null>(null)
   const [importing, setImporting] = useState(false)
+
+  function switchTopTab(next: 'collections' | 'notes') {
+    setTopTab(next)
+    const nextGroup = next === 'notes' ? notesTrackers : collectionTrackers
+    if (!nextGroup.some(t => t.id === trackerId)) setTrackerId(nextGroup[0]?.id ?? '')
+    setView(null)
+  }
 
   const activeView = view ?? tracker?.defaultView ?? 'table'
   const entries = useMemo(() => state.entries.filter(e => e.trackerId === tracker?.id), [state.entries, tracker])
@@ -50,14 +74,41 @@ export default function CollectionsPage() {
 
   return (
     <div className="grid grid-cols-1 gap-4">
+      {/* Top-level split: Notes vs. everything else, so the free-form catch-all never blends
+          in with the structured watch-lists/trackers */}
+      {hasNotesTab && (
+        <div className="flex items-center gap-1.5 -mb-1">
+          <button
+            onClick={() => switchTopTab('collections')}
+            className={cn(
+              'px-3 py-1.5 text-[12.5px] border rounded-sm transition-colors',
+              topTab === 'collections' ? 'bg-primary text-primary-foreground border-primary' : 'border-transparent hover:border-border hover:bg-accent',
+            )}
+          >
+            Collections
+          </button>
+          <button
+            onClick={() => switchTopTab('notes')}
+            className={cn(
+              'px-3 py-1.5 text-[12.5px] border rounded-sm transition-colors',
+              topTab === 'notes' ? 'bg-primary text-primary-foreground border-primary' : 'border-transparent hover:border-border hover:bg-accent',
+            )}
+          >
+            Notes
+          </button>
+        </div>
+      )}
+
       {/* Collection / tracker picker */}
       <div className="flex flex-wrap items-center gap-1.5">
-        {state.collections.filter(c => c.active).map(col => (
+        {groupCollections.map(col => (
           <React.Fragment key={col.id}>
-            <span className="text-[11px] uppercase tracking-wide text-muted-foreground ml-2 first:ml-0 inline-flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full" style={{ background: col.color }} />{col.name}
-            </span>
-            {trackers.filter(t => t.collectionId === col.id).map(t => (
+            {groupCollections.length > 1 && (
+              <span className="text-[11px] uppercase tracking-wide text-muted-foreground ml-2 first:ml-0 inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full" style={{ background: col.color }} />{col.name}
+              </span>
+            )}
+            {groupTrackers.filter(t => t.collectionId === col.id).map(t => (
               <button
                 key={t.id}
                 onClick={() => { setTrackerId(t.id); setView(null) }}
