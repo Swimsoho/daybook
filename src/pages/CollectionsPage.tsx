@@ -32,25 +32,38 @@ function titleOf(trk: Tracker, e: Entry): string {
   return String(e.values[col.key] ?? '—')
 }
 
-// Notes gets its own top-level tab rather than being lumped in with the structured
-// Collections (Movies, Books, Subscriptions, ...) — it's a different kind of thing (an
-// unstructured catch-all vs. a purpose-built list), and sitting in the same flat row of pills
-// made it easy to miss or mistake for just another tracker. Matched by name rather than a
-// hardcoded id so it still works if the seeded "Notes" collection is ever recreated.
-function isNotesCollectionId(state: { collections: { id: string; name: string }[] }, collectionId: string | undefined): boolean {
-  return state.collections.find(c => c.id === collectionId)?.name.trim().toLowerCase() === 'notes'
+// Notes and Ideas each get their own top-level tab rather than being lumped in with the
+// structured Collections (Movies, Books, Subscriptions, ...) — each is a different kind of
+// thing (a free-form catch-all / an idea holding-pen vs. a purpose-built watch-list), and
+// sitting in the same flat row of pills made them easy to miss or mistake for just another
+// tracker. Matched by name rather than a hardcoded id so it still works if either seeded
+// collection is ever recreated. Anything that isn't Notes or Ideas is a plain "collection."
+type TopTab = 'collections' | 'notes' | 'ideas'
+function collectionGroup(state: { collections: { id: string; name: string }[] }, collectionId: string | undefined): TopTab {
+  const name = state.collections.find(c => c.id === collectionId)?.name.trim().toLowerCase()
+  if (name === 'notes') return 'notes'
+  if (name === 'ideas') return 'ideas'
+  return 'collections'
 }
 
 export default function CollectionsPage() {
   const { state, updateEntry } = useStore()
   const trackers = state.trackers.filter(t => t.active)
-  const notesTrackers = trackers.filter(t => isNotesCollectionId(state, t.collectionId))
-  const collectionTrackers = trackers.filter(t => !isNotesCollectionId(state, t.collectionId))
-  const hasNotesTab = notesTrackers.length > 0
+  const grp = (t: Tracker) => collectionGroup(state, t.collectionId)
+  const trackersByTab: Record<TopTab, Tracker[]> = {
+    collections: trackers.filter(t => grp(t) === 'collections'),
+    notes: trackers.filter(t => grp(t) === 'notes'),
+    ideas: trackers.filter(t => grp(t) === 'ideas'),
+  }
+  const hasNotesTab = trackersByTab.notes.length > 0
+  const hasIdeasTab = trackersByTab.ideas.length > 0
+  // Show the tab bar only when there's actually more than one group to split between.
+  const showTabBar = hasNotesTab || hasIdeasTab
 
-  const [topTab, setTopTab] = useState<'collections' | 'notes'>(collectionTrackers.length ? 'collections' : 'notes')
-  const groupTrackers = topTab === 'notes' ? notesTrackers : collectionTrackers
-  const groupCollections = state.collections.filter(c => c.active && isNotesCollectionId(state, c.id) === (topTab === 'notes'))
+  const firstTab: TopTab = trackersByTab.collections.length ? 'collections' : hasNotesTab ? 'notes' : 'ideas'
+  const [topTab, setTopTab] = useState<TopTab>(firstTab)
+  const groupTrackers = trackersByTab[topTab]
+  const groupCollections = state.collections.filter(c => c.active && collectionGroup(state, c.id) === topTab)
 
   const [trackerId, setTrackerId] = useState(groupTrackers[0]?.id ?? '')
   const tracker = groupTrackers.find(t => t.id === trackerId) ?? groupTrackers[0]
@@ -59,12 +72,13 @@ export default function CollectionsPage() {
   const [editEntry, setEditEntry] = useState<Entry | null>(null)
   const [importing, setImporting] = useState(false)
 
-  function switchTopTab(next: 'collections' | 'notes') {
+  function switchTopTab(next: TopTab) {
     setTopTab(next)
-    const nextGroup = next === 'notes' ? notesTrackers : collectionTrackers
+    const nextGroup = trackersByTab[next]
     if (!nextGroup.some(t => t.id === trackerId)) setTrackerId(nextGroup[0]?.id ?? '')
     setView(null)
   }
+  const TAB_LABEL: Record<TopTab, string> = { collections: 'Collections', notes: 'Notes', ideas: 'Ideas' }
 
   const activeView = view ?? tracker?.defaultView ?? 'table'
   const entries = useMemo(() => state.entries.filter(e => e.trackerId === tracker?.id), [state.entries, tracker])
@@ -74,28 +88,24 @@ export default function CollectionsPage() {
 
   return (
     <div className="grid grid-cols-1 gap-4">
-      {/* Top-level split: Notes vs. everything else, so the free-form catch-all never blends
-          in with the structured watch-lists/trackers */}
-      {hasNotesTab && (
+      {/* Top-level split: Collections vs. Notes vs. Ideas, so the free-form catch-all and the
+          idea holding-pen never blend in with the structured watch-lists/trackers */}
+      {showTabBar && (
         <div className="flex items-center gap-1.5 -mb-1">
-          <button
-            onClick={() => switchTopTab('collections')}
-            className={cn(
-              'px-3 py-1.5 text-[12.5px] border rounded-sm transition-colors',
-              topTab === 'collections' ? 'bg-primary text-primary-foreground border-primary' : 'border-transparent hover:border-border hover:bg-accent',
-            )}
-          >
-            Collections
-          </button>
-          <button
-            onClick={() => switchTopTab('notes')}
-            className={cn(
-              'px-3 py-1.5 text-[12.5px] border rounded-sm transition-colors',
-              topTab === 'notes' ? 'bg-primary text-primary-foreground border-primary' : 'border-transparent hover:border-border hover:bg-accent',
-            )}
-          >
-            Notes
-          </button>
+          {(['collections', 'notes', 'ideas'] as const)
+            .filter(t => t === 'collections' || trackersByTab[t].length > 0)
+            .map(t => (
+              <button
+                key={t}
+                onClick={() => switchTopTab(t)}
+                className={cn(
+                  'px-3 py-1.5 text-[12.5px] border rounded-sm transition-colors',
+                  topTab === t ? 'bg-primary text-primary-foreground border-primary' : 'border-transparent hover:border-border hover:bg-accent',
+                )}
+              >
+                {TAB_LABEL[t]}
+              </button>
+            ))}
         </div>
       )}
 

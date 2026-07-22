@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v40 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v41 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -323,3 +323,13 @@ None of these are things the rest of the app depends on to function — they're 
     Third, **the timezone field is now a searchable dropdown** instead of a free-text box you had to type an exact IANA name into. It lists every timezone (your common ones — London, Jerusalem, New York, etc. — first), and you can type to filter. No more guessing the exact spelling of "Europe/London."
 
     Fourth, **the Morning-brief channel now offers Telegram, Slack and SMS**, not just WhatsApp and Email — and the in-app brief card shows the channel name properly capitalised. (This is still the display/reference channel for the in-app card; the actual scheduled pushes are wired up in the Telegram & Slack section, as before.)
+
+29. **v41** — Ideas gets its own tab, reports cover every tracker, a display-size control, and three new bright palettes.
+
+    First, **Ideas is now a top-level tab on the Collections page** — Collections · Notes · Ideas — instead of sitting as a small pill inside the Collections tab where it was easy to miss. The split is generalised: anything named "Notes" or "Ideas" gets promoted to its own tab; everything else (Movies, Books, TV Series, Subscriptions, Dates) stays under Collections. The tab bar only appears once you actually have a Notes or Ideas tracker to separate out.
+
+    Second, **Reports now covers every tracker, not just Subscriptions.** A new "Collections — every tracker at a glance" section on the Standard-reports tab lists each active tracker grouped by collection, with its entry count and, where the tracker has a status column, a live breakdown by status (e.g. Movies → Want to watch / Watching / Watched). So Ideas, Notes, TV Series and anything you add later all get a report automatically, alongside the existing Subscriptions cost rollup.
+
+    Third, **a Display size control** (Settings → Appearance): Normal / Large / Larger / Largest. It scales the entire interface — text, icons and spacing together, like OS display scaling — for easier reading, applied everywhere via a root zoom and saved to your account. Untouched accounts stay at Normal.
+
+    Fourth, **three new bright palettes** answering "give me a white background and different colouring": **Snow** (pure white background, graphite accent — the cleanest, brightest option), **Indigo** (crisp near-white with a vivid indigo accent), and **Teal** (cool white with a deep teal accent). Twelve palettes in total now. The faint background dot-grid was also made theme-aware (it uses each palette's own border colour) so it stays subtle and on-tone on the white and cool palettes instead of showing warm dots.

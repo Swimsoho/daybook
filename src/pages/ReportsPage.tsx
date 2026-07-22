@@ -160,6 +160,42 @@ export default function ReportsPage() {
               <span className="text-sm text-muted-foreground font-normal"> / month — currency columns roll up with no extra setup</span>
             </p>
           </section>
+
+          {/* Every tracker at a glance — so a report exists for Movies, Books, TV Series, Dates,
+              Notes, Ideas and anything else the person adds, not just the built-in Subscriptions
+              one above. Groups by collection, counts entries, and breaks down by the tracker's
+              own status column when it has one. */}
+          <section className="border border-border bg-card shadow-sm p-4 sm:col-span-2">
+            <SectionTitle>Collections — every tracker at a glance</SectionTitle>
+            {state.trackers.filter(t => t.active).length === 0 && (
+              <p className="text-[12.5px] text-muted-foreground italic">No trackers yet — add one under Settings → Notes &amp; Collections.</p>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1">
+              {state.trackers.filter(t => t.active).map(t => {
+                const es = state.entries.filter(e => e.trackerId === t.id)
+                const col = state.collections.find(c => c.id === t.collectionId)
+                const statusCol = t.columns.find(c => c.type === 'status')
+                const breakdown = statusCol?.options
+                  ?.map(opt => ({ opt, n: es.filter(e => e.values[statusCol.key] === opt).length }))
+                  .filter(x => x.n > 0)
+                return (
+                  <div key={t.id} className="py-1.5 border-b border-border/50">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-[13px] font-medium truncate">
+                        {col && <span className="text-muted-foreground font-normal">{col.name} · </span>}{t.name}
+                      </span>
+                      <span className="text-[12px] tabular text-muted-foreground shrink-0">{es.length} {es.length === 1 ? 'entry' : 'entries'}</span>
+                    </div>
+                    {breakdown && breakdown.length > 0 && (
+                      <div className="text-[11.5px] text-muted-foreground mt-0.5">
+                        {breakdown.map(b => `${b.opt}: ${b.n}`).join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
         </div>
       )}
       <p className="text-[11.5px] text-muted-foreground">Every report supports free-text search, multi-field filters and saved presets; results click through to the underlying items.</p>

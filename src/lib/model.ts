@@ -234,7 +234,7 @@ export type PriorityScheme = 'p' | 'hml' | 'num'
 // Color palette for the whole app — a plain CSS custom-property swap (see src/lib/themes.ts
 // and the [data-theme] blocks in index.css), not a per-page setting, so every screen and
 // component picks it up for free.
-export type ThemeId = 'sage' | 'clay' | 'ocean' | 'plum' | 'slate' | 'ink' | 'burgundy' | 'forest' | 'brass'
+export type ThemeId = 'sage' | 'clay' | 'ocean' | 'plum' | 'slate' | 'ink' | 'burgundy' | 'forest' | 'brass' | 'snow' | 'indigo' | 'teal'
 
 export interface Settings {
   theme: ThemeId
@@ -273,6 +273,11 @@ export interface Settings {
     morningBrief: boolean
     lunchReminder: boolean
   }
+  // App-wide display size (Settings → Appearance). Scales the whole interface up or down for
+  // legibility — like OS display scaling — applied as a `zoom` on the root so every px size,
+  // icon and gap grows together. Optional/undefined = 'normal' (1×), so existing accounts are
+  // unaffected until they choose otherwise.
+  displayScale?: 'normal' | 'large' | 'larger' | 'largest'
   // User-arranged Today-dashboard widget layout — which widgets are full-width ("wide") and
   // the order of the rest split across the two columns. Optional: undefined just means "use
   // the shipped default arrangement," so accounts saved before this existed need no backfill.

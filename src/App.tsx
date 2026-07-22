@@ -143,6 +143,15 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
     document.documentElement.dataset.theme = state.settings.theme
   }, [state.settings.theme])
 
+  // Settings → Appearance also picks a display size. Applied as a `zoom` on the root so the
+  // whole UI (fonts, icons, spacing) scales together for legibility, without having to convert
+  // the app's px-based sizing to rem. 'normal' clears the override entirely.
+  React.useEffect(() => {
+    const zoom: Record<string, string> = { normal: '', large: '1.1', larger: '1.2', largest: '1.32' }
+    ;(document.documentElement.style as CSSStyleDeclaration & { zoom: string }).zoom =
+      zoom[state.settings.displayScale ?? 'normal'] ?? ''
+  }, [state.settings.displayScale])
+
   function startNavResize(e: React.PointerEvent) {
     e.preventDefault()
     const move = (ev: PointerEvent) => setNavW(Math.min(340, Math.max(120, ev.clientX)))

@@ -318,7 +318,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
       </div>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 items-start">
       <div className="grid grid-cols-1 gap-4">
-        <Section title="Appearance" sub="Pick a color palette for the whole app — takes effect immediately, everywhere.">
+        <Section title="Appearance" sub="Pick a colour palette and display size for the whole app — takes effect immediately, everywhere.">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {THEMES.map(t => {
               const active = s.theme === t.id
@@ -344,6 +344,35 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                 </button>
               )
             })}
+          </div>
+
+          <div className="border-t border-border pt-3 mt-1 grid grid-cols-1 gap-1.5">
+            <Label className="text-xs">Display size</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                { id: 'normal', label: 'Normal' },
+                { id: 'large', label: 'Large' },
+                { id: 'larger', label: 'Larger' },
+                { id: 'largest', label: 'Largest' },
+              ] as const).map(opt => {
+                const active = (s.displayScale ?? 'normal') === opt.id
+                return (
+                  <button
+                    key={opt.id}
+                    onClick={() => updateSettings({ displayScale: opt.id })}
+                    className={cn(
+                      'px-3 py-1.5 text-[12.5px] border rounded-sm transition-colors',
+                      active ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-card hover:bg-accent',
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="text-[10.5px] text-muted-foreground">
+              Enlarges the whole interface — text, icons and spacing together — for easier reading. Applies everywhere and is saved to your account.
+            </p>
           </div>
         </Section>
         <Section title="Focus areas" sub="Add, rename, colour, retire — archiving preserves all history. Keep to 3–6.">

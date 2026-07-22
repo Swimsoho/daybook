@@ -209,6 +209,75 @@
     --nav-border: 40 26% 16%;
     --nav-text: 42 38% 91%;
   }
+
+  /* Three bright, cool-toned options that answer "give me a white background / different
+     colouring": Snow (pure white, graphite accent — the cleanest), Indigo (crisp white with a
+     vivid indigo accent), and Teal (cool white with a deep teal accent). These set
+     --muted-foreground explicitly to a cool grey so secondary text doesn't read warm-olive on a
+     white page (the shared default is tuned for the warm-paper palettes). */
+  :root[data-theme='snow'] {
+    --background: 0 0% 100%;
+    --foreground: 220 20% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 12%;
+    --popover: 0 0% 100%;
+    --primary: 220 16% 20%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 95%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 38%;
+    --accent: 220 13% 94%;
+    --accent-foreground: 220 20% 12%;
+    --border: 220 13% 88%;
+    --input: 220 13% 84%;
+    --ring: 220 16% 20%;
+    --nav-from: 220 16% 17%;
+    --nav-to: 220 18% 10%;
+    --nav-border: 220 14% 15%;
+    --nav-text: 220 16% 92%;
+  }
+  :root[data-theme='indigo'] {
+    --background: 230 30% 99%;
+    --foreground: 232 28% 14%;
+    --card: 0 0% 100%;
+    --card-foreground: 232 28% 14%;
+    --popover: 0 0% 100%;
+    --primary: 245 58% 42%;
+    --primary-foreground: 230 40% 98%;
+    --secondary: 235 28% 94%;
+    --muted: 235 28% 95%;
+    --muted-foreground: 233 12% 40%;
+    --accent: 235 30% 93%;
+    --accent-foreground: 232 28% 14%;
+    --border: 235 24% 88%;
+    --input: 235 24% 84%;
+    --ring: 245 58% 42%;
+    --nav-from: 245 40% 22%;
+    --nav-to: 245 45% 14%;
+    --nav-border: 245 34% 20%;
+    --nav-text: 235 40% 93%;
+  }
+  :root[data-theme='teal'] {
+    --background: 190 30% 99%;
+    --foreground: 195 30% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 195 30% 12%;
+    --popover: 0 0% 100%;
+    --primary: 185 60% 26%;
+    --primary-foreground: 185 40% 97%;
+    --secondary: 190 24% 93%;
+    --muted: 190 22% 94%;
+    --muted-foreground: 195 12% 38%;
+    --accent: 190 24% 92%;
+    --accent-foreground: 195 30% 12%;
+    --border: 190 20% 87%;
+    --input: 190 20% 83%;
+    --ring: 185 60% 26%;
+    --nav-from: 185 45% 15%;
+    --nav-to: 185 50% 9%;
+    --nav-border: 185 38% 14%;
+    --nav-text: 185 40% 92%;
+  }
 }
 
 @layer base {
@@ -220,7 +289,10 @@
   }
   body {
     @apply bg-background text-foreground antialiased;
-    background-image: radial-gradient(hsl(42 30% 88% / 0.7) 1px, transparent 1px);
+    /* Faint dot grid — uses the palette's own border colour so it stays subtle and on-tone in
+       every theme (warm on Sage/Brass, cool/neutral on Snow/Ocean) instead of a hardcoded warm
+       dot that looked wrong on the white and cool palettes. */
+    background-image: radial-gradient(hsl(var(--border) / 0.55) 1px, transparent 1px);
     background-size: 22px 22px;
   }
   ::selection {
