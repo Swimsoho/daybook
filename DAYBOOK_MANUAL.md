@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v58 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v59 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -430,3 +430,7 @@ None of these are things the rest of the app depends on to function — they're 
 46. **v58** — Fixed: changes on the task panel now update the buttons instantly.
 
     A bug: on the task detail panel, tapping Type (or Priority, Status, or a Move‑to change) *did* save — the audit trail recorded it — but the highlighted button didn't move, so it looked like nothing happened and it was tempting to tap again. The panel was showing a frozen snapshot of the task from the moment it opened. It now reads the task live, so the moment you tap **To‑do**, that button highlights and the header updates, no reopen needed. (Applies to every quick control on that panel.)
+
+47. **v59** — "Attention needed" now explains itself, and stops flagging things that aren't slipping.
+
+    Two problems with the Attention needed list: it wasn't clear *why* something was on it, and it was surfacing items that don't really need attention (e.g. a low‑priority task due next week that you happen to be waiting on). Both fixed. Every row now carries a plain‑language reason chip — a red **OVERDUE 3d** or an amber **WAITING 7d** — and there's a one‑line note under the heading ("Overdue, or waiting on someone too long — each row shows why"). And the rule is tighter: a task appears only if it's **overdue** (past its due date), or you've been **waiting on someone 5+ days** *and* it isn't parked on a comfortable future date. So a "waiting" item that's due next week stays quiet until it's actually close — it no longer sits in Attention needed looking urgent when it isn't. (Calls are excluded here too, as of v56.)

@@ -115,7 +115,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
 
 // ---------- Task row with quick actions ----------
 
-export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, selected, onToggleSelect }: {
+export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, selected, onToggleSelect, note }: {
   task: Task
   showArea?: boolean
   depth?: number
@@ -123,6 +123,9 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
   expandAll?: boolean
   selected?: boolean
   onToggleSelect?: (id: string) => void
+  // Optional "why is this here" chip — used by the Attention list to say, on the row itself,
+  // exactly why the task is flagged (e.g. "overdue 3d" or "waiting 7d").
+  note?: { text: string; tone: 'overdue' | 'waiting' }
 }) {
   const { state, completeTask, snoozeTask, calledFollowUp, updateTask, dropTask, deleteTask, reinsertTasks } = useStore()
   const [localExp, setLocalExp] = useState<boolean | null>(null)
@@ -232,6 +235,18 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
           </div>
         </button>
 
+        {note && (
+          <span
+            className={cn(
+              'shrink-0 rounded-sm px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide whitespace-nowrap',
+              note.tone === 'overdue'
+                ? 'bg-[hsl(8_60%_41%_/_0.12)] text-[hsl(8_60%_38%)] border border-[hsl(8_50%_60%)]'
+                : 'bg-[hsl(35_70%_88%)] text-[hsl(28_60%_28%)] border border-[hsl(35_50%_70%)]',
+            )}
+          >
+            {note.text}
+          </span>
+        )}
         <DueChip due={task.due} />
         <PriorityChip p={task.priority} />
 

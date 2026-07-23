@@ -233,12 +233,23 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
     .filter(t => !isCall(t) && ((t.due && daysSince(t.due) >= 0) || (!t.due && (t.priority === 'P0' || t.priority === 'P1'))))
     .sort((a, b) => a.priority.localeCompare(b.priority) || (a.due ?? '9999').localeCompare(b.due ?? '9999'))
   const overdue = open.filter(t => !isCall(t) && isOverdue(t))
-  const attention = open.filter(t =>
-    !isCall(t) && (
-      (isOverdue(t) && !todays.slice(0, 8).includes(t)) ||
-      (t.status === 'waiting' && daysSince(t.waitingSince) >= 5)
-    ),
-  )
+  // "Attention needed" = things that are genuinely slipping, each tagged with the reason it's here:
+  //   • OVERDUE — past its due date (and not already sitting in today's list), or
+  //   • WAITING — you've been waiting on someone 5+ days AND it isn't parked on a comfortable
+  //     future date. A low-priority item due next week that you're waiting on is NOT nagged about;
+  //     its future due date is keeping it quiet until it's closer.
+  const attention = open
+    .map(t => {
+      if (isCall(t)) return null
+      if (isOverdue(t) && !todays.slice(0, 8).includes(t)) {
+        return { task: t, note: { text: `overdue ${daysSince(t.due)}d`, tone: 'overdue' as const } }
+      }
+      if (t.status === 'waiting' && daysSince(t.waitingSince) >= 5 && (!t.due || daysSince(t.due) >= 0)) {
+        return { task: t, note: { text: `waiting ${daysSince(t.waitingSince)}d`, tone: 'waiting' as const } }
+      }
+      return null
+    })
+    .filter(Boolean) as { task: Task; note: { text: string; tone: 'overdue' | 'waiting' } }[]
   const calls = buildCallList(state).slice(0, state.settings.callGoal + 1)
   const made = callsMadeOn(state, today())
   // Any call (Type = Call OR Call action) belongs on today's call list — due today/overdue, or
@@ -393,9 +404,10 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
         <section className="rise-in border border-border bg-card shadow-sm" style={{ animationDelay: '120ms' }}>
           <div className="px-4 pt-3.5 pb-1">
             <SectionTitle className="mb-0">Attention needed</SectionTitle>
+            <p className="text-[11px] text-muted-foreground mt-0.5">Overdue, or waiting on someone too long — each row shows why.</p>
           </div>
           {attention.length === 0 && <EmptyNote>Nothing slipping. That’s the goal.</EmptyNote>}
-          {attention.map(t => <TaskRow key={t.id} task={t} onOpen={setOpenTask} />)}
+          {attention.map(({ task, note }) => <TaskRow key={task.id} task={task} onOpen={setOpenTask} note={note} />)}
         </section>
     ),
     calls: (
