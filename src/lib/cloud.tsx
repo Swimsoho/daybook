@@ -223,7 +223,7 @@ function LoginScreen() {
           <div className="font-display-soft text-4xl">Daybook</div>
           <p className="text-[12px] uppercase tracking-[0.2em] text-muted-foreground mt-1.5">Run your life from it</p>
         </div>
-        <div className="border border-border bg-card shadow-sm p-5 grid grid-cols-1 gap-3">
+        <div className="border border-border bg-card shadow-sm rounded-lg p-5 grid grid-cols-1 gap-3">
           {mode === 'signup' && (
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name"
               className="h-10 border border-input bg-background px-3 text-sm rounded-sm outline-none focus:border-primary" />

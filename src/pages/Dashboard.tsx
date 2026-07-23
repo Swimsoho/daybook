@@ -582,7 +582,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
 
   const OVERALL_WIDGET_NODE: Record<OverallWidgetId, React.ReactNode> = {
     portfolio: (
-        <section className="border border-border bg-card shadow-sm rise-in">
+        <section className="border border-border bg-card shadow-sm rounded-lg rise-in">
           <div className="px-4 pt-3.5 pb-1">
             <SectionTitle
               className="mb-1"
@@ -688,7 +688,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
         </section>
     ),
     overdue: (
-        <section className="border border-border bg-card shadow-sm rise-in" style={{ animationDelay: '80ms' }}>
+        <section className="border border-border bg-card shadow-sm rounded-lg rise-in" style={{ animationDelay: '80ms' }}>
           <div className="px-4 pt-3.5 pb-1">
             <SectionTitle className="mb-0">Overdue — worst first</SectionTitle>
           </div>
@@ -697,7 +697,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
         </section>
     ),
     relationship: (
-        <section className="border border-border bg-card shadow-sm rise-in" style={{ animationDelay: '140ms' }}>
+        <section className="border border-border bg-card shadow-sm rounded-lg rise-in" style={{ animationDelay: '140ms' }}>
           <div className="px-4 pt-3.5 pb-2">
             <SectionTitle className="mb-0" right={<button onClick={() => goTo('people')} className="text-[11.5px] text-muted-foreground hover:text-foreground">all people →</button>}>Relationship health</SectionTitle>
           </div>

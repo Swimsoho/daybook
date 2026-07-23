@@ -185,7 +185,7 @@ export default function CollectionsPage() {
 
       {/* TABLE */}
       {activeView === 'table' && (
-        <section className="border border-border bg-card shadow-sm overflow-x-auto">
+        <section className="border border-border bg-card shadow-sm rounded-lg overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-border text-left text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">
@@ -222,7 +222,7 @@ export default function CollectionsPage() {
           {statusCol.options?.map(stage => (
             <div
               key={stage}
-              className="border border-border bg-card shadow-sm transition-shadow [&.dragover]:ring-2 [&.dragover]:ring-[hsl(17_63%_47%)]"
+              className="border border-border bg-card shadow-sm rounded-lg transition-shadow [&.dragover]:ring-2 [&.dragover]:ring-[hsl(17_63%_47%)]"
               onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('dragover') }}
               onDragLeave={e => e.currentTarget.classList.remove('dragover')}
               onDrop={ev => {
@@ -269,7 +269,7 @@ export default function CollectionsPage() {
             const rating = e.values['rating'] as number | undefined
             const stage = statusCol ? String(e.values[statusCol.key] ?? '') : ''
             return (
-              <button key={e.id} onClick={() => setEditEntry(e)} className="border border-border bg-card shadow-sm text-left hover:-translate-y-0.5 transition-transform">
+              <button key={e.id} onClick={() => setEditEntry(e)} className="border border-border bg-card shadow-sm rounded-lg text-left hover:-translate-y-0.5 transition-transform">
                 <div className="aspect-[3/2] flex items-center justify-center font-display-soft text-3xl text-[hsl(45_50%_96%)]" style={{ background: `linear-gradient(150deg, hsl(152 22% 26%), hsl(152 18% 18%))` }}>
                   {titleOf(tracker, e).slice(0, 1)}
                 </div>

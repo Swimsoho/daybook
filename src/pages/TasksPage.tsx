@@ -364,7 +364,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
           {groupedByArea.map(({ area, tasks }) => (
             <section
               key={area.id}
-              className="border border-border bg-card shadow-sm transition-shadow [&.dragover]:ring-2 [&.dragover]:ring-[hsl(17_63%_47%)]"
+              className="border border-border bg-card shadow-sm rounded-lg transition-shadow [&.dragover]:ring-2 [&.dragover]:ring-[hsl(17_63%_47%)]"
               onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('dragover') }}
               onDragLeave={e => e.currentTarget.classList.remove('dragover')}
               onDrop={e => {
@@ -395,7 +395,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
           ))}
         </div>
       ) : (
-        <section className="border border-border bg-card shadow-sm">
+        <section className="border border-border bg-card shadow-sm rounded-lg">
           {sorted.length === 0 && <EmptyNote>Nothing in this view{view === 'someday' ? ' — the backlog rests until the weekly review' : ''}.</EmptyNote>}
           {sorted.map(t => (
             <div key={t.id}>
@@ -467,7 +467,7 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
   if (rows.length === 0) return <EmptyNote>Nothing matches the current filters.</EmptyNote>
 
   return (
-    <section className="border border-border bg-card shadow-sm overflow-x-auto">
+    <section className="border border-border bg-card shadow-sm rounded-lg overflow-x-auto">
       <table className="w-full text-[12.5px] border-collapse min-w-[820px]">
         <thead className="border-b border-border bg-accent/30">
           <tr>

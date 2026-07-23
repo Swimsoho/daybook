@@ -54,7 +54,7 @@ export default function InboxPage() {
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
       <div className="grid grid-cols-1 gap-4 content-start">
-        <section className="border border-border bg-card shadow-sm rise-in">
+        <section className="border border-border bg-card shadow-sm rounded-lg rise-in">
           <div className="px-4 pt-3.5 pb-1 flex items-baseline justify-between">
             <SectionTitle className="mb-0">One inbox, cleared lightly</SectionTitle>
             <span className="text-[11px] text-muted-foreground">{pending.length} to confirm</span>
@@ -224,7 +224,7 @@ function WhatsAppPanel({ onSend }: { onSend: (text: string, source: Source) => v
     }
   }
   return (
-    <section className="border border-border bg-card shadow-sm rise-in h-fit" style={{ animationDelay: '80ms' }}>
+    <section className="border border-border bg-card shadow-sm rounded-lg rise-in h-fit" style={{ animationDelay: '80ms' }}>
       <div className="px-4 py-2.5 bg-primary text-primary-foreground flex items-center gap-2">
         <MessageCircle className="h-4 w-4" />
         <div>

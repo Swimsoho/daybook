@@ -95,8 +95,8 @@ export function KpiTile({ label, value, sub, tone, onClick }: { label: string; v
     <Comp
       onClick={onClick}
       className={cn(
-        'rise-in border border-border bg-card px-4 py-3 flex flex-col gap-0.5 min-w-0 text-left',
-        onClick && 'cursor-pointer transition-all hover:border-[hsl(152_22%_40%)] hover:shadow-sm hover:-translate-y-px active:translate-y-0',
+        'rise-in border border-border bg-card px-4 py-3 flex flex-col gap-0.5 min-w-0 text-left rounded-lg shadow-sm',
+        onClick && 'cursor-pointer transition-all hover:border-primary hover:shadow-md hover:-translate-y-px active:translate-y-0',
       )}
     >
       <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground truncate">{label}{onClick && ' ↗'}</span>

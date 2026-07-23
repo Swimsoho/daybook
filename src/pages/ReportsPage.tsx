@@ -72,7 +72,7 @@ export default function ReportsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <section className="border border-border bg-card shadow-sm p-4">
+          <section className="border border-border bg-card shadow-sm rounded-lg p-4">
             <SectionTitle>Open tasks by area</SectionTitle>
             <div className="grid grid-cols-1 gap-2">
               {byArea.map(({ a, n }) => (
@@ -86,7 +86,7 @@ export default function ReportsPage() {
               ))}
             </div>
           </section>
-          <section className="border border-border bg-card shadow-sm p-4">
+          <section className="border border-border bg-card shadow-sm rounded-lg p-4">
             <SectionTitle>Calls made — last 7 days vs goal ({state.settings.callGoal}/day)</SectionTitle>
             <div className="flex items-end gap-1.5 h-28">
               {callDays.map(({ date, n }) => (
@@ -102,7 +102,7 @@ export default function ReportsPage() {
               <span className="absolute right-0 -top-4 text-[9.5px] text-[hsl(8_50%_45%)]">goal</span>
             </div>
           </section>
-          <section className="border border-border bg-card shadow-sm p-4">
+          <section className="border border-border bg-card shadow-sm rounded-lg p-4">
             <SectionTitle>Tasks by priority</SectionTitle>
             <div className="grid grid-cols-1 gap-2">
               {byPriority.map(({ p, n }) => (
@@ -116,7 +116,7 @@ export default function ReportsPage() {
               ))}
             </div>
           </section>
-          <section className="border border-border bg-card shadow-sm p-4">
+          <section className="border border-border bg-card shadow-sm rounded-lg p-4">
             <SectionTitle>Contacts by tier</SectionTitle>
             <div className="grid grid-cols-1 gap-2">
               {byTier.map(({ t, n }) => (
@@ -130,7 +130,7 @@ export default function ReportsPage() {
               ))}
             </div>
           </section>
-          <section className="border border-border bg-card shadow-sm p-4 sm:col-span-2">
+          <section className="border border-border bg-card shadow-sm rounded-lg p-4 sm:col-span-2">
             <SectionTitle>Vendors — open items and history</SectionTitle>
             <div className="overflow-x-auto">
             <table className="w-full text-[12.5px]">
@@ -153,7 +153,7 @@ export default function ReportsPage() {
             </table>
             </div>
           </section>
-          <section className="border border-border bg-card shadow-sm p-4 sm:col-span-2">
+          <section className="border border-border bg-card shadow-sm rounded-lg p-4 sm:col-span-2">
             <SectionTitle>Collections — total monthly cost of active subscriptions</SectionTitle>
             <p className="font-display text-3xl font-semibold tabular">
               £{state.entries.filter(e => e.trackerId === 'trk_subs' && e.values['status'] === 'Active').reduce((sum, e) => sum + Number(e.values['cost'] ?? 0), 0).toFixed(2)}
@@ -165,7 +165,7 @@ export default function ReportsPage() {
               Notes, Ideas and anything else the person adds, not just the built-in Subscriptions
               one above. Groups by collection, counts entries, and breaks down by the tracker's
               own status column when it has one. */}
-          <section className="border border-border bg-card shadow-sm p-4 sm:col-span-2">
+          <section className="border border-border bg-card shadow-sm rounded-lg p-4 sm:col-span-2">
             <SectionTitle>Collections — every tracker at a glance</SectionTitle>
             {state.trackers.filter(t => t.active).length === 0 && (
               <p className="text-[12.5px] text-muted-foreground italic">No trackers yet — add one under Settings → Notes &amp; Collections.</p>
@@ -205,7 +205,7 @@ export default function ReportsPage() {
 
 function ExceptionCard({ title, rows, empty, tone }: { title: string; rows: [string, string][]; empty: string; tone?: 'bad' }) {
   return (
-    <section className="border border-border bg-card shadow-sm">
+    <section className="border border-border bg-card shadow-sm rounded-lg">
       <div className={cn('px-4 py-2.5 border-b border-border text-[12.5px] font-semibold', tone === 'bad' && rows.length > 0 && 'text-[hsl(8_60%_41%)]')}>{title}</div>
       <div className="px-4 py-2">
         {rows.length === 0 && <p className="text-[12.5px] text-muted-foreground italic py-1">{empty}</p>}

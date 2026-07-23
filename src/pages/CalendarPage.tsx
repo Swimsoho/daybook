@@ -132,7 +132,7 @@ export default function CalendarPage() {
 
       {view === 'month' ? (
         <>
-          <section className="border border-border bg-card shadow-sm rounded-sm overflow-hidden">
+          <section className="border border-border bg-card shadow-sm rounded-lg overflow-hidden">
             <div className="grid grid-cols-7 border-b border-border bg-muted/40">
               {WEEKDAYS.map(w => <div key={w} className="px-2 py-1.5 text-[10.5px] uppercase tracking-wide text-muted-foreground font-semibold text-center">{w}</div>)}
             </div>
@@ -187,7 +187,7 @@ export default function CalendarPage() {
           </section>
 
           {/* Selected-day panel */}
-          <section className="border border-border bg-card shadow-sm rounded-sm">
+          <section className="border border-border bg-card shadow-sm rounded-lg">
             <div className="px-4 py-2.5 border-b border-border flex items-baseline justify-between">
               <h3 className="font-display text-[15px] font-semibold">{fmtDate(selected)}{selected === todayIso && <span className="text-[11px] text-muted-foreground font-normal"> · today</span>}</h3>
               <span className="text-[11px] text-muted-foreground">{selItems.tasks.length + selItems.dates.length} item{selItems.tasks.length + selItems.dates.length === 1 ? '' : 's'}</span>
@@ -217,7 +217,7 @@ export default function CalendarPage() {
           </section>
         </>
       ) : (
-        <section className="border border-border bg-card shadow-sm rounded-sm">
+        <section className="border border-border bg-card shadow-sm rounded-lg">
           <div className="px-4 py-2.5 border-b border-border">
             <h3 className="font-display text-[15px] font-semibold">Next 60 days</h3>
           </div>

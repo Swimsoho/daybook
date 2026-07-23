@@ -28,7 +28,7 @@ export default function HistoryPage() {
         <ClearFiltersButton active={!!search || entity !== 'all'} onClear={() => { setSearch(''); setEntity('all') }} />
         <p className="text-[11.5px] text-muted-foreground ml-auto">Every create, edit, status change, call and archive — timestamped, per user. Nothing is ever silently lost.</p>
       </div>
-      <section className="border border-border bg-card shadow-sm">
+      <section className="border border-border bg-card shadow-sm rounded-lg">
         {events.length === 0 && <EmptyNote>No matching events.</EmptyNote>}
         {events.map(a => (
           <div key={a.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 py-2 border-b border-border/60 last:border-0 text-[13px]">

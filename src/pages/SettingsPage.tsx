@@ -56,7 +56,7 @@ function slugKey(name: string, existing: string[]): string {
 
 function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
   return (
-    <section className="border border-border bg-card shadow-sm rounded-sm overflow-hidden">
+    <section className="border border-border bg-card shadow-sm rounded-lg overflow-hidden">
       <div className="px-4 py-3 border-b border-border bg-muted/40">
         <h2 className="flex items-center gap-2">
           <span className="inline-block w-[3px] h-[14px] rounded-full bg-primary shrink-0" aria-hidden="true" />

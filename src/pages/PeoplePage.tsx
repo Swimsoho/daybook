@@ -39,7 +39,7 @@ export default function PeoplePage() {
   return (
     <div className="grid grid-cols-1 gap-4">
       {/* Call list strip */}
-      <section className="border border-border bg-card shadow-sm rise-in">
+      <section className="border border-border bg-card shadow-sm rounded-lg rise-in">
         <div className="px-4 pt-3 pb-2 flex items-baseline gap-3">
           <SectionTitle className="mb-0">Today’s suggested calls</SectionTitle>
           <span className="text-[11px] text-muted-foreground">overdue cadence · follow-ups due · flags · one reconnect</span>
@@ -82,7 +82,7 @@ export default function PeoplePage() {
       </div>
 
       {/* Table */}
-      <section className="border border-border bg-card shadow-sm overflow-x-auto">
+      <section className="border border-border bg-card shadow-sm rounded-lg overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-border text-left text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">

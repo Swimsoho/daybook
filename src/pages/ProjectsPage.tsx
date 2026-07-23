@@ -52,7 +52,7 @@ export default function ProjectsPage() {
             </div>
           </div>
         </div>
-        <section className="border border-border bg-card shadow-sm">
+        <section className="border border-border bg-card shadow-sm rounded-lg">
           {tasks.length === 0 && <EmptyNote>No tasks yet — add the first next action.</EmptyNote>}
           {tasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} />)}
         </section>
@@ -76,7 +76,7 @@ export default function ProjectsPage() {
         const activeCount = projs.filter(p => p.status === 'active').length
         const overWip = activeCount > state.settings.projectWipLimit
         return (
-          <section key={a.id} className="border border-border bg-card shadow-sm rise-in" style={{ animationDelay: `${i * 60}ms` }}>
+          <section key={a.id} className="border border-border bg-card shadow-sm rounded-lg rise-in" style={{ animationDelay: `${i * 60}ms` }}>
             <div className="px-4 py-3 border-b border-border flex items-center gap-2.5">
               <span className="h-3 w-3 rounded-full" style={{ background: a.color }} />
               <div>

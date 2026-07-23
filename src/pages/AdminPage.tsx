@@ -91,7 +91,7 @@ export default function AdminPage({ onViewPortal, cloud }: { onViewPortal: (user
         <KpiTile label="Isolation" value="Per-user" sub="no one sees another's data" />
       </div>
 
-      <section className="border border-border bg-card shadow-sm overflow-x-auto">
+      <section className="border border-border bg-card shadow-sm rounded-lg overflow-x-auto">
         <div className="px-4 pt-3 pb-1"><SectionTitle className="mb-0">Users</SectionTitle></div>
         <table className="w-full text-[13px]">
           <thead>
