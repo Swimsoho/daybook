@@ -109,8 +109,8 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
       // "n:"/"note:"/"i:"/"idea:" capture prefixes would silently do nothing (no tracker to
       // find by name) even though the code fully supports them. Backfill each by name only if
       // it's actually missing — never touches anything the person's already renamed/added.
-      collections: backfillByName(loaded.collections, seedState().collections, ['notes', 'ideas']),
-      trackers: backfillByName(loaded.trackers, seedState().trackers, ['notes', 'ideas']),
+      collections: backfillByName(loaded.collections, seedState().collections, ['notes', 'ideas', 'dates']),
+      trackers: backfillByName(loaded.trackers, seedState().trackers, ['notes', 'ideas', 'dates to remember']),
     }
   }
   const fresh = ws.kind === 'sample' ? seedState() : emptyState(ownerName || 'there')

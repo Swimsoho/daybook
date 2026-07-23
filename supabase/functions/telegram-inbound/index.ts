@@ -90,6 +90,21 @@ function backfillNotesAndIdeas(collections: Record<string, unknown>[], trackers:
       ],
     })
   }
+  if (!haveCollection('dates')) {
+    nextCollections.push({ id: 'col_dates', name: 'Dates', description: 'Dates worth remembering — birthdays, anniversaries, renewals and any other date you don’t want to miss', color: 'hsl(340 45% 45%)', active: true })
+  }
+  if (!haveTracker('dates to remember')) {
+    nextTrackers.push({
+      id: 'trk_dates', collectionId: 'col_dates', name: 'Dates to Remember', description: 'Birthdays, anniversaries, and other dates worth a nudge — export to your calendar from Collections', defaultView: 'table', active: true,
+      columns: [
+        { key: 'name', name: 'Name', type: 'text', isTitle: true, required: true },
+        { key: 'date', name: 'Date', type: 'date', required: true },
+        { key: 'recurring', name: 'Repeats every year', type: 'checkbox' },
+        { key: 'type', name: 'Type', type: 'select', options: ['Birthday', 'Anniversary', 'Other'] },
+        { key: 'notes', name: 'Notes', type: 'longtext' },
+      ],
+    })
+  }
   return { collections: nextCollections, trackers: nextTrackers }
 }
 

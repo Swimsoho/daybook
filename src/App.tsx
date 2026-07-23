@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Toaster, toast } from 'sonner'
 import {
-  Archive, CalendarDays, Eye, FolderKanban, History, Inbox as InboxIcon,
+  Archive, CalendarDays, CalendarRange, Eye, FolderKanban, History, Inbox as InboxIcon,
   LayoutDashboard, ListChecks, Menu, Mic, Send, Settings as SettingsIcon, ShieldCheck, Sparkles, Users, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -16,13 +16,14 @@ import TasksPage from '@/pages/TasksPage'
 import PeoplePage from '@/pages/PeoplePage'
 import ProjectsPage from '@/pages/ProjectsPage'
 import CollectionsPage from '@/pages/CollectionsPage'
+import CalendarPage from '@/pages/CalendarPage'
 import InboxPage from '@/pages/InboxPage'
 import ReportsPage from '@/pages/ReportsPage'
 import SettingsPage from '@/pages/SettingsPage'
 import HistoryPage from '@/pages/HistoryPage'
 import AdminPage from '@/pages/AdminPage'
 
-type Page = 'today' | 'overall' | 'inbox' | 'tasks' | 'people' | 'projects' | 'collections' | 'reports' | 'history' | 'settings' | 'admin'
+type Page = 'today' | 'overall' | 'inbox' | 'tasks' | 'people' | 'projects' | 'collections' | 'calendar' | 'reports' | 'history' | 'settings' | 'admin'
 
 interface Impersonation {
   user: AdminUser
@@ -39,6 +40,7 @@ const TITLES: Record<Page, [string, string]> = {
   people: ['People', 'The relationship engine — never let a promise or a person go cold'],
   projects: ['Areas & Projects', 'Meaningful outcomes with a finish line'],
   collections: ['Notes & Collections', 'The things you track rather than do — shaped entirely by you'],
+  calendar: ['Calendar', 'Your tasks and dates on one calendar — month or agenda'],
   reports: ['Reports', 'Every screen is reportable; exceptions surface what’s slipping'],
   history: ['Audit Trail', 'Append-only memory — archive, never delete'],
   settings: ['Settings', 'The control room — sensible defaults, everything overridable'],
@@ -185,6 +187,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
     { id: 'people', label: 'People', icon: <Users className="h-4 w-4" /> },
     { id: 'projects', label: 'Projects', icon: <FolderKanban className="h-4 w-4" /> },
     ...(collectionsOn ? [{ id: 'collections' as Page, label: 'Collections', icon: <Archive className="h-4 w-4" /> }] : []),
+    { id: 'calendar', label: 'Calendar', icon: <CalendarRange className="h-4 w-4" /> },
     { id: 'reports', label: 'Reports', icon: <Sparkles className="h-4 w-4" /> },
     { id: 'history', label: 'History', icon: <History className="h-4 w-4" /> },
     { id: 'settings', label: 'Settings', icon: <SettingsIcon className="h-4 w-4" /> },
@@ -316,6 +319,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
           {page === 'people' && <PeoplePage />}
           {page === 'projects' && <ProjectsPage />}
           {page === 'collections' && collectionsOn && <CollectionsPage />}
+          {page === 'calendar' && <CalendarPage />}
           {page === 'reports' && <ReportsPage />}
           {page === 'history' && <HistoryPage />}
           {page === 'settings' && <SettingsPage cloud={cloud ?? undefined} />}

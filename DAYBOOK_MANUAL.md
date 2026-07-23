@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v43 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v45 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -348,3 +348,15 @@ None of these are things the rest of the app depends on to function — they're 
     - **Tracker templates now give a dropdown to every option-bearing field.** Previously only Status/single-choice and checkbox fields got real in-cell dropdowns; now multi-select fields (pick one from the cell, or still type several ";"-separated) and rating fields (1–5) get them too, each built live from that field's current options. Edit a tracker's options in Settings and the next template download reflects them.
 
     Nothing here changed how templates are produced — they're still built on demand from your current areas, projects, categories, actions, people, vendors and tracker fields — so editing any of those in Settings is picked up the next time you download a template.
+
+32. **v44** — Dates gets its own tab, and accounts missing the Dates tracker now get it automatically.
+
+    **Dates is now a top-level tab** on the Collections page — Collections · Notes · Ideas · Dates — the same treatment as Notes and Ideas. Under it sits the Dates to Remember tracker, which holds birthdays, anniversaries, renewals and any other date worth a nudge (it was always more than birthdays — the Type column distinguishes them). The seeded collection was renamed from "Personal" to "Dates" so it reads clearly as its own thing; older accounts that had it under "Personal" still land in this tab via an alias.
+
+    Crucially, **any account that never had the Dates tracker now gets it backfilled automatically** — the same self-healing mechanism used for Notes and Ideas, on both the app side (on load) and the Telegram/Slack side (on the first bot message). Several real accounts (created before the dates tracker shipped) simply didn't have it, which is why "Dates to Remember" was missing from Collections; it now appears on its own tab with nothing to set up. Birthdays set on a contact card, or added directly here, both live in this one tracker and surface in the Today page's Upcoming dates card.
+
+33. **v45** — A Calendar page (in-app), the first phase of calendar support.
+
+    New **Calendar** section in the left nav. It puts your Daybook data on one calendar: every open task on its due date (dot-coloured by focus area, overdue ones in red) and every Dates to Remember entry (birthdays and anniversaries repeat each year automatically). Two views — a **Month** grid and an **Agenda** list of the next 60 days — plus a selected-day panel where you can **add a task straight onto a day** (it's created with that due date). Click any task to open it.
+
+    This is Phase 1, built entirely on your own data with nothing to connect. Phase 2 — two-way sync with **Google Calendar, Microsoft 365 / Outlook, Yahoo and Apple iCloud** so external events show here and Daybook items can be pushed out — is a separate build that needs an OAuth app registered with each provider plus backend work; it's the agreed next step.

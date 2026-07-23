@@ -38,11 +38,14 @@ function titleOf(trk: Tracker, e: Entry): string {
 // sitting in the same flat row of pills made them easy to miss or mistake for just another
 // tracker. Matched by name rather than a hardcoded id so it still works if either seeded
 // collection is ever recreated. Anything that isn't Notes or Ideas is a plain "collection."
-type TopTab = 'collections' | 'notes' | 'ideas'
+type TopTab = 'collections' | 'notes' | 'ideas' | 'dates'
 function collectionGroup(state: { collections: { id: string; name: string }[] }, collectionId: string | undefined): TopTab {
   const name = state.collections.find(c => c.id === collectionId)?.name.trim().toLowerCase()
   if (name === 'notes') return 'notes'
   if (name === 'ideas') return 'ideas'
+  // 'personal' kept as an alias so any older account that seeded the dates tracker under a
+  // "Personal" collection still lands its dates in this tab rather than under Collections.
+  if (name === 'dates' || name === 'personal') return 'dates'
   return 'collections'
 }
 
@@ -54,13 +57,15 @@ export default function CollectionsPage() {
     collections: trackers.filter(t => grp(t) === 'collections'),
     notes: trackers.filter(t => grp(t) === 'notes'),
     ideas: trackers.filter(t => grp(t) === 'ideas'),
+    dates: trackers.filter(t => grp(t) === 'dates'),
   }
   const hasNotesTab = trackersByTab.notes.length > 0
   const hasIdeasTab = trackersByTab.ideas.length > 0
+  const hasDatesTab = trackersByTab.dates.length > 0
   // Show the tab bar only when there's actually more than one group to split between.
-  const showTabBar = hasNotesTab || hasIdeasTab
+  const showTabBar = hasNotesTab || hasIdeasTab || hasDatesTab
 
-  const firstTab: TopTab = trackersByTab.collections.length ? 'collections' : hasNotesTab ? 'notes' : 'ideas'
+  const firstTab: TopTab = trackersByTab.collections.length ? 'collections' : hasNotesTab ? 'notes' : hasIdeasTab ? 'ideas' : 'dates'
   const [topTab, setTopTab] = useState<TopTab>(firstTab)
   const groupTrackers = trackersByTab[topTab]
   const groupCollections = state.collections.filter(c => c.active && collectionGroup(state, c.id) === topTab)
@@ -78,7 +83,7 @@ export default function CollectionsPage() {
     if (!nextGroup.some(t => t.id === trackerId)) setTrackerId(nextGroup[0]?.id ?? '')
     setView(null)
   }
-  const TAB_LABEL: Record<TopTab, string> = { collections: 'Collections', notes: 'Notes', ideas: 'Ideas' }
+  const TAB_LABEL: Record<TopTab, string> = { collections: 'Collections', notes: 'Notes', ideas: 'Ideas', dates: 'Dates' }
 
   const activeView = view ?? tracker?.defaultView ?? 'table'
   const entries = useMemo(() => state.entries.filter(e => e.trackerId === tracker?.id), [state.entries, tracker])
@@ -92,7 +97,7 @@ export default function CollectionsPage() {
           idea holding-pen never blend in with the structured watch-lists/trackers */}
       {showTabBar && (
         <div className="flex items-center gap-1.5 -mb-1">
-          {(['collections', 'notes', 'ideas'] as const)
+          {(['collections', 'notes', 'ideas', 'dates'] as const)
             .filter(t => t === 'collections' || trackersByTab[t].length > 0)
             .map(t => (
               <button
