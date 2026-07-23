@@ -505,7 +505,8 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         )
       },
       addAction(a) {
-        const act: Action = { id: uid('a'), name: a.name, active: true, color: a.color }
+        // Auto-assign a colour (cycling the palette) so new actions get a dot like categories.
+        const act: Action = { id: uid('a'), name: a.name, active: true, color: a.color ?? nextDot(state.actions.length) }
         withAudit(s => ({ ...s, actions: [...s.actions, act] }), auditEvent('created', 'action', act.id, act.name))
         return act
       },

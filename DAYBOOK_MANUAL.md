@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v41 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v42 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -333,3 +333,9 @@ None of these are things the rest of the app depends on to function — they're 
     Third, **a Display size control** (Settings → Appearance): Normal / Large / Larger / Largest. It scales the entire interface — text, icons and spacing together, like OS display scaling — for easier reading, applied everywhere via a root zoom and saved to your account. Untouched accounts stay at Normal.
 
     Fourth, **three new bright palettes** answering "give me a white background and different colouring": **Snow** (pure white background, graphite accent — the cleanest, brightest option), **Indigo** (crisp near-white with a vivid indigo accent), and **Teal** (cool white with a deep teal accent). Twelve palettes in total now. The faint background dot-grid was also made theme-aware (it uses each palette's own border colour) so it stays subtle and on-tone on the white and cool palettes instead of showing warm dots.
+
+30. **v42** — Colour circles on categories, actions and areas, and a birthday field on contacts that feeds Upcoming dates.
+
+    First, **categories, actions and Focus areas now all have colour circles.** Before, only areas were colour-coded and categories/actions showed as plain text (or only a dot if a colour happened to be set) — the colour field existed in the data but was never wired into Settings, so newly-created categories and actions never got one. Now every category and action gets a colour auto-assigned when created (cycling a 12-colour palette so a run of new ones comes out visibly different), everything that predates the change shows a stable colour immediately, and clicking any dot opens a small swatch picker to change it. The picker was added to Focus areas too, whose dot was previously fixed — so all three lists are consistent and properly editable now.
+
+    Second, **a birthday field on the contact card.** Open anyone in People and there's now a Birthday date field. Setting it mirrors a recurring "Birthday" entry into the Dates to Remember tracker automatically — so it shows up in the Upcoming dates card on Today and exports to your calendar — without you having to enter it twice. Editing the date updates the mirrored entry; clearing it removes it. (Contacts are still about cadence — when you last reached out — so the birthday is the one calendar-date exception that belongs there, and it simply feeds the dates system.) The link is tracked invisibly on the entry, so it always updates the right one.

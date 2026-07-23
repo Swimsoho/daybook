@@ -517,7 +517,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
               const usage = actionUsage(state, a.id)
               return (
                 <div key={a.id} className="flex items-center gap-2">
-                  {a.color && <span className="h-2 w-2 rounded-full shrink-0" style={{ background: a.color }} />}
+                  <ColorPicker value={a.color ?? fallbackDot(a.id)} onChange={col => updateAction(a.id, { color: col })} size={11} title={`Colour for ${a.name}`} />
                   <Input
                     value={a.name}
                     onChange={e => updateAction(a.id, { name: e.target.value })}
