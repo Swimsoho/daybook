@@ -257,13 +257,16 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
               )}
               {qa.snooze && (
                 <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>Snooze / defer</DropdownMenuSubTrigger>
+                  <DropdownMenuSubTrigger>Schedule / set due</DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
-                    {[1, 2, 7].map(d => (
-                      <DropdownMenuItem key={d} onClick={() => { snoozeTask(task.id, d); toast(`Snoozed to ${fmtDate(addDays(today(), d))}`) }}>
-                        {d === 1 ? 'Tomorrow' : d === 2 ? 'In 2 days' : 'Next week'}
+                    {[0, 1, 2, 7].map(d => (
+                      <DropdownMenuItem key={d} onClick={() => { snoozeTask(task.id, d); toast(d === 0 ? 'Due today — now on Today' : `Due ${fmtDate(addDays(today(), d))}`) }}>
+                        {d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : d === 2 ? 'In 2 days' : 'Next week'}
                       </DropdownMenuItem>
                     ))}
+                    <DropdownMenuItem onClick={() => { updateTask(task.id, { due: undefined }, 'due date cleared'); toast('Due date cleared') }}>
+                      <span className="text-muted-foreground">Clear due date</span>
+                    </DropdownMenuItem>
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               )}

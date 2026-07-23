@@ -134,6 +134,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
   const [projectFilter, setProjectFilter] = useState<string | null>(null)
   const [navW, setNavW] = useState(200)
   const [navOpen, setNavOpen] = useState(false)
+  const scaleRef = React.useRef<HTMLDivElement>(null)
   const compactNav = navW < 168
   const viewerFirstName = (impersonation ? impersonation.user.name : cloud ? (cloud.profile.name || cloud.profile.email) : 'Craig').split(' ')[0]
 
@@ -145,13 +146,18 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
     document.documentElement.dataset.theme = state.settings.theme
   }, [state.settings.theme])
 
-  // Settings → Appearance also picks a display size. Applied as a `zoom` on the root so the
-  // whole UI (fonts, icons, spacing) scales together for legibility, without having to convert
-  // the app's px-based sizing to rem. 'normal' clears the override entirely.
+  // Settings → Appearance also picks a display size. Applied as a `zoom` on the app wrapper
+  // (see scaleRef below) rather than the document root. The whole UI still scales together for
+  // legibility without converting the app's px-based sizing to rem — but because Radix menus,
+  // selects and popovers portal to <body> (a sibling of the wrapper, NOT a descendant), they
+  // sit OUTSIDE the zoomed context. That's the fix for the "3-dots menu flies off-screen" bug:
+  // when the zoom lived on the root, the portal was inside it and its position got scaled twice.
+  // Any stale root-level zoom from an earlier build is cleared here so it can't double up.
   React.useEffect(() => {
     const zoom: Record<string, string> = { normal: '', large: '1.1', larger: '1.2', largest: '1.32' }
-    ;(document.documentElement.style as CSSStyleDeclaration & { zoom: string }).zoom =
-      zoom[state.settings.displayScale ?? 'normal'] ?? ''
+    const z = zoom[state.settings.displayScale ?? 'normal'] ?? ''
+    ;(document.documentElement.style as CSSStyleDeclaration & { zoom: string }).zoom = ''
+    if (scaleRef.current) (scaleRef.current.style as CSSStyleDeclaration & { zoom: string }).zoom = z
   }, [state.settings.displayScale])
 
   function startNavResize(e: React.PointerEvent) {
@@ -204,7 +210,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
   const [title, subtitle] = TITLES[page]
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div ref={scaleRef} className="min-h-screen flex flex-col">
       {/* Impersonation banner — powerful but never invisible */}
       {impersonation && (
         <div className="sticky top-0 z-30 flex flex-wrap items-center gap-2 sm:gap-3 px-4 py-2 bg-[hsl(40_65%_42%)] text-[hsl(45_50%_97%)] text-[12.5px]">

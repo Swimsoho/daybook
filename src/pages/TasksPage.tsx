@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowUpDown, Check, Download, FileUp, Plus } from 'lucide-react'
+import { ArrowUpDown, CalendarClock, Check, Download, FileUp, Plus } from 'lucide-react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import {
-  Priority, PRIORITY_LABELS, STATUS_LABELS, Task, TaskStatus, TYPE_LABELS, daysSince, fmtDate, today,
+  Priority, PRIORITY_LABELS, STATUS_LABELS, Task, TaskStatus, TYPE_LABELS, addDays, daysSince, fmtDate, today,
 } from '@/lib/model'
 import { useStore } from '@/lib/store'
 import { ClearFiltersButton, DueChip, EmptyNote, PriorityChip } from '@/components/bits'
@@ -18,6 +18,14 @@ import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
 type View = 'today' | 'week' | 'area' | 'waiting' | 'someday' | 'done' | 'all' | 'list'
+
+// "End of this week" for the bulk due-date picker — the upcoming Friday (today if it's already
+// Friday). Any due date inside the next 7 days lands a task in the This Week view, so this is a
+// natural, meaningful target for "schedule these for this week".
+function endOfWeek(): string {
+  const dow = new Date(today() + 'T00:00:00').getDay() // 0 Sun … 6 Sat
+  return addDays(today(), (5 - dow + 7) % 7)
+}
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'today', label: 'Today' },
@@ -342,6 +350,28 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+              <span className="h-4 w-px bg-border" />
+              {/* Bulk due date — schedule the selected tasks onto Today / This Week in one move.
+                  A task is "on Today" when it's due today (or overdue); "on This Week" when due
+                  within the next 7 days. So these quick picks put tasks exactly where the user
+                  expects them, and the date box handles any specific day. */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className="h-7 px-2 text-[12px]"><CalendarClock className="h-3.5 w-3.5 mr-1" />Due date ▾</Button></DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={() => bulkApply({ due: today() }, 'bulk due → today')}>Today <span className="ml-auto text-[10.5px] text-muted-foreground">→ Today</span></DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => bulkApply({ due: addDays(today(), 1) }, 'bulk due → tomorrow')}>Tomorrow</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => bulkApply({ due: endOfWeek() }, 'bulk due → end of this week')}>End of this week <span className="ml-auto text-[10.5px] text-muted-foreground">→ This Week</span></DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => bulkApply({ due: addDays(today(), 7) }, 'bulk due → next week')}>Next week (+7 days)</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => bulkApply({ due: undefined }, 'bulk due cleared')}><span className="text-muted-foreground">Clear due date</span></DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <input
+                type="date"
+                title="Set a specific due date on all selected tasks"
+                onChange={e => { if (e.target.value) bulkApply({ due: e.target.value }, `bulk due → ${fmtDate(e.target.value)}`) }}
+                className="h-7 px-1.5 text-[11.5px] border border-border rounded-sm bg-card text-muted-foreground hover:text-foreground cursor-pointer outline-none"
+              />
             </>
           )}
         </div>
