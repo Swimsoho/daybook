@@ -210,7 +210,7 @@ function DropZone({ active, onDragOver, onDrop }: { active: boolean; onDragOver:
 // ================= TODAY =================
 
 function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => void; projectFilter?: string | null; viewerName?: string }) {
-  const { state, updateSettings } = useStore()
+  const { state, updateSettings, completeTask } = useStore()
   const [openTask, setOpenTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [logPerson, setLogPerson] = useState<Person | null>(null)
@@ -236,6 +236,15 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   )
   const calls = buildCallList(state).slice(0, state.settings.callGoal + 1)
   const made = callsMadeOn(state, today())
+  // Any task typed as a call belongs on today's call list — due today/overdue, or undated (an
+  // undated call shouldn't go quiet). Shown whether or not a contact is attached; being a call is
+  // enough. If a call task already names a contact, we drop that person's cadence suggestion so
+  // nobody is listed twice.
+  const callTasks = open
+    .filter(t => t.type === 'call' && (!t.due || daysSince(t.due) >= 0))
+    .sort((a, b) => a.priority.localeCompare(b.priority) || (a.due ?? '9999').localeCompare(b.due ?? '9999'))
+  const callTaskPersonIds = new Set(callTasks.map(t => t.personId).filter(Boolean) as string[])
+  const personCalls = calls.filter(c => !callTaskPersonIds.has(c.person.id))
   const pendingCaptures = state.captures.filter(c => c.status === 'pending')
   const capacity = state.settings.dailyCapacity
   const overCapacity = todays.length > capacity
@@ -391,7 +400,34 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
             <span className="text-[11px] tabular text-muted-foreground">{made}/{state.settings.callGoal} made</span>
           </div>
           <div className="px-2 pb-2">
-            {calls.map(c => (
+            {/* Call-type tasks first — the specific calls you set for today, contact or not. */}
+            {callTasks.map(t => {
+              const person = t.personId ? state.people.find(p => p.id === t.personId) : undefined
+              return (
+                <div key={t.id} className="group flex items-center gap-2.5 px-2 py-2 border-b border-border/60 last:border-0 hover:bg-accent/50">
+                  <button onClick={() => setOpenTask(t)} className="min-w-0 flex-1 text-left">
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-3 w-3 shrink-0 text-[hsl(215_45%_42%)]" />
+                      <span className="text-[13.5px] font-medium truncate">{t.title}</span>
+                      {person && <TierBadge tier={person.tier} />}
+                    </div>
+                    <div className="text-[11.5px] text-muted-foreground truncate">
+                      {person ? person.name : (t.callAbout || state.areas.find(a => a.id === t.areaId)?.name || 'No contact attached')}
+                    </div>
+                  </button>
+                  {person && (
+                    <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] shrink-0 opacity-40 group-hover:opacity-100" onClick={() => setLogPerson(person)}>
+                      <Phone className="h-3 w-3 mr-1" />Log
+                    </Button>
+                  )}
+                  <Button size="sm" className="h-7 px-2.5 text-[11px] shrink-0" onClick={() => { completeTask(t.id); toast.success('Call done — checked off') }}>
+                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Done
+                  </Button>
+                </div>
+              )
+            })}
+            {/* Then people worth calling from relationship cadence / flags. */}
+            {personCalls.map(c => (
               <div key={c.person.id} className="group flex items-center gap-2.5 px-2 py-2 border-b border-border/60 last:border-0 hover:bg-accent/50">
                 <button onClick={() => setViewPerson(c.person)} className="min-w-0 flex-1 text-left">
                   <div className="flex items-center gap-2">
@@ -406,7 +442,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
                 </Button>
               </div>
             ))}
-            {calls.length === 0 && <EmptyNote>No calls suggested — everyone’s within cadence.</EmptyNote>}
+            {callTasks.length === 0 && personCalls.length === 0 && <EmptyNote>No calls today — nothing typed as a call, and everyone’s within cadence.</EmptyNote>}
           </div>
         </section>
     ),

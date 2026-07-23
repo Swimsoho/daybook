@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v54 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v55 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -412,3 +412,7 @@ None of these are things the rest of the app depends on to function — they're 
     Widgets grow to fit. The dashboard cards (Today, call list, etc.) used to cap their height and scroll inside a little inner scrollbar, so a full day was clipped. In normal viewing each widget now **expands to show all its content** — no inner scrollbars, the page scrolls as one. (While you're in "Rearrange widgets", the fixed heights and drag-to-resize still work; a height you set is treated as a minimum, so content is never cut off.)
 
     A summary strip on top. Because the widgets can now run tall, the four numbers worth knowing are pinned at the very top of the Today page in a row of tiles — **Today** (count vs capacity), **Overdue**, **Calls** (made vs goal), and **Inbox** (to confirm) — each colour-coded with an icon, and each a shortcut to the relevant screen. So the day's headline figures are always visible without scrolling.
+
+43. **v55** — Anything typed as a call now shows on Today's call list.
+
+    The call list used to be purely a *people* queue — it only listed contacts to phone (from relationship cadence, flags, or a call/follow-up task that already had a contact attached). So a task like "Call Lawyer," even typed as a call, didn't appear there unless you'd linked a contact. Now **every task typed as a call** shows up on **Today's call list** — with or without a contact — as long as it's due today/overdue or has no date. Each call-task row has a **Done** button to check the call off, and a **Log** button too when a contact is attached (to record the call against that person). The relationship-cadence people still appear below, and if a call task already names a contact, that person's cadence suggestion is hidden so nobody is listed twice. Net effect: if you flag something as a call, it's on your call list. (Note: this keys off the task **Type = Call**, not the word "call" in the title — so set the type to Call, which the importer now does automatically when a row's Action is "Call".)
