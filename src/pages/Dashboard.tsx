@@ -244,8 +244,11 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
       if (isOverdue(t) && !todays.slice(0, 8).includes(t)) {
         return { task: t, note: { text: `overdue ${daysSince(t.due)}d`, tone: 'overdue' as const } }
       }
-      if (t.status === 'waiting' && daysSince(t.waitingSince) >= 5 && (!t.due || daysSince(t.due) >= 0)) {
-        return { task: t, note: { text: `waiting ${daysSince(t.waitingSince)}d`, tone: 'waiting' as const } }
+      // Fall back to the created date when no wait-start was ever recorded, so we never show the
+      // "no date" sentinel (9999) — an older imported waiting task still gets a sensible number.
+      const waitDays = daysSince(t.waitingSince ?? t.created)
+      if (t.status === 'waiting' && waitDays >= 5 && (!t.due || daysSince(t.due) >= 0)) {
+        return { task: t, note: { text: `waiting ${waitDays}d`, tone: 'waiting' as const } }
       }
       return null
     })

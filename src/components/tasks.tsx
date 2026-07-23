@@ -230,7 +230,7 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
             {project && <span className="text-[11px] text-muted-foreground truncate">› {project.name}</span>}
             {person && <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5"><User className="h-2.5 w-2.5" />{person.name}</span>}
             {task.status === 'waiting' && task.waitingOn && (
-              <span className="text-[11px] text-[hsl(28_60%_32%)]">waiting on {task.waitingOn} · {daysSince(task.waitingSince)}d</span>
+              <span className="text-[11px] text-[hsl(28_60%_32%)]">waiting on {task.waitingOn} · {daysSince(task.waitingSince ?? task.created)}d</span>
             )}
           </div>
         </button>

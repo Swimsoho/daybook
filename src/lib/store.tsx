@@ -336,6 +336,9 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
           actionIds: t.actionIds,
           priority: t.priority ?? 'P2', status: t.status ?? 'next', due: t.due, followUp: t.followUp,
           source: t.source ?? 'manual', notes: t.notes, callAbout: t.callAbout, waitingOn: t.waitingOn,
+          // If a task is created already in "waiting" status (e.g. from an import) stamp when the
+          // wait started, so "days waiting" is a real number instead of an unknown-date sentinel.
+          waitingSince: t.waitingSince ?? (t.status === 'waiting' ? today() : undefined),
           created: today(),
         }
         withAudit(s => ({ ...s, tasks: [...s.tasks, task] }), auditEvent('created', 'task', task.id, task.title))

@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v59 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v60 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -434,3 +434,7 @@ None of these are things the rest of the app depends on to function — they're 
 47. **v59** — "Attention needed" now explains itself, and stops flagging things that aren't slipping.
 
     Two problems with the Attention needed list: it wasn't clear *why* something was on it, and it was surfacing items that don't really need attention (e.g. a low‑priority task due next week that you happen to be waiting on). Both fixed. Every row now carries a plain‑language reason chip — a red **OVERDUE 3d** or an amber **WAITING 7d** — and there's a one‑line note under the heading ("Overdue, or waiting on someone too long — each row shows why"). And the rule is tighter: a task appears only if it's **overdue** (past its due date), or you've been **waiting on someone 5+ days** *and* it isn't parked on a comfortable future date. So a "waiting" item that's due next week stays quiet until it's actually close — it no longer sits in Attention needed looking urgent when it isn't. (Calls are excluded here too, as of v56.)
+
+48. **v60** — Fixed "WAITING 9999D".
+
+    A task put into "Waiting on" status without a recorded start date (which happened to imported waiting tasks) was showing a nonsense **9999** for days‑waiting — that's the app's internal "no date" placeholder leaking onto the screen. Two fixes: (1) any task created already in waiting status now stamps the wait‑start date automatically, and (2) everywhere that shows "days waiting" (Attention needed, the task row, the Reports exceptions) now falls back to the task's created date when no wait‑start was recorded, so you always see a real number instead of 9999. Existing waiting tasks are covered by the fallback, no re‑entry needed.

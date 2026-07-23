@@ -37,7 +37,7 @@ export default function ReportsPage() {
   const overdueTasks = open.filter(isOverdue)
   const noDue = open.filter(t => !t.due && t.priority !== 'P3')
   const stuck = open.filter(t => t.status === 'in-progress' && daysSince(t.created) > 7)
-  const waitingQuiet = open.filter(t => t.status === 'waiting' && daysSince(t.waitingSince) >= 5)
+  const waitingQuiet = open.filter(t => t.status === 'waiting' && daysSince(t.waitingSince ?? t.created) >= 5)
   const overdueContacts = state.people.filter(p => personOverdueBy(p, state.settings) > 0)
   const stalled = stalledProjects(state)
   const subsTracker = state.trackers.find(t => t.id === 'trk_subs')
@@ -63,7 +63,7 @@ export default function ReportsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <ExceptionCard title={`Tasks overdue (${overdueTasks.length})`} tone="bad" rows={overdueTasks.map(t => [t.title, `${daysSince(t.due!)}d late`])} empty="Nothing overdue." />
           <ExceptionCard title={`Contacts past cadence (${overdueContacts.length})`} tone="bad" rows={overdueContacts.map(p => [p.name, `${personOverdueBy(p, state.settings)}d past target`])} empty="Everyone within cadence." />
-          <ExceptionCard title={`Waiting-on gone quiet (${waitingQuiet.length})`} rows={waitingQuiet.map(t => [t.title, `${t.waitingOn} · ${daysSince(t.waitingSince)}d silent`])} empty="No chases needed." />
+          <ExceptionCard title={`Waiting-on gone quiet (${waitingQuiet.length})`} rows={waitingQuiet.map(t => [t.title, `${t.waitingOn ?? 'someone'} · ${daysSince(t.waitingSince ?? t.created)}d silent`])} empty="No chases needed." />
           <ExceptionCard title={`Stalled projects (${stalled.length})`} rows={stalled.map(p => [p.name, `no activity ${daysSince(p.lastActivity)}d`])} empty="All projects moving." />
           <ExceptionCard title={`Tasks with no due date (${noDue.length})`} rows={noDue.map(t => [t.title, t.priority])} empty="Everything is dated." />
           <ExceptionCard title={`Stuck in progress > 7d (${stuck.length})`} rows={stuck.map(t => [t.title, `${daysSince(t.created)}d old`])} empty="Nothing languishing." />
