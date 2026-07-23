@@ -112,6 +112,8 @@ export function seedState(): AppState {
       { id: 'col_dates', name: 'Dates', description: 'Dates worth remembering — birthdays, anniversaries, renewals and any other date you don’t want to miss', color: 'hsl(340 45% 45%)', active: true },
       { id: 'col_notes', name: 'Notes', description: 'A catch-all for anything jotted down that isn’t a task, call, or specific list', color: 'hsl(35 45% 42%)', active: true },
       { id: 'col_ideas', name: 'Ideas', description: 'Things to explore — not a task yet, don’t want to lose it', color: 'hsl(40 65% 42%)', active: true },
+      { id: 'col_health', name: 'Health', description: 'Exercise and other things you do for your body', color: 'hsl(150 40% 36%)', active: true },
+      { id: 'col_learning', name: 'Learning', description: 'Courses, study, skills and anything you’re working to learn', color: 'hsl(210 45% 45%)', active: true },
     ],
     trackers: [
       {
@@ -137,6 +139,27 @@ export function seedState(): AppState {
           { key: 'date', name: 'Date', type: 'date', required: true },
           { key: 'recurring', name: 'Repeats every year', type: 'checkbox' },
           { key: 'type', name: 'Type', type: 'select', options: ['Birthday', 'Anniversary', 'Other'] },
+          { key: 'notes', name: 'Notes', type: 'longtext' },
+        ],
+      },
+      {
+        id: 'trk_exercise', collectionId: 'col_health', name: 'Exercise', description: 'A log of workouts — runs, weights, classes, whatever you do', defaultView: 'table', active: true,
+        columns: [
+          { key: 'activity', name: 'Activity', type: 'text', isTitle: true, required: true },
+          { key: 'date', name: 'Date', type: 'date' },
+          { key: 'type', name: 'Type', type: 'select', options: ['Run', 'Walk', 'Weights', 'Yoga', 'Cycle', 'Swim', 'Class', 'Other'] },
+          { key: 'duration', name: 'Duration (mins)', type: 'number' },
+          { key: 'distance', name: 'Distance (km)', type: 'number' },
+          { key: 'notes', name: 'Notes', type: 'longtext' },
+        ],
+      },
+      {
+        id: 'trk_learning', collectionId: 'col_learning', name: 'Learning', description: 'Courses, books-to-study, skills — what you’re learning and how far along', defaultView: 'board', active: true,
+        columns: [
+          { key: 'title', name: 'Title', type: 'text', isTitle: true, required: true },
+          { key: 'status', name: 'Status', type: 'status', options: ['To start', 'In progress', 'Done'] },
+          { key: 'source', name: 'Source', type: 'text' },
+          { key: 'rating', name: 'Rating', type: 'rating', showWhen: { columnKey: 'status', equals: 'Done' } },
           { key: 'notes', name: 'Notes', type: 'longtext' },
         ],
       },
@@ -187,6 +210,10 @@ export function seedState(): AppState {
       { id: 'e12', trackerId: 'trk_dates', created: daysAgo(200), values: { name: 'Wedding anniversary', date: '2015-07-29', recurring: true, type: 'Anniversary' } },
       { id: 'e13', trackerId: 'trk_dates', created: daysAgo(200), values: { name: 'Rabbi Stern’s birthday', date: '1970-09-15', recurring: true, type: 'Birthday' } },
       { id: 'e14', trackerId: 'trk_dates', created: daysAgo(5), values: { name: 'Passport renewal due', date: addDays(T, 25), recurring: false, type: 'Other', notes: 'Apply at least 6 weeks ahead' } },
+      { id: 'e_ex1', trackerId: 'trk_exercise', created: daysAgo(2), values: { activity: 'Morning run', date: daysAgo(2), type: 'Run', duration: 35, distance: 6 } },
+      { id: 'e_ex2', trackerId: 'trk_exercise', created: daysAgo(1), values: { activity: 'Weights — upper body', date: daysAgo(1), type: 'Weights', duration: 45 } },
+      { id: 'e_ln1', trackerId: 'trk_learning', created: daysAgo(20), values: { title: 'Daf Yomi', status: 'In progress', source: 'Daily Talmud page' } },
+      { id: 'e_ln2', trackerId: 'trk_learning', created: daysAgo(3), values: { title: 'TypeScript deep-dive course', status: 'To start', source: 'Online course' } },
     ],
     captures: [
       { id: 'cap1', text: 'buy tickets for the shul dinner', source: 'whatsapp', created: daysAgo(0), status: 'pending', proposal: { kind: 'task', taskType: 'todo', areaId: 'a_shul', projectId: 'pr_dinner', priority: 'P1', title: 'Buy tickets for the shul dinner', due: addDays(T, 3), explanation: '“shul dinner” matched Shul › Annual Dinner' } },

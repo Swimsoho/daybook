@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v46 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v47 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -364,3 +364,7 @@ None of these are things the rest of the app depends on to function — they're 
 34. **v46** — Reorder and sort Focus areas, Categories and Actions in Settings.
 
     Each row in the Focus areas, Categories and Actions lists now has small **up/down arrows** to nudge it into the order you want (categories move among their own siblings, so a sub-category stays under its parent), and each list has a one-click **Sort A–Z** button. Previously a new item just appended to the bottom in creation order with no way to reorder. The chosen order is saved to your account and is what the Settings lists show.
+
+35. **v47** — Two new standard trackers for everyone: Exercise and Learning.
+
+    Added an **Exercise** tracker (under a new Health collection) — a workout log with Activity, Date, Type (Run / Walk / Weights / Yoga / Cycle / Swim / Class / Other), Duration, Distance and Notes — and a **Learning** tracker (under a new Learning collection) — Title, Status (To start / In progress / Done), Source, Rating and Notes, as a board. Both are seeded for new accounts and **backfilled into every existing account automatically** (the same seed + backfill mechanism used for Notes, Ideas and Dates), so all users get them with nothing to set up. Columns are editable per account in Settings like any other tracker. This is the pattern for rolling out a new standard tracker to the whole user base, versus a tracker one person adds in their own Settings, which stays private to that account.
