@@ -88,7 +88,9 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       case 'today':
         // to-call tasks surface today by default (a call with no due date shouldn't go quiet),
         // but a call you've deliberately scheduled for later still respects that due date
-        return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && (t.priority === 'P0' || t.priority === 'P1' || (t.type === 'call' && !t.due) || (t.due && daysSince(t.due) >= 0)))
+        // On Today: due-today/overdue anything, plus UNDATED high-priority (Urgent/High) or undated
+        // calls. A future due date wins — a High task set for tomorrow waits until tomorrow.
+        return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && ((t.due && daysSince(t.due) >= 0) || (!t.due && (t.priority === 'P0' || t.priority === 'P1' || t.type === 'call'))))
       case 'week':
         return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && (['P0', 'P1'].includes(t.priority) || (t.due && daysSince(t.due) >= -7)))
       case 'waiting':

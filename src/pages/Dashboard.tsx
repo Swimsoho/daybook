@@ -124,13 +124,14 @@ function useDebouncedCallback<A extends unknown[]>(fn: (...args: A) => void, del
 }
 
 function WidgetShell({
-  title, wide, customize, dragging, height, onDragStart, onDragOver, onDrop, onToggleWide, onResize, children,
+  title, wide, customize, dragging, height, autoGrow, onDragStart, onDragOver, onDrop, onToggleWide, onResize, children,
 }: {
   title: string
   wide: boolean
   customize: boolean
   dragging: boolean
   height?: number
+  autoGrow?: boolean
   onDragStart: () => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
@@ -179,8 +180,16 @@ function WidgetShell({
       )}
       <div
         ref={resizeRef}
-        style={{ height: height ? `${height}px` : undefined, minHeight: customize ? 96 : undefined }}
-        className={cn('overflow-auto', customize && 'resize-y')}
+        // In normal viewing an auto-grow widget expands to fit ALL its content — no inner scrollbar,
+        // the page scrolls instead. A previously-set height is honoured only as a minimum, so
+        // resizing still makes a widget taller but content is never clipped. While arranging
+        // (customize), we keep the fixed height + resize handle so the drag-to-resize UX works.
+        style={
+          autoGrow && !customize
+            ? { minHeight: height ? `${height}px` : undefined }
+            : { height: height ? `${height}px` : undefined, minHeight: customize ? 96 : undefined }
+        }
+        className={cn(autoGrow && !customize ? 'overflow-visible' : 'overflow-auto', customize && 'resize-y')}
         title={customize ? 'Drag the bottom-right corner to resize' : undefined}
       >
         {children}
@@ -211,11 +220,16 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   const [dragId, setDragId] = useState<WidgetId | null>(null)
 
   const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
-  // to-call tasks surface today by default (a call with no due date shouldn't go quiet),
-  // but a call you've deliberately scheduled for later still respects that due date
+  // What lands on Today:
+  //   • anything due today or already overdue, OR
+  //   • an UNDATED high-priority task (Urgent/High) or an undated call — the "do it soon" work
+  //     that has no date of its own.
+  // The key rule: an explicit FUTURE due date wins. A High task you scheduled for tomorrow waits
+  // until tomorrow instead of showing today just because it's High.
   const todays = open
-    .filter(t => t.priority === 'P0' || t.priority === 'P1' || (t.type === 'call' && !t.due) || (t.due && daysSince(t.due) >= 0))
+    .filter(t => (t.due && daysSince(t.due) >= 0) || (!t.due && (t.priority === 'P0' || t.priority === 'P1' || t.type === 'call')))
     .sort((a, b) => a.priority.localeCompare(b.priority) || (a.due ?? '9999').localeCompare(b.due ?? '9999'))
+  const overdue = open.filter(isOverdue)
   const attention = open.filter(t =>
     (isOverdue(t) && !todays.slice(0, 8).includes(t)) ||
     (t.status === 'waiting' && daysSince(t.waitingSince) >= 5),
@@ -283,6 +297,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
       customize={customize}
       dragging={dragId === id}
       height={state.settings.widgetHeights?.[id]}
+      autoGrow
       onDragStart={() => setDragId(id)}
       onDragOver={e => { if (customize && dragId && dragId !== id) e.preventDefault() }}
       onDrop={e => { e.preventDefault(); if (dragId && dragId !== id) moveWidget(dragId, zone, id); setDragId(null) }}
@@ -470,6 +485,32 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
         <p className="text-[11px] text-muted-foreground -mt-1">
           Drag a widget by its grip handle to reorder, use “Full width” to stretch it across both columns, or drag its bottom-right corner to resize it taller or shorter.
         </p>
+      )}
+
+      {/* At-a-glance summary strip — the four numbers worth knowing before you scroll. Pinned to
+          the top so that, with widgets now growing to full height below, the day's key figures are
+          always visible without hunting. Each tile jumps to the relevant screen. */}
+      {!customize && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <KpiTile
+            label="Today" value={todays.length} sub={`of ${capacity} capacity`}
+            icon={<ListChecks className="h-4 w-4" />} accent="hsl(215 55% 50%)"
+            tone={overCapacity ? 'bad' : undefined} onClick={() => goTo('tasks')}
+          />
+          <KpiTile
+            label="Overdue" value={overdue.length} sub={overdue.length ? 'needs attention' : 'all clear'}
+            icon={<AlertTriangle className="h-4 w-4" />} accent="hsl(8 62% 48%)"
+            tone={overdue.length ? 'bad' : 'good'} onClick={() => goTo('tasks')}
+          />
+          <KpiTile
+            label="Calls" value={`${made}/${state.settings.callGoal}`} sub="made today"
+            icon={<Phone className="h-4 w-4" />} accent="hsl(28 70% 48%)" onClick={() => goTo('people')}
+          />
+          <KpiTile
+            label="Inbox" value={pendingCaptures.length} sub="to confirm"
+            icon={<Inbox className="h-4 w-4" />} accent="hsl(175 45% 40%)" onClick={() => goTo('inbox')}
+          />
+        </div>
       )}
 
       {(layout.wide.some(id => available[id]) || customize) && (

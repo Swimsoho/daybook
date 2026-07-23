@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v53 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v54 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -402,3 +402,13 @@ None of these are things the rest of the app depends on to function — they're 
     Import now creates contacts. The **Person** column on the import template is meant to link a task to a contact. Previously, if the name wasn't already in your People list it was dropped (flagged "not found") — so those names went nowhere. Now, any Person name that isn't a contact yet is **created as a new contact and linked to the task** on import. The preview flags each one ("… will be added to Contacts") so you can see it before committing, and the success message tells you how many contacts were added. Once linked, the contact shows on the task — a small person icon and name on the task row, and a contact block (name, phone, what the call's about) when you open it.
 
     Import routes calls into the Calls list. The **Calls** queue is driven by a task's **Type** (call / follow-up), not by its Action label. So the importer now (a) promotes a to-do whose **Action is "Call"** to a proper **call** type, and (b) gives a call that has a contact but no due date **today's date**, since the Calls queue only surfaces a call once it has both a contact and a due date. The net effect: import a row that's a call to someone, and it shows up in your Calls list straight away instead of sitting silent. Both behaviours are flagged in the preview, and non-call tasks are never auto-dated.
+
+42. **v54** — Today no longer jumps the gun on future dates, the dashboard widgets grow to fit, and a summary strip up top.
+
+    Three fixes to the Today page, from the same screenshot:
+
+    Future dates are respected. Adding High to Today (v52) had a side effect: a High task with a due date of *tomorrow* was showing on Today anyway, purely because it was High. Now an explicit **future due date wins** — a High task scheduled for tomorrow waits until tomorrow. Today shows: anything **due today or overdue**, plus **undated** Urgent/High tasks and undated calls (the "do soon" work with no date of its own). Undated High tasks — like your imported ones — still appear; only future-*dated* ones now hold until their day.
+
+    Widgets grow to fit. The dashboard cards (Today, call list, etc.) used to cap their height and scroll inside a little inner scrollbar, so a full day was clipped. In normal viewing each widget now **expands to show all its content** — no inner scrollbars, the page scrolls as one. (While you're in "Rearrange widgets", the fixed heights and drag-to-resize still work; a height you set is treated as a minimum, so content is never cut off.)
+
+    A summary strip on top. Because the widgets can now run tall, the four numbers worth knowing are pinned at the very top of the Today page in a row of tiles — **Today** (count vs capacity), **Overdue**, **Calls** (made vs goal), and **Inbox** (to confirm) — each colour-coded with an icon, and each a shortcut to the relevant screen. So the day's headline figures are always visible without scrolling.
