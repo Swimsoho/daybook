@@ -826,6 +826,24 @@ export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClo
                 </button>
               ))}
             </div>
+            {/* Type switcher — call vs to-do vs follow-up, changeable in one tap. This is what
+                decides whether a task lands on the call list, so it lives here in plain sight
+                rather than only in the deeper Edit form. */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-0.5">Type</span>
+              {(Object.keys(TYPE_LABELS) as TaskType[]).map(tt => (
+                <button
+                  key={tt}
+                  onClick={() => updateTask(task.id, { type: tt }, `type → ${TYPE_LABELS[tt]}`)}
+                  className={cn(
+                    'px-2 py-0.5 text-[11px] border rounded-sm transition-colors',
+                    task.type === tt ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-card hover:bg-accent',
+                  )}
+                >
+                  {TYPE_LABELS[tt]}
+                </button>
+              ))}
+            </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-0.5">Move to</span>
               {(() => {

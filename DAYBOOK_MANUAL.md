@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v56 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v57 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -422,3 +422,7 @@ None of these are things the rest of the app depends on to function — they're 
     What counts as a call. A task is treated as a call — and so appears on Today's call list — if its **Type is Call OR it carries the "Call" action**. That means "Call Lawyer" (which you tagged with the Call *action* but left as a to-do type) now lands in the call list, exactly as expected, without you having to change its type. Anything typed as Call still counts too; so if something you didn't mean as a call is showing there (e.g. an item whose Type was set to Call), change its Type to To-do and it drops off.
 
     Calls come out of the task list. Previously a call showed in *both* the Today task list and the call list, and it counted toward the daily capacity (the "X of 6") — so a call inflated your task number and appeared twice. Now, on the **Today dashboard**, calls are pulled **out** of the Today task list and the Overdue/Attention counts entirely; they live only in the call list. The capacity number reflects your **non-call tasks**, and calls are tracked on their own (calls made vs goal). No more double-listing, no more calls padding the capacity. (This applies to the Today dashboard; the full Tasks page still lists everything, calls included, since it's your complete task view.)
+
+45. **v57** — Change a task's Type right from its detail panel.
+
+    A task's **Type** (To‑do / To‑call / Follow‑up) decides whether it lands on the call list — but until now the only place to change it was the deeper Edit form, which was easy to miss. The task detail panel (the one that opens when you click a task) now has a **Type** row of one‑tap buttons, sitting alongside the Priority, Status and Move‑to controls. So if something is showing as a call that shouldn't be — e.g. a to‑do whose Type got set to Call — open it and tap **To‑do**, and it leaves the call list on the spot. (The same three buttons are still in the full Edit form too.)
