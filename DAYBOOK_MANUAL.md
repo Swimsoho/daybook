@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v47 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v48 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -368,3 +368,9 @@ None of these are things the rest of the app depends on to function — they're 
 35. **v47** — Two new standard trackers for everyone: Exercise and Learning.
 
     Added an **Exercise** tracker (under a new Health collection) — a workout log with Activity, Date, Type (Run / Walk / Weights / Yoga / Cycle / Swim / Class / Other), Duration, Distance and Notes — and a **Learning** tracker (under a new Learning collection) — Title, Status (To start / In progress / Done), Source, Rating and Notes, as a board. Both are seeded for new accounts and **backfilled into every existing account automatically** (the same seed + backfill mechanism used for Notes, Ideas and Dates), so all users get them with nothing to set up. Columns are editable per account in Settings like any other tracker. This is the pattern for rolling out a new standard tracker to the whole user base, versus a tracker one person adds in their own Settings, which stays private to that account.
+
+36. **v48** — Clearer collection grouping on the Collections page, plus richer Notes and Ideas options.
+
+    First, a **redesign of the Collections picker** so you can see the grouping at a glance. Each collection is now its own bordered card with a bold, colour-filled label (Entertainment, Financial, Health, Learning — each in its own colour) sitting beside its trackers, instead of a flat row where the group names blended into the tracker pills. The view switch (Table / Board / Gallery) moved to its own clean segmented control on the line below. Same clear "labelled group" visual language can be carried to other pages on request.
+
+    Second, **Notes and Ideas gained proper categorisation, for every user.** The Notes "Type" now offers Personal, Work, Idea, List, Reminder, Quote, Other (was just Idea / Reminder / Quote / Other), and Ideas gained a **Category** field — Business, Community, Personal, Family, Product, Other — alongside its status. Both changes reach every account, not just new ones: a non-destructive migration adds the new options and the Category column on load without disturbing anything you've customised (it only ever adds, never removes).

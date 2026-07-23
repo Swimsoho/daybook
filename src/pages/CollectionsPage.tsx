@@ -114,34 +114,60 @@ export default function CollectionsPage() {
         </div>
       )}
 
-      {/* Collection / tracker picker */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {groupCollections.map(col => (
-          <React.Fragment key={col.id}>
-            {groupCollections.length > 1 && (
-              <span className="text-[11px] uppercase tracking-wide text-muted-foreground ml-2 first:ml-0 inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: col.color }} />{col.name}
-              </span>
-            )}
-            {groupTrackers.filter(t => t.collectionId === col.id).map(t => (
-              <button
-                key={t.id}
-                onClick={() => { setTrackerId(t.id); setView(null) }}
-                className={cn(
-                  'px-2.5 py-1 text-[12.5px] border rounded-sm',
-                  tracker.id === t.id ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-card hover:bg-accent',
-                )}
+      {/* Collection / tracker picker — each collection is its own clearly-labelled group so you
+          can tell at a glance where one ends and the next begins. The label carries the
+          collection's own colour as a solid chip; its trackers sit in a card beside it. */}
+      <div className="flex flex-wrap items-stretch gap-2.5">
+        {groupCollections.map(col => {
+          const trks = groupTrackers.filter(t => t.collectionId === col.id)
+          if (!trks.length) return null
+          return (
+            <div key={col.id} className="inline-flex items-stretch rounded-md border border-border bg-card shadow-sm overflow-hidden">
+              <span
+                className="flex items-center px-3 text-[11px] font-bold uppercase tracking-[0.07em] text-white shrink-0"
+                style={{ background: col.color }}
               >
-                {t.name}
-              </button>
-            ))}
-          </React.Fragment>
-        ))}
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                {col.name}
+              </span>
+              <div className="flex items-center gap-1 px-1.5 py-1">
+                {trks.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => { setTrackerId(t.id); setView(null) }}
+                    className={cn(
+                      'px-3 py-1 text-[13px] rounded-sm border transition-colors',
+                      tracker.id === t.id
+                        ? 'bg-primary text-primary-foreground border-primary font-semibold shadow-sm'
+                        : 'border-transparent text-foreground/80 hover:bg-accent hover:text-foreground',
+                    )}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* View switch + row of actions, on their own line so the group picker stays uncluttered */}
+      <div className="flex flex-wrap items-center gap-2 -mt-1">
+        <div className="flex border border-border rounded-md overflow-hidden shadow-sm">
           {(['table', 'board', 'gallery'] as const).map(v => (
-            <button key={v} onClick={() => setView(v)} className={cn('px-2 py-1 text-[11.5px] border rounded-sm capitalize', activeView === v ? 'bg-secondary border-input' : 'border-transparent hover:border-border')}>{v}</button>
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={cn(
+                'px-3.5 py-1 text-[12px] capitalize border-l first:border-l-0 border-border transition-colors',
+                activeView === v ? 'bg-primary text-primary-foreground font-medium' : 'bg-card hover:bg-accent',
+              )}
+            >
+              {v}
+            </button>
           ))}
-          <Button size="sm" variant="outline" className="h-7 ml-1" onClick={() => downloadTrackerTemplate(tracker)}><Download className="h-3.5 w-3.5 mr-1" />Excel template</Button>
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          <Button size="sm" variant="outline" className="h-7" onClick={() => downloadTrackerTemplate(tracker)}><Download className="h-3.5 w-3.5 mr-1" />Excel template</Button>
           {tracker.columns.some(c => c.type === 'date') && (
             <Button size="sm" variant="outline" className="h-7" onClick={() => downloadTrackerIcs(tracker, entries)}>
               <CalendarPlus className="h-3.5 w-3.5 mr-1" />Add to Calendar

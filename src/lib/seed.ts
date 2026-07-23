@@ -120,13 +120,14 @@ export function seedState(): AppState {
         id: 'trk_notes', collectionId: 'col_notes', name: 'Notes', description: 'Quick jottings — one-liners, things worth remembering that aren’t a task', defaultView: 'table', active: true,
         columns: [
           { key: 'text', name: 'Note', type: 'longtext', isTitle: true, required: true },
-          { key: 'tag', name: 'Tag', type: 'select', options: ['Idea', 'Reminder', 'Quote', 'Other'] },
+          { key: 'tag', name: 'Type', type: 'select', options: ['Personal', 'Work', 'Idea', 'List', 'Reminder', 'Quote', 'Other'] },
         ],
       },
       {
         id: 'trk_ideas', collectionId: 'col_ideas', name: 'Ideas', description: 'A holding pen for things worth exploring later — separate from your to-do list', defaultView: 'board', active: true,
         columns: [
           { key: 'idea', name: 'Idea', type: 'longtext', isTitle: true, required: true },
+          { key: 'category', name: 'Category', type: 'select', options: ['Business', 'Community', 'Personal', 'Family', 'Product', 'Other'] },
           { key: 'status', name: 'Status', type: 'status', options: ['New', 'Exploring', 'Parked', 'Acted on'] },
           { key: 'notes', name: 'Notes', type: 'longtext' },
         ],

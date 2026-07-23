@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Toaster, toast } from 'sonner'
 import { supabase } from './supabase'
-import { AdminUser, AppState, Role } from './model'
+import { AdminUser, AppState, Role, Tracker, TrackerColumn } from './model'
 import { emptyState, seedState } from './seed'
 
 // ---------- Types ----------
@@ -83,6 +83,37 @@ function backfillByName<T extends { name: string }>(existing: T[] | undefined, s
   return missing.length ? [...list, ...missing] : list
 }
 
+// Non-destructively bring the standard Notes/Ideas trackers up to date with options and columns
+// that shipped after an account's tracker was first created (backfillByName only adds a whole
+// missing tracker, never touches an existing one's columns). Only ADDS — never removes an option
+// or column the person may have customised. Runs on every load; a no-op once everything's present.
+function augmentStandardTrackers(trackers: Tracker[]): Tracker[] {
+  const mergeOptions = (col: TrackerColumn, want: string[]): TrackerColumn => {
+    const have = col.options ?? []
+    const add = want.filter(o => !have.includes(o))
+    return add.length ? { ...col, options: [...have, ...add] } : col
+  }
+  return trackers.map(t => {
+    const name = t.name.trim().toLowerCase()
+    if (name === 'notes') {
+      return { ...t, columns: t.columns.map(c => (c.key === 'tag' && (c.type === 'select' || c.type === 'multiselect'))
+        ? mergeOptions(c, ['Personal', 'Work', 'Idea', 'List', 'Reminder', 'Quote', 'Other']) : c) }
+    }
+    if (name === 'ideas') {
+      // add the Category column (once) after Status, and keep Status' own options current
+      let columns = t.columns.map(c => (c.key === 'status' && c.type === 'status')
+        ? mergeOptions(c, ['New', 'Exploring', 'Parked', 'Acted on']) : c)
+      if (!columns.some(c => c.key === 'category')) {
+        const catCol: TrackerColumn = { key: 'category', name: 'Category', type: 'select', options: ['Business', 'Community', 'Personal', 'Family', 'Product', 'Other'] }
+        const si = columns.findIndex(c => c.key === 'status')
+        columns = si >= 0 ? [...columns.slice(0, si + 1), catCol, ...columns.slice(si + 1)] : [...columns, catCol]
+      }
+      return { ...t, columns }
+    }
+    return t
+  })
+}
+
 async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<AppState> {
   const { data } = await supabase!.from('workspace_state').select('data').eq('workspace_id', ws.id).maybeSingle()
   if (data?.data && Object.keys(data.data).length > 0) {
@@ -110,7 +141,7 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
       // find by name) even though the code fully supports them. Backfill each by name only if
       // it's actually missing — never touches anything the person's already renamed/added.
       collections: backfillByName(loaded.collections, seedState().collections, ['notes', 'ideas', 'dates', 'health', 'learning']),
-      trackers: backfillByName(loaded.trackers, seedState().trackers, ['notes', 'ideas', 'dates to remember', 'exercise', 'learning']),
+      trackers: augmentStandardTrackers(backfillByName(loaded.trackers, seedState().trackers, ['notes', 'ideas', 'dates to remember', 'exercise', 'learning'])),
     }
   }
   const fresh = ws.kind === 'sample' ? seedState() : emptyState(ownerName || 'there')
