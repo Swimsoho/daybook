@@ -115,6 +115,14 @@ export interface Store {
   updateFeatures: (patch: Partial<Settings['features']>) => void
   updateArea: (id: string, patch: Partial<AppState['areas'][0]>) => void
   addArea: (name: string) => void
+  // Manual ordering for the Settings lists: nudge one item up/down (categories move only among
+  // their own siblings), or sort a whole list A–Z at once.
+  reorderArea: (id: string, dir: 'up' | 'down') => void
+  reorderCategory: (id: string, dir: 'up' | 'down') => void
+  reorderAction: (id: string, dir: 'up' | 'down') => void
+  sortAreasByName: () => void
+  sortCategoriesByName: () => void
+  sortActionsByName: () => void
   addProject: (p: Partial<AppState['projects'][0]> & { name: string; areaId: string }) => void
   updateProject: (id: string, patch: Partial<AppState['projects'][0]>) => void
   addAttachment: (taskId: string, attachment: TaskAttachment) => void
@@ -133,6 +141,16 @@ const Ctx = createContext<Store | null>(null)
 
 function baseAuditEvent(action: string, entity: string, entityId: string, detail: string, user = 'Craig'): AuditEvent {
   return { id: uid('au'), ts: new Date().toISOString().slice(0, 16).replace('T', 'T'), user, action, entity, entityId, detail }
+}
+
+// Move the item at `idx` one place up/down within its array; returns the array unchanged if the
+// move would fall off either end. Used by the Settings reorder arrows.
+function swapAdjacent<T>(arr: T[], idx: number, dir: 'up' | 'down'): T[] {
+  if (idx < 0) return arr
+  const j = idx + (dir === 'up' ? -1 : 1)
+  if (j < 0 || j >= arr.length) return arr
+  const next = [...arr]; const tmp = next[idx]; next[idx] = next[j]; next[j] = tmp
+  return next
 }
 
 // ---------- The simulated AI router ----------
@@ -547,6 +565,47 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
       addArea(name) {
         const a = { id: uid('a'), name, description: '', color: 'hsl(200 30% 40%)', sort: state.areas.length, active: true, inBrief: true, reviewDay: 'Sunday' }
         withAudit(s => ({ ...s, areas: [...s.areas, a] }), auditEvent('created', 'area', a.id, name))
+      },
+      // ---- Manual ordering for Settings lists (display follows array order) ----
+      reorderArea(id, dir) {
+        withAudit(s => ({ ...s, areas: swapAdjacent(s.areas, s.areas.findIndex(a => a.id === id), dir) }), auditEvent('reordered', 'area', id, `moved ${dir}`))
+      },
+      reorderAction(id, dir) {
+        withAudit(s => ({ ...s, actions: swapAdjacent(s.actions, s.actions.findIndex(a => a.id === id), dir) }), auditEvent('reordered', 'action', id, `moved ${dir}`))
+      },
+      reorderCategory(id, dir) {
+        withAudit(s => {
+          const cat = s.categories.find(c => c.id === id)
+          if (!cat) return s
+          // move only among siblings (same parent) so the grouped display stays coherent
+          const siblings = s.categories.filter(c => (c.parentId ?? null) === (cat.parentId ?? null))
+          const si = siblings.findIndex(c => c.id === id)
+          const target = siblings[si + (dir === 'up' ? -1 : 1)]
+          if (!target) return s
+          const i = s.categories.findIndex(c => c.id === id)
+          const j = s.categories.findIndex(c => c.id === target.id)
+          const next = [...s.categories]; const tmp = next[i]; next[i] = next[j]; next[j] = tmp
+          return { ...s, categories: next }
+        }, auditEvent('reordered', 'category', id, `moved ${dir}`))
+      },
+      sortAreasByName() {
+        withAudit(s => ({ ...s, areas: [...s.areas].sort((a, b) => a.name.localeCompare(b.name)) }), auditEvent('reordered', 'area', 'all', 'sorted A–Z'))
+      },
+      sortActionsByName() {
+        withAudit(s => ({ ...s, actions: [...s.actions].sort((a, b) => a.name.localeCompare(b.name)) }), auditEvent('reordered', 'action', 'all', 'sorted A–Z'))
+      },
+      sortCategoriesByName() {
+        withAudit(s => {
+          // depth-first: top-level A–Z, each parent immediately followed by its children A–Z
+          const ordered: typeof s.categories = []
+          const pushTree = (parentId: string | null) => {
+            for (const c of s.categories.filter(x => (x.parentId ?? null) === parentId).sort((a, b) => a.name.localeCompare(b.name))) {
+              ordered.push(c); pushTree(c.id)
+            }
+          }
+          pushTree(null)
+          return { ...s, categories: ordered }
+        }, auditEvent('reordered', 'category', 'all', 'sorted A–Z'))
       },
       addProject(p) {
         const proj = { id: uid('pr'), areaId: p.areaId, name: p.name, outcome: p.outcome ?? '', status: p.status ?? 'active' as const, priority: p.priority ?? 'P2' as Priority, due: p.due, notes: p.notes, lastActivity: today() }

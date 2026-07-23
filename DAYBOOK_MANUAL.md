@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v45 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v46 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -360,3 +360,7 @@ None of these are things the rest of the app depends on to function — they're 
     New **Calendar** section in the left nav. It puts your Daybook data on one calendar: every open task on its due date (dot-coloured by focus area, overdue ones in red) and every Dates to Remember entry (birthdays and anniversaries repeat each year automatically). Two views — a **Month** grid and an **Agenda** list of the next 60 days — plus a selected-day panel where you can **add a task straight onto a day** (it's created with that due date). Click any task to open it.
 
     This is Phase 1, built entirely on your own data with nothing to connect. Phase 2 — two-way sync with **Google Calendar, Microsoft 365 / Outlook, Yahoo and Apple iCloud** so external events show here and Daybook items can be pushed out — is a separate build that needs an OAuth app registered with each provider plus backend work; it's the agreed next step.
+
+34. **v46** — Reorder and sort Focus areas, Categories and Actions in Settings.
+
+    Each row in the Focus areas, Categories and Actions lists now has small **up/down arrows** to nudge it into the order you want (categories move among their own siblings, so a sub-category stays under its parent), and each list has a one-click **Sort A–Z** button. Previously a new item just appended to the bottom in creation order with no way to reorder. The chosen order is saved to your account and is what the Settings lists show.

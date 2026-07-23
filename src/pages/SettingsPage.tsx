@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { toast } from 'sonner'
-import { Check, ChevronDown, ChevronRight, Plus, Trash2 } from 'lucide-react'
+import { ArrowDownAZ, Check, ChevronDown, ChevronRight, ChevronUp, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -66,6 +66,16 @@ function Section({ title, sub, children }: { title: string; sub?: string; childr
       </div>
       <div className="px-4 py-3.5 grid grid-cols-1 gap-3">{children}</div>
     </section>
+  )
+}
+
+// Up/down nudge control for the reorderable Settings lists (Focus areas, Categories, Actions).
+function ReorderArrows({ onUp, onDown }: { onUp: () => void; onDown: () => void }) {
+  return (
+    <div className="flex flex-col shrink-0 -my-1 text-muted-foreground/70">
+      <button type="button" onClick={onUp} title="Move up" className="h-3.5 grid place-items-center hover:text-foreground"><ChevronUp className="h-3.5 w-3.5" /></button>
+      <button type="button" onClick={onDown} title="Move down" className="h-3.5 grid place-items-center hover:text-foreground"><ChevronDown className="h-3.5 w-3.5" /></button>
+    </div>
   )
 }
 
@@ -231,6 +241,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
     state, updateSettings, updateFeatures, updateArea, addArea, addCategory, updateCategory, deleteCategory,
     addAction, updateAction, deleteAction,
     addCollection, updateCollection, addTracker, updateTracker,
+    reorderArea, reorderCategory, reorderAction, sortAreasByName, sortCategoriesByName, sortActionsByName,
   } = useStore()
   const s = state.settings
   const [newArea, setNewArea] = useState('')
@@ -380,6 +391,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
         <Section title="Focus areas" sub="Add, rename, colour, retire — archiving preserves all history. Keep to 3–6.">
           {state.areas.map(a => (
             <div key={a.id} className="flex items-center gap-2.5">
+              <ReorderArrows onUp={() => reorderArea(a.id, 'up')} onDown={() => reorderArea(a.id, 'down')} />
               <ColorPicker value={a.color} onChange={col => updateArea(a.id, { color: col })} size={12} title={`Colour for ${a.name}`} />
               <Input
                 value={a.name}
@@ -397,6 +409,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           <div className="flex gap-2">
             <Input placeholder="New area…" value={newArea} onChange={e => setNewArea(e.target.value)} className="h-8" />
             <Button size="sm" className="h-8" onClick={() => { if (newArea.trim()) { addArea(newArea); setNewArea(''); toast.success('Area added') } }}><Plus className="h-3.5 w-3.5" /></Button>
+            <Button variant="outline" size="sm" className="h-8 text-[11px] shrink-0" title="Sort alphabetically" onClick={() => { sortAreasByName(); toast.success('Focus areas sorted A–Z') }}><ArrowDownAZ className="h-3.5 w-3.5 mr-1" />Sort A–Z</Button>
           </div>
         </Section>
 
@@ -423,6 +436,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
               return (
                 <div key={c.id} className={cn('grid grid-cols-1 gap-1', c.parentId && 'pl-5')}>
                   <div className="flex items-center gap-2">
+                    <ReorderArrows onUp={() => reorderCategory(c.id, 'up')} onDown={() => reorderCategory(c.id, 'down')} />
                     {c.parentId && <span className="text-muted-foreground text-[11px] shrink-0">›</span>}
                     <ColorPicker value={c.color ?? fallbackDot(c.id)} onChange={col => updateCategory(c.id, { color: col })} size={11} title={`Colour for ${c.name}`} />
                     <Input
@@ -508,6 +522,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
               addCategory({ name: newCat, parentId: newCatParent === 'none' ? undefined : newCatParent, level: newCatParent === 'none' ? 0 : 1 })
               setNewCat(''); toast.success('Category added — now in every dropdown and report')
             }}><Plus className="h-3.5 w-3.5" /></Button>
+            <Button variant="outline" size="sm" className="h-8 text-[11px] shrink-0" title="Sort alphabetically (keeps sub-categories under their parent)" onClick={() => { sortCategoriesByName(); toast.success('Categories sorted A–Z') }}><ArrowDownAZ className="h-3.5 w-3.5 mr-1" />Sort A–Z</Button>
           </div>
         </Section>
 
@@ -517,6 +532,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
               const usage = actionUsage(state, a.id)
               return (
                 <div key={a.id} className="flex items-center gap-2">
+                  <ReorderArrows onUp={() => reorderAction(a.id, 'up')} onDown={() => reorderAction(a.id, 'down')} />
                   <ColorPicker value={a.color ?? fallbackDot(a.id)} onChange={col => updateAction(a.id, { color: col })} size={11} title={`Colour for ${a.name}`} />
                   <Input
                     value={a.name}
@@ -558,6 +574,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
               addAction({ name: newAction })
               setNewAction(''); toast.success('Action added — now available on tasks')
             }}><Plus className="h-3.5 w-3.5" /></Button>
+            <Button variant="outline" size="sm" className="h-8 text-[11px] shrink-0" title="Sort alphabetically" onClick={() => { sortActionsByName(); toast.success('Actions sorted A–Z') }}><ArrowDownAZ className="h-3.5 w-3.5 mr-1" />Sort A–Z</Button>
           </div>
         </Section>
 
