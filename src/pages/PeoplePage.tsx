@@ -172,17 +172,29 @@ function AddPersonDialog({ open, onClose, onAdd }: { open: boolean; onClose: () 
 
 async function downloadContactsTemplate() {
   const rows = [
-    ['Name', 'Phone / WhatsApp', 'Email', 'Tier', 'Cadence days', 'How you know them', 'Topics', 'VIP', 'Notes'],
-    ['David Feldman', '+44 7700 900010', 'david@feldman.co', 'active', '', 'Old colleague', 'Consulting, governors', 'yes', 'Owes me an intro'],
-    ['Mum', '+44 7700 900001', '', 'inner', '3', 'Family', 'Family, weekend plans', '', 'Call every few days'],
-    ['Ella Rosen', '', 'ella.rosen@gmail.com', 'dormant', '', 'Former client', 'Marketing', '', ''],
-    ['- DELETE THIS ROW - allowed values: Tier = inner | active | network | dormant. Cadence days = number (blank = tier default). VIP = yes/no. Only Name is required.', '', '', '', '', '', '', '', ''],
+    ['Name', 'Phone / WhatsApp', 'Email', 'Tier', 'Cadence days', 'How you know them', 'Topics', 'VIP', 'Birthday', 'Notes'],
+    ['David Feldman', '+44 7700 900010', 'david@feldman.co', 'active', '', 'Old colleague', 'Consulting, governors', 'yes', '1975-04-12', 'Owes me an intro'],
+    ['Mum', '+44 7700 900001', '', 'inner', '3', 'Family', 'Family, weekend plans', '', '1958-08-02', 'Call every few days'],
+    ['Ella Rosen', '', 'ella.rosen@gmail.com', 'dormant', '', 'Former client', 'Marketing', '', '', ''],
+    ['- DELETE THIS ROW - allowed values: Tier = inner | active | network | dormant. Cadence days = number (blank = tier default). VIP = yes/no. Birthday = date YYYY-MM-DD (also lands in Upcoming dates). Only Name is required.', '', '', '', '', '', '', '', '', ''],
   ]
   await downloadXlsxTemplateWithDropdowns('daybook-contacts-template.xlsx', 'Contacts', rows, [
     { col: 3, values: ['inner', 'active', 'network', 'dormant'] }, // Tier
     { col: 7, values: ['yes', 'no'] }, // VIP
   ])
-  toast.success('Excel template downloaded — Tier and VIP are real dropdowns now')
+  toast.success('Excel template downloaded — includes Birthday, with Tier and VIP as dropdowns')
+}
+
+// Accepts YYYY-MM-DD (also tolerates common date-cell formats Excel might hand back). Returns a
+// clean ISO date string or undefined if it doesn't look like a real date.
+function normalizeBirthday(raw: string): string | undefined {
+  const s = raw.trim()
+  if (!s) return undefined
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+  const d = new Date(s)
+  if (isNaN(d.getTime())) return undefined
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return iso
 }
 
 interface ParsedPerson {
@@ -192,7 +204,7 @@ interface ParsedPerson {
 }
 
 function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { state, addPerson, updatePerson } = useStore()
+  const { state, addPerson, updatePerson, setBirthday } = useStore()
   const [parsed, setParsed] = useState<ParsedPerson[] | null>(null)
   const [fileName, setFileName] = useState('')
 
@@ -223,6 +235,9 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
           (email && p.email && p.email.toLowerCase() === email.toLowerCase()) ||
           p.name.trim().toLowerCase() === name.toLowerCase(),
         )
+        const birthdayRaw = get(r, 'birthday')
+        const birthday = normalizeBirthday(birthdayRaw)
+        if (birthdayRaw && !birthday) warnings.push(`birthday "${birthdayRaw}" ignored (use YYYY-MM-DD)`)
         out.push({
           warnings,
           mergeWith: existing,
@@ -231,6 +246,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
             cadenceDays: cadence && cadence > 0 ? cadence : undefined,
             how: get(r, 'how'), topics: get(r, 'topics'),
             vip: ['yes', 'y', 'true', '1'].includes(get(r, 'vip').toLowerCase()),
+            birthday,
             notes: get(r, 'notes') || undefined,
           },
         })
@@ -244,13 +260,13 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
     if (!parsed) return
     let added = 0, merged = 0
     for (const p of parsed) {
-      if (p.mergeWith) {
-        updatePerson(p.mergeWith.id, { ...p.person, name: p.mergeWith.name }, 'merged from import')
-        merged++
-      } else {
-        addPerson(p.person)
-        added++
-      }
+      const id = p.mergeWith
+        ? (updatePerson(p.mergeWith.id, { ...p.person, name: p.mergeWith.name }, 'merged from import'), p.mergeWith.id)
+        : addPerson(p.person).id
+      // Mirror an imported birthday into Dates to Remember too, exactly like setting it on the
+      // contact card — so imported birthdays show up in Upcoming dates, not just on the record.
+      if (p.person.birthday) setBirthday(id, p.person.birthday)
+      if (p.mergeWith) merged++; else added++
     }
     toast.success(`Imported: ${added} new, ${merged} merged into existing contacts`)
     setParsed(null); setFileName(''); onClose()

@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v42 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v43 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -339,3 +339,12 @@ None of these are things the rest of the app depends on to function — they're 
     First, **categories, actions and Focus areas now all have colour circles.** Before, only areas were colour-coded and categories/actions showed as plain text (or only a dot if a colour happened to be set) — the colour field existed in the data but was never wired into Settings, so newly-created categories and actions never got one. Now every category and action gets a colour auto-assigned when created (cycling a 12-colour palette so a run of new ones comes out visibly different), everything that predates the change shows a stable colour immediately, and clicking any dot opens a small swatch picker to change it. The picker was added to Focus areas too, whose dot was previously fixed — so all three lists are consistent and properly editable now.
 
     Second, **a birthday field on the contact card.** Open anyone in People and there's now a Birthday date field. Setting it mirrors a recurring "Birthday" entry into the Dates to Remember tracker automatically — so it shows up in the Upcoming dates card on Today and exports to your calendar — without you having to enter it twice. Editing the date updates the mirrored entry; clearing it removes it. (Contacts are still about cadence — when you last reached out — so the birthday is the one calendar-date exception that belongs there, and it simply feeds the dates system.) The link is tracked invisibly on the entry, so it always updates the right one.
+
+31. **v43** — Import templates now cover every current field and option, and always reflect your latest settings.
+
+    The Excel/CSV import templates are generated fresh from your live setup each time you download them — so they already track settings changes automatically — but a few things weren't fully covered. Now fixed:
+
+    - **Contacts template gained a Birthday column.** Since birthdays became a contact field (v42), the template was missing it. It's there now, and importing a birthday doesn't just fill the field — it mirrors into the Dates to Remember tracker exactly like setting it on the contact card, so imported birthdays show up in Upcoming dates. (This also fixed a latent bug where a bulk-imported custom cadence or birthday was silently dropped instead of saved.)
+    - **Tracker templates now give a dropdown to every option-bearing field.** Previously only Status/single-choice and checkbox fields got real in-cell dropdowns; now multi-select fields (pick one from the cell, or still type several ";"-separated) and rating fields (1–5) get them too, each built live from that field's current options. Edit a tracker's options in Settings and the next template download reflects them.
+
+    Nothing here changed how templates are produced — they're still built on demand from your current areas, projects, categories, actions, people, vendors and tracker fields — so editing any of those in Settings is picked up the next time you download a template.

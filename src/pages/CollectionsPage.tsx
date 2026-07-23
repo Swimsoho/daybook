@@ -376,17 +376,19 @@ async function downloadTrackerTemplate(tracker: Tracker) {
   })
   const instructionsRow = header.map((_h, i) => i === 0 ? `- DELETE THIS ROW - allowed values: ${notes.join(' ')}` : '')
   const rows = [header, exampleRow, instructionsRow]
-  // Single-choice columns (Status, and any select field) get a real in-cell dropdown built from
-  // that field's own option list; a checkbox gets a yes/no dropdown. Multi-select isn't a great
-  // fit for a single-value Excel dropdown, so it stays a free-text ";"-separated field with the
-  // instructions row spelling out the valid options, same as before.
+  // Every option-bearing column becomes a real in-cell dropdown built live from that field's own
+  // current options — so a field you just edited in Settings shows its new options here the next
+  // time you download. Single-choice/Status use their list; checkbox is yes/no; rating is 1–5;
+  // and multi-select now gets a dropdown too (pick one from the cell, or still type several
+  // ";"-separated — the instructions row spells that out).
   const dropdowns: ColumnDropdown[] = tracker.columns.map((c, i) => {
-    if (c.type === 'select' || c.type === 'status') return { col: i, values: c.options ?? [] }
+    if (c.type === 'select' || c.type === 'status' || c.type === 'multiselect') return { col: i, values: c.options ?? [] }
     if (c.type === 'checkbox') return { col: i, values: ['yes', 'no'] }
+    if (c.type === 'rating') return { col: i, values: ['1', '2', '3', '4', '5'] }
     return { col: i, values: [] }
   })
   await downloadXlsxTemplateWithDropdowns(`daybook-${tracker.name.toLowerCase().replace(/\s+/g, '-')}-template.xlsx`, tracker.name, rows, dropdowns)
-  toast.success('Excel template downloaded - matches this tracker’s own columns, with dropdowns for its Status/single-choice/checkbox fields')
+  toast.success('Excel template downloaded - matches this tracker’s current columns, with dropdowns built live from each field’s options')
 }
 
 // ---------- Export any date-bearing tracker as a standard .ics calendar file ----------

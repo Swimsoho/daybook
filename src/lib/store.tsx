@@ -366,6 +366,9 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         const person: Person = {
           id: uid('p'), name: p.name, phone: p.phone, email: p.email, tier: p.tier ?? 'network',
           how: p.how ?? '', topics: p.topics ?? '', vip: p.vip ?? false, flaggedForCall: false, notes: p.notes,
+          // Carry through the optional fields callers actually pass (bulk import sets these) —
+          // previously dropped, so an imported custom cadence or birthday was silently lost.
+          cadenceDays: p.cadenceDays, birthday: p.birthday,
         }
         withAudit(s => ({ ...s, people: [...s.people, person] }), auditEvent('created', 'person', person.id, person.name))
         return person
