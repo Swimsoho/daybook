@@ -214,7 +214,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   // to-call tasks surface today by default (a call with no due date shouldn't go quiet),
   // but a call you've deliberately scheduled for later still respects that due date
   const todays = open
-    .filter(t => t.priority === 'P0' || (t.type === 'call' && !t.due) || (t.due && daysSince(t.due) >= 0))
+    .filter(t => t.priority === 'P0' || t.priority === 'P1' || (t.type === 'call' && !t.due) || (t.due && daysSince(t.due) >= 0))
     .sort((a, b) => a.priority.localeCompare(b.priority) || (a.due ?? '9999').localeCompare(b.due ?? '9999'))
   const attention = open.filter(t =>
     (isOverdue(t) && !todays.slice(0, 8).includes(t)) ||

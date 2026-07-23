@@ -124,7 +124,7 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
   selected?: boolean
   onToggleSelect?: (id: string) => void
 }) {
-  const { state, completeTask, snoozeTask, calledFollowUp, updateTask, dropTask } = useStore()
+  const { state, completeTask, snoozeTask, calledFollowUp, updateTask, dropTask, deleteTask, reinsertTasks } = useStore()
   const [localExp, setLocalExp] = useState<boolean | null>(null)
   React.useEffect(() => { setLocalExp(null) }, [expandAll])
   const expanded = localExp ?? expandAll ?? false
@@ -134,7 +134,19 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
   const person = state.people.find(p => p.id === task.personId)
   const project = state.projects.find(p => p.id === task.projectId)
   const qa = state.settings.quickActions
-  const done = task.status === 'done'
+  const done = task.status === 'done' || task.status === 'dropped'
+
+  // Permanent delete — removes the task (and its subtasks) from the list entirely, with a short
+  // Undo window so an accidental delete is recoverable. This is what actually clears items out of
+  // Accomplished, unlike Drop/Done which only archive them.
+  function doDelete() {
+    const removed = deleteTask(task.id)
+    toast('Deleted permanently', {
+      description: task.title,
+      action: { label: 'Undo', onClick: () => reinsertTasks(removed) },
+      duration: 6000,
+    })
+  }
 
   return (
     <>
@@ -350,8 +362,24 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
               <DropdownMenuItem className="text-[hsl(8_60%_41%)]" onClick={() => { dropTask(task.id, 'Dropped from quick actions'); toast('Dropped — archived with reason') }}>
                 Drop (archive with reason)
               </DropdownMenuItem>
+              <DropdownMenuItem className="text-[hsl(8_60%_41%)]" onClick={doDelete}>
+                <Trash2 className="h-3.5 w-3.5 mr-2" />Delete permanently
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        )}
+
+        {/* Archived rows (done / dropped) hide the quick-actions menu, so they get a direct
+            trash button — this is how you clear items out of Accomplished for good. */}
+        {done && (
+          <button
+            aria-label="Delete permanently"
+            title="Delete permanently"
+            onClick={doDelete}
+            className="h-7 w-7 grid place-items-center shrink-0 rounded-sm text-muted-foreground opacity-30 group-hover:opacity-100 hover:text-[hsl(8_60%_41%)] hover:bg-[hsl(8_60%_41%_/_0.08)] transition-all"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
         )}
       </div>
       {expanded && kids.map(k => <TaskRow key={k.id} task={k} showArea={false} depth={depth + 1} onOpen={onOpen} />)}

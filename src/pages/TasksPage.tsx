@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowUpDown, CalendarClock, Check, Download, FileUp, Plus } from 'lucide-react'
+import { ArrowUpDown, CalendarClock, Check, Download, FileUp, Plus, Trash2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,7 +39,7 @@ const VIEWS: { id: View; label: string }[] = [
 ]
 
 export default function TasksPage({ projectFilter, onClearProject }: { projectFilter?: string | null; onClearProject?: () => void }) {
-  const { state, updateTask, completeTask, dropTask } = useStore()
+  const { state, updateTask, completeTask, dropTask, deleteTask, reinsertTasks } = useStore()
   const [view, setView] = useState<View>('today')
   const [search, setSearch] = useState('')
   const [areaFilter, setAreaFilter] = useState('all')
@@ -88,7 +88,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       case 'today':
         // to-call tasks surface today by default (a call with no due date shouldn't go quiet),
         // but a call you've deliberately scheduled for later still respects that due date
-        return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && (t.priority === 'P0' || (t.type === 'call' && !t.due) || (t.due && daysSince(t.due) >= 0)))
+        return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && (t.priority === 'P0' || t.priority === 'P1' || (t.type === 'call' && !t.due) || (t.due && daysSince(t.due) >= 0)))
       case 'week':
         return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && (['P0', 'P1'].includes(t.priority) || (t.due && daysSince(t.due) >= -7)))
       case 'waiting':
@@ -167,6 +167,15 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
     const ids = Array.from(selected)
     ids.forEach(id => dropTask(id, 'Bulk dropped from Tasks list'))
     toast(`Dropped — ${ids.length} task${ids.length === 1 ? '' : 's'}`)
+    setSelected(new Set())
+  }
+  function bulkDelete() {
+    const ids = Array.from(selected)
+    const removed = ids.flatMap(id => deleteTask(id))
+    toast(`Deleted permanently — ${ids.length} task${ids.length === 1 ? '' : 's'}`, {
+      action: { label: 'Undo', onClick: () => reinsertTasks(removed) },
+      duration: 6000,
+    })
     setSelected(new Set())
   }
 
@@ -275,6 +284,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
               <span className="h-4 w-px bg-border" />
               <Button variant="outline" size="sm" className="h-7 px-2 text-[12px]" onClick={bulkDone}><Check className="h-3.5 w-3.5 mr-1" />Mark done</Button>
               <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] text-[hsl(8_60%_41%)]" onClick={bulkDrop}>Drop</Button>
+              <Button variant="ghost" size="sm" className="h-7 px-2 text-[12px] text-[hsl(8_60%_41%)]" onClick={bulkDelete}><Trash2 className="h-3.5 w-3.5 mr-1" />Delete</Button>
               <span className="h-4 w-px bg-border" />
               <span className="text-[11px] text-muted-foreground">Priority</span>
               {(['P0', 'P1', 'P2', 'P3'] as Priority[]).map(p => (

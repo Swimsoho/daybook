@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v51 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v52 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -388,3 +388,9 @@ None of these are things the rest of the app depends on to function — they're 
     Two things. First, the bug: when the display size was set above Normal (Settings → Appearance), the "…" quick-actions menu — and any other drop-down, especially on right-hand items like task rows — opened partly or fully off the right edge of the screen. The cause was the display-size zoom being applied to the whole document root; the menus render in a layer attached to the page body, so the zoom was being counted twice for them and their position was pushed out. The zoom is now applied to the app's own wrapper instead of the document root, so those menu layers sit outside the zoomed area and land in the right place. The whole app still scales exactly as before; only the stray menu positioning changed. Verified at the largest size across Tasks, Today and other pages — menus now stay fully on screen.
 
     Second, scheduling in bulk. On the Tasks page, once you tick one or more tasks, the bulk action bar now has a **Due date ▾** button plus a small date box. "Today" puts the selected tasks on Today; "Tomorrow", "End of this week" (lands them in This Week), and "Next week (+7 days)" schedule them out; "Clear due date" removes the date; and the date box sets any specific day — all applied to every selected task at once. The single-task "…" menu's old "Snooze / defer" sub-menu is now "Schedule / set due" and gained a "Today" option and "Clear due date" to match. This is the fast way to pull a batch of freshly-imported, undated tasks onto Today or This Week (see below for what puts a task there).
+
+40. **v52** — A real Delete (permanent), plus High-priority tasks now surface on Today.
+
+    Delete, at last. Until now the only ways to remove a task were **Done** and **Drop**, and both *archive* rather than remove — which is why anything you "removed" kept showing up under **Accomplished**. There is now a true **Delete permanently** that takes the task (and its subtasks) off the list entirely. It's in three places: the single-task "…" menu ("Delete permanently"), a **Delete** button in the bulk action bar when you've ticked tasks, and — importantly — a small trash button on every archived row in the **Accomplished** view, so you can finally clear out the items you'd dropped earlier. Every delete pops a short **Undo** (about six seconds) in case it was a mistake; after that it's gone for good, so it's genuinely permanent, unlike Done/Drop.
+
+    Today now includes High. The app has four priority levels; in your High/Medium/Low labelling they read as Urgent / **High** / Medium / Low. Previously only **Urgent** tasks were pulled onto **Today** automatically, so imported **High** tasks (which is what your spreadsheet's "High" maps to) sat off Today even though they mattered. Today now surfaces **Urgent *and* High** tasks (alongside anything due today or overdue, and calls with no date). Medium and Low still wait until you give them a due date or bump their priority. This applies to both the Today page and the Today tab on Tasks.

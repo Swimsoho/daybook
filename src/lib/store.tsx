@@ -84,6 +84,11 @@ export interface Store {
   updateTask: (id: string, patch: Partial<Task>, auditLabel?: string) => void
   completeTask: (id: string) => void
   dropTask: (id: string, reason: string) => void
+  // Permanent removal (not archiving). Returns the removed task plus any of its subtasks, so the
+  // caller can offer an Undo. Unlike complete/drop, a deleted task leaves the list entirely — this
+  // is what clears out items that were only "dropped" and still lingered under Accomplished.
+  deleteTask: (id: string) => Task[]
+  reinsertTasks: (tasks: Task[]) => void
   snoozeTask: (id: string, days: number) => void
   calledFollowUp: (id: string) => void
   addPerson: (p: Partial<Person> & { name: string }) => Person
@@ -352,6 +357,22 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         withAudit(
           s => ({ ...s, tasks: s.tasks.map(t => t.id === id ? { ...t, status: 'dropped' as TaskStatus, droppedReason: reason, completedAt: today() } : t) }),
           auditEvent('dropped', 'task', id, reason),
+        )
+      },
+      deleteTask(id) {
+        const target = state.tasks.find(t => t.id === id)
+        const removed = state.tasks.filter(t => t.id === id || t.parentId === id)
+        withAudit(
+          s => ({ ...s, tasks: s.tasks.filter(t => t.id !== id && t.parentId !== id) }),
+          auditEvent('deleted', 'task', id, `${target?.title ?? 'task'} permanently deleted${removed.length > 1 ? ` (with ${removed.length - 1} subtask${removed.length - 1 === 1 ? '' : 's'})` : ''}`),
+        )
+        return removed
+      },
+      reinsertTasks(tasks) {
+        if (!tasks.length) return
+        withAudit(
+          s => ({ ...s, tasks: [...s.tasks, ...tasks.filter(t => !s.tasks.some(x => x.id === t.id))] }),
+          auditEvent('restored', 'task', tasks[0].id, `restored ${tasks.length} task${tasks.length === 1 ? '' : 's'} from delete`),
         )
       },
       snoozeTask(id, days) {
