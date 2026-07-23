@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v57 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v58 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -426,3 +426,7 @@ None of these are things the rest of the app depends on to function — they're 
 45. **v57** — Change a task's Type right from its detail panel.
 
     A task's **Type** (To‑do / To‑call / Follow‑up) decides whether it lands on the call list — but until now the only place to change it was the deeper Edit form, which was easy to miss. The task detail panel (the one that opens when you click a task) now has a **Type** row of one‑tap buttons, sitting alongside the Priority, Status and Move‑to controls. So if something is showing as a call that shouldn't be — e.g. a to‑do whose Type got set to Call — open it and tap **To‑do**, and it leaves the call list on the spot. (The same three buttons are still in the full Edit form too.)
+
+46. **v58** — Fixed: changes on the task panel now update the buttons instantly.
+
+    A bug: on the task detail panel, tapping Type (or Priority, Status, or a Move‑to change) *did* save — the audit trail recorded it — but the highlighted button didn't move, so it looked like nothing happened and it was tempting to tap again. The panel was showing a frozen snapshot of the task from the moment it opened. It now reads the task live, so the moment you tap **To‑do**, that button highlights and the header updates, no reopen needed. (Applies to every quick control on that panel.)

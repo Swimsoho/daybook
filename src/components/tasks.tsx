@@ -749,8 +749,12 @@ function TaskShare({ task }: { task: Task }) {
 
 // ---------- Task detail sheet (with per-item history) ----------
 
-export function TaskDetail({ task, onClose, onEdit }: { task: Task | null; onClose: () => void; onEdit: (t: Task) => void }) {
+export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | null; onClose: () => void; onEdit: (t: Task) => void }) {
   const { state, completeTask, calledFollowUp, snoozeTask, updateTask, dropTask } = useStore()
+  // Always read the LIVE task from the store — the `task` passed in is a snapshot from when the
+  // panel opened, so without this, changes made here (Type, Priority, Status, Move-to) wouldn't
+  // visibly update the buttons/labels until the panel was closed and reopened.
+  const task = taskProp ? (state.tasks.find(t => t.id === taskProp.id) ?? taskProp) : null
   const history = useMemo(() => state.audit.filter(a => a.entityId === task?.id), [state.audit, task])
   if (!task) return null
   const area = state.areas.find(a => a.id === task.areaId)
