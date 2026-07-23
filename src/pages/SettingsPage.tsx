@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SearchableSelect, SearchableSelectOption } from '@/components/ui/searchable-select'
+import { ColorPicker } from '@/components/ui/color-picker'
+import { fallbackDot } from '@/lib/colors'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { ColumnType, PriorityScheme, Tier, TIER_LABELS, Tracker, TrackerColumn } from '@/lib/model'
@@ -378,7 +380,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
         <Section title="Focus areas" sub="Add, rename, colour, retire — archiving preserves all history. Keep to 3–6.">
           {state.areas.map(a => (
             <div key={a.id} className="flex items-center gap-2.5">
-              <span className="h-3 w-3 rounded-full shrink-0" style={{ background: a.color }} />
+              <ColorPicker value={a.color} onChange={col => updateArea(a.id, { color: col })} size={12} title={`Colour for ${a.name}`} />
               <Input
                 value={a.name}
                 onChange={e => updateArea(a.id, { name: e.target.value })}
@@ -422,7 +424,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                 <div key={c.id} className={cn('grid grid-cols-1 gap-1', c.parentId && 'pl-5')}>
                   <div className="flex items-center gap-2">
                     {c.parentId && <span className="text-muted-foreground text-[11px] shrink-0">›</span>}
-                    {c.color && <span className="h-2 w-2 rounded-full shrink-0" style={{ background: c.color }} />}
+                    <ColorPicker value={c.color ?? fallbackDot(c.id)} onChange={col => updateCategory(c.id, { color: col })} size={11} title={`Colour for ${c.name}`} />
                     <Input
                       value={c.name}
                       onChange={e => updateCategory(c.id, { name: e.target.value })}

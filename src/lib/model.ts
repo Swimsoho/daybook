@@ -85,6 +85,10 @@ export interface Person {
   vip: boolean
   flaggedForCall: boolean
   notes?: string
+  // Birthday (YYYY-MM-DD). Editable on the contact card; setting it mirrors a recurring
+  // "Birthday" entry into the Dates to Remember tracker (see `setBirthday` in the store) so it
+  // surfaces in Upcoming dates without double entry. Clearing it removes that mirrored entry.
+  birthday?: string
 }
 
 export interface Interaction {

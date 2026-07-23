@@ -5,6 +5,7 @@ import {
   daysSince, today, uid,
 } from './model'
 import { seedState } from './seed'
+import { nextDot } from './colors'
 
 type Updater = (s: AppState) => AppState
 
@@ -87,6 +88,7 @@ export interface Store {
   calledFollowUp: (id: string) => void
   addPerson: (p: Partial<Person> & { name: string }) => Person
   updatePerson: (id: string, patch: Partial<Person>, auditLabel?: string) => void
+  setBirthday: (personId: string, date: string | undefined) => void
   logInteraction: (i: Omit<Interaction, 'id'>, opts?: { followUpTitle?: string }) => void
   capture: (text: string, source: Capture['source']) => Capture
   // `trackerId` lets the Inbox redirect a pending capture to a different destination than
@@ -374,6 +376,33 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
           auditEvent('updated', 'person', id, auditLabel ?? Object.keys(patch).join(', ') + ' changed'),
         )
       },
+      // Set (or clear, with date=undefined) a person's birthday AND keep a matching recurring
+      // entry in the Dates to Remember tracker in sync — created/updated/removed in the same
+      // atomic state update. The mirrored entry carries a hidden `personId` value (not a tracker
+      // column, so it never shows in the table) so we can find and update the right one later.
+      setBirthday(personId, date) {
+        withAudit(s => {
+          const person = s.people.find(p => p.id === personId)
+          if (!person) return s
+          const people = s.people.map(p => p.id === personId ? { ...p, birthday: date || undefined } : p)
+          const datesTracker = s.trackers.find(t => t.active && (t.id === 'trk_dates' || t.name.trim().toLowerCase() === 'dates to remember'))
+          let entries = s.entries
+          if (datesTracker) {
+            const existing = entries.find(e => e.trackerId === datesTracker.id && e.values.personId === personId)
+            const label = `${person.name}’s birthday`
+            if (date) {
+              if (existing) {
+                entries = entries.map(e => e.id === existing.id ? { ...e, values: { ...e.values, name: label, date, recurring: true, type: 'Birthday' } } : e)
+              } else {
+                entries = [...entries, { id: uid('e'), trackerId: datesTracker.id, created: today(), values: { name: label, date, recurring: true, type: 'Birthday', personId } }]
+              }
+            } else if (existing) {
+              entries = entries.filter(e => e.id !== existing.id)
+            }
+          }
+          return { ...s, people, entries }
+        }, auditEvent('updated', 'person', personId, date ? 'birthday set' : 'birthday cleared'))
+      },
       logInteraction(i, opts) {
         const inter: Interaction = { ...i, id: uid('i') }
         const followTask: Task | null = i.followUpDate ? {
@@ -451,7 +480,9 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         )
       },
       addCategory(c) {
-        const cat: Category = { id: uid('c'), name: c.name, parentId: c.parentId, level: (c.level ?? 0) as 0 | 1 | 2, active: true, color: c.color }
+        // Auto-assign a colour (cycling the shared palette) so a new category shows a dot right
+        // away, matching Focus areas — the caller can still pass an explicit colour to override.
+        const cat: Category = { id: uid('c'), name: c.name, parentId: c.parentId, level: (c.level ?? 0) as 0 | 1 | 2, active: true, color: c.color ?? nextDot(state.categories.length) }
         withAudit(s => ({ ...s, categories: [...s.categories, cat] }), auditEvent('created', 'category', cat.id, cat.name))
       },
       updateCategory(id, patch) {

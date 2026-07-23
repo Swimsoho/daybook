@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { toast } from 'sonner'
-import { Mail, MessageCircle, Phone, Users } from 'lucide-react'
+import { Cake, Mail, MessageCircle, Phone, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -116,7 +116,7 @@ export function LogCallDialog({ person, open, onClose }: { person: Person | null
 // ---------- Person detail: timeline + edit ----------
 
 export function PersonDetail({ person, onClose, onLog }: { person: Person | null; onClose: () => void; onLog: (p: Person) => void }) {
-  const { state, updatePerson, logInteraction } = useStore()
+  const { state, updatePerson, logInteraction, setBirthday } = useStore()
   if (!person) return null
   const timeline = state.interactions.filter(i => i.personId === person.id)
   const openTasks = state.tasks.filter(t => t.personId === person.id && t.status !== 'done' && t.status !== 'dropped')
@@ -186,6 +186,20 @@ export function PersonDetail({ person, onClose, onLog }: { person: Person | null
             {person.email && <Button size="sm" variant="outline" className="h-7" onClick={() => toast('Opens a draft — AI can write it in your voice')}><Mail className="h-3 w-3 mr-1.5" />{person.email}</Button>}
           </div>
         )}
+
+        <div className="flex items-center gap-2 text-[12.5px]">
+          <Cake className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="text-muted-foreground">Birthday</span>
+          <input
+            type="date"
+            value={person.birthday ?? ''}
+            onChange={e => setBirthday(person.id, e.target.value || undefined)}
+            className="h-7 border border-input rounded-sm px-2 text-[12.5px] bg-card outline-none focus:border-primary"
+          />
+          {person.birthday
+            ? <span className="text-[11px] text-muted-foreground">✓ in Upcoming dates</span>
+            : <span className="text-[11px] text-muted-foreground/70">adds to Upcoming dates</span>}
+        </div>
 
         {person.notes && <p className="text-[13px] border-l-2 border-border pl-3 text-foreground/80">{person.notes}</p>}
 
