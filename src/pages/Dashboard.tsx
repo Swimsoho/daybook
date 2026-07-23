@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowRight, Cake, CalendarClock, ChevronDown, ChevronRight, GripVertical, Heart, Inbox, LayoutGrid, Maximize2, MessageCircle, Minimize2, Phone, RotateCcw, Sparkles } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Cake, CalendarClock, CheckCircle2, ChevronDown, ChevronRight, FolderKanban, GripVertical, Heart, Inbox, LayoutGrid, ListChecks, Maximize2, MessageCircle, Minimize2, Phone, RotateCcw, Sparkles, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
@@ -726,16 +726,22 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
       {/* KPI strip — every tile clicks through to its underlying data */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
         <KpiTile label="Open tasks" value={open.length} sub={`across ${state.areas.filter(a => a.active).length} areas`}
+          icon={<ListChecks className="h-4 w-4" />} accent="hsl(210 66% 48%)"
           onClick={() => setDrill({ kind: 'tasks', title: `Open tasks (${open.length})`, tasks: open })} />
         <KpiTile label="Overdue" value={overdue.length} tone={overdue.length ? 'bad' : 'good'} sub="worst first"
+          icon={<AlertTriangle className="h-4 w-4" />} accent="hsl(8 66% 50%)"
           onClick={() => setDrill({ kind: 'tasks', title: `Overdue tasks (${overdue.length})`, tasks: overdue })} />
         <KpiTile label="Projects" value={activeProjects.length} sub={`${stalled.length} stalled`} tone={stalled.length ? undefined : 'good'}
+          icon={<FolderKanban className="h-4 w-4" />} accent="hsl(265 46% 54%)"
           onClick={() => setDrill({ kind: 'projects', title: `Projects — active vs stalled` })} />
         <KpiTile label="Calls this week" value={`${callsThisWeek}/${state.settings.callGoal * 7}`} sub="vs weekly goal"
+          icon={<Phone className="h-4 w-4" />} accent="hsl(150 46% 38%)"
           onClick={() => setDrill({ kind: 'calls', title: `Calls & touches this week (${callsThisWeek})` })} />
         <KpiTile label="Contacts overdue" value={overdueContacts.length} tone={overdueContacts.length ? 'bad' : 'good'} sub="past their cadence"
+          icon={<Users className="h-4 w-4" />} accent="hsl(28 76% 50%)"
           onClick={() => setDrill({ kind: 'people', title: `Contacts past cadence (${overdueContacts.length})`, people: overdueContacts })} />
         <KpiTile label="Done this week" value={doneThisWeek.length} tone="good" sub="archived, not deleted"
+          icon={<CheckCircle2 className="h-4 w-4" />} accent="hsl(175 56% 36%)"
           onClick={() => setDrill({ kind: 'tasks', title: `Finished this week (${doneThisWeek.length})`, tasks: doneThisWeek })} />
       </div>
 

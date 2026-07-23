@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v49 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v50 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -378,3 +378,7 @@ None of these are things the rest of the app depends on to function — they're 
 37. **v49** — A consistency-and-polish sweep across every page.
 
     A design pass applied through the shared building blocks so it lands everywhere at once: every card and panel across the app (Today, Overall, Inbox, Tasks, People, Projects, Reports, History, Settings, Calendar, Admin, Collections) now uses the same softly-rounded corners instead of a mix of sharp and lightly-rounded, and the KPI tiles on the Overall page are rounded with a theme-aware hover (they lift and outline in the current palette's colour rather than a hardcoded green). Combined with the earlier work — accent ticks on section headers, the masthead rule on the top bar, deeper text contrast, the colour-coded collection group cards, and every palette now theming the whole app — the interface reads as one consistent, professional system rather than a patchwork. No layout or behaviour changed; this is purely how it looks.
+
+38. **v50** — Colourful, distinct KPI tiles on the Overall page.
+
+    The six summary tiles (Open tasks, Overdue, Projects, Calls this week, Contacts overdue, Done this week) were a row of near-identical white boxes. Each now carries its own accent colour — a solid icon badge (checklist, warning, projects, phone, people, done), a colour stripe along the top, a faint matching wash across the card, and a colour-matched number — so they read as six distinct, lively metrics at a glance while staying clean and legible. The colours are hand-picked per metric (blue / red / violet / green / orange / teal); semantic tone still wins where it matters (an actual overdue count stays red, done stays green). The KpiTile component now takes an icon and accent, so the same treatment can be reused for other stat displays.

@@ -89,19 +89,40 @@ export function Stars({ n, onChange }: { n: number; onChange?: (v: number) => vo
   )
 }
 
-export function KpiTile({ label, value, sub, tone, onClick }: { label: string; value: React.ReactNode; sub?: string; tone?: 'bad' | 'good'; onClick?: () => void }) {
+export function KpiTile({ label, value, sub, tone, onClick, icon, accent }: { label: string; value: React.ReactNode; sub?: string; tone?: 'bad' | 'good'; onClick?: () => void; icon?: React.ReactNode; accent?: string }) {
   const Comp = onClick ? 'button' : 'div'
+  // Each tile carries its own accent colour: a solid icon badge, a top stripe, and a faint wash
+  // over the card so the six read as distinct and lively rather than a row of identical white
+  // boxes. Semantic tone (bad=red, good=green) still wins for the number where it's meaningful;
+  // otherwise the number takes the accent colour.
+  const ac = accent ?? 'hsl(var(--primary))'
   return (
     <Comp
       onClick={onClick}
+      style={{ background: `color-mix(in srgb, ${ac} 7%, hsl(var(--card)))` }}
       className={cn(
-        'rise-in border border-border bg-card px-4 py-3 flex flex-col gap-0.5 min-w-0 text-left rounded-lg shadow-sm',
-        onClick && 'cursor-pointer transition-all hover:border-primary hover:shadow-md hover:-translate-y-px active:translate-y-0',
+        'rise-in relative border border-border px-4 py-3.5 flex flex-col gap-2 min-w-0 text-left rounded-lg shadow-sm overflow-hidden',
+        onClick && 'cursor-pointer transition-all hover:shadow-md hover:-translate-y-px active:translate-y-0',
       )}
     >
-      <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground truncate">{label}{onClick && ' ↗'}</span>
-      <span className={cn('font-display text-[26px] leading-none font-semibold tabular', tone === 'bad' && 'text-[hsl(8_60%_41%)]', tone === 'good' && 'text-[hsl(152_25%_32%)]')}>{value}</span>
-      {sub && <span className="text-[11px] text-muted-foreground truncate">{sub}</span>}
+      <span aria-hidden className="absolute inset-x-0 top-0 h-[3px]" style={{ background: ac }} />
+      <div className="flex items-center gap-2">
+        {icon && (
+          <span className="h-8 w-8 rounded-md grid place-items-center shrink-0 text-white shadow-sm" style={{ background: ac }}>
+            {icon}
+          </span>
+        )}
+        <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground truncate leading-tight">{label}{onClick && ' ↗'}</span>
+      </div>
+      <div className="min-w-0">
+        <span
+          className={cn('font-display text-[28px] leading-none font-semibold tabular', tone === 'bad' && 'text-[hsl(8_62%_46%)]', tone === 'good' && 'text-[hsl(152_32%_34%)]')}
+          style={tone ? undefined : { color: ac }}
+        >
+          {value}
+        </span>
+        {sub && <div className="text-[11px] text-muted-foreground truncate mt-1.5">{sub}</div>}
+      </div>
     </Comp>
   )
 }
