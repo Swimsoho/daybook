@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v55 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v56 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -416,3 +416,9 @@ None of these are things the rest of the app depends on to function — they're 
 43. **v55** — Anything typed as a call now shows on Today's call list.
 
     The call list used to be purely a *people* queue — it only listed contacts to phone (from relationship cadence, flags, or a call/follow-up task that already had a contact attached). So a task like "Call Lawyer," even typed as a call, didn't appear there unless you'd linked a contact. Now **every task typed as a call** shows up on **Today's call list** — with or without a contact — as long as it's due today/overdue or has no date. Each call-task row has a **Done** button to check the call off, and a **Log** button too when a contact is attached (to record the call against that person). The relationship-cadence people still appear below, and if a call task already names a contact, that person's cadence suggestion is hidden so nobody is listed twice. Net effect: if you flag something as a call, it's on your call list. (Note: this keys off the task **Type = Call**, not the word "call" in the title — so set the type to Call, which the importer now does automatically when a row's Action is "Call".)
+
+44. **v56** — Calls are now defined by type *or* action, and they no longer double up on the task list or the capacity count.
+
+    What counts as a call. A task is treated as a call — and so appears on Today's call list — if its **Type is Call OR it carries the "Call" action**. That means "Call Lawyer" (which you tagged with the Call *action* but left as a to-do type) now lands in the call list, exactly as expected, without you having to change its type. Anything typed as Call still counts too; so if something you didn't mean as a call is showing there (e.g. an item whose Type was set to Call), change its Type to To-do and it drops off.
+
+    Calls come out of the task list. Previously a call showed in *both* the Today task list and the call list, and it counted toward the daily capacity (the "X of 6") — so a call inflated your task number and appeared twice. Now, on the **Today dashboard**, calls are pulled **out** of the Today task list and the Overdue/Attention counts entirely; they live only in the call list. The capacity number reflects your **non-call tasks**, and calls are tracked on their own (calls made vs goal). No more double-listing, no more calls padding the capacity. (This applies to the Today dashboard; the full Tasks page still lists everything, calls included, since it's your complete task view.)

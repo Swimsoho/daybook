@@ -220,28 +220,33 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   const [dragId, setDragId] = useState<WidgetId | null>(null)
 
   const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
-  // What lands on Today:
+  // A task counts as a "call" if its Type is Call OR it carries a Call action. Calls have their own
+  // home (Today's call list), so they're kept OUT of the Today task list and the capacity count —
+  // no double-listing, no inflating the daily number.
+  const callActionIds = new Set(state.actions.filter(a => a.name.trim().toLowerCase() === 'call').map(a => a.id))
+  const isCall = (t: Task) => t.type === 'call' || (t.actionIds ?? []).some(id => callActionIds.has(id))
+  // What lands on the Today TASK list (calls excluded):
   //   • anything due today or already overdue, OR
-  //   • an UNDATED high-priority task (Urgent/High) or an undated call — the "do it soon" work
-  //     that has no date of its own.
-  // The key rule: an explicit FUTURE due date wins. A High task you scheduled for tomorrow waits
-  // until tomorrow instead of showing today just because it's High.
+  //   • an UNDATED high-priority task (Urgent/High) — the "do it soon" work with no date of its own.
+  // An explicit FUTURE due date wins: a High task scheduled for tomorrow waits until tomorrow.
   const todays = open
-    .filter(t => (t.due && daysSince(t.due) >= 0) || (!t.due && (t.priority === 'P0' || t.priority === 'P1' || t.type === 'call')))
+    .filter(t => !isCall(t) && ((t.due && daysSince(t.due) >= 0) || (!t.due && (t.priority === 'P0' || t.priority === 'P1'))))
     .sort((a, b) => a.priority.localeCompare(b.priority) || (a.due ?? '9999').localeCompare(b.due ?? '9999'))
-  const overdue = open.filter(isOverdue)
+  const overdue = open.filter(t => !isCall(t) && isOverdue(t))
   const attention = open.filter(t =>
-    (isOverdue(t) && !todays.slice(0, 8).includes(t)) ||
-    (t.status === 'waiting' && daysSince(t.waitingSince) >= 5),
+    !isCall(t) && (
+      (isOverdue(t) && !todays.slice(0, 8).includes(t)) ||
+      (t.status === 'waiting' && daysSince(t.waitingSince) >= 5)
+    ),
   )
   const calls = buildCallList(state).slice(0, state.settings.callGoal + 1)
   const made = callsMadeOn(state, today())
-  // Any task typed as a call belongs on today's call list — due today/overdue, or undated (an
-  // undated call shouldn't go quiet). Shown whether or not a contact is attached; being a call is
-  // enough. If a call task already names a contact, we drop that person's cadence suggestion so
-  // nobody is listed twice.
+  // Any call (Type = Call OR Call action) belongs on today's call list — due today/overdue, or
+  // undated (an undated call shouldn't go quiet). Shown whether or not a contact is attached. If a
+  // call task already names a contact, we drop that person's cadence suggestion so nobody's listed
+  // twice. A call with a FUTURE due date waits for its day, same as tasks.
   const callTasks = open
-    .filter(t => t.type === 'call' && (!t.due || daysSince(t.due) >= 0))
+    .filter(t => isCall(t) && (!t.due || daysSince(t.due) >= 0))
     .sort((a, b) => a.priority.localeCompare(b.priority) || (a.due ?? '9999').localeCompare(b.due ?? '9999'))
   const callTaskPersonIds = new Set(callTasks.map(t => t.personId).filter(Boolean) as string[])
   const personCalls = calls.filter(c => !callTaskPersonIds.has(c.person.id))
