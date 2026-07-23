@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, Loader2, MoreHorizontal, Paperclip, Phone, Send, Trash2, User } from 'lucide-react'
+import { CalendarDays, Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, Loader2, MoreHorizontal, Paperclip, Phone, Send, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -126,6 +126,8 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
 }) {
   const { state, completeTask, snoozeTask, calledFollowUp, updateTask, dropTask, deleteTask, reinsertTasks } = useStore()
   const [localExp, setLocalExp] = useState<boolean | null>(null)
+  // null = the "pick a date" dialog is closed; a date string = open, pre-filled with that value.
+  const [pickDate, setPickDate] = useState<string | null>(null)
   React.useEffect(() => { setLocalExp(null) }, [expandAll])
   const expanded = localExp ?? expandAll ?? false
   const setExpanded = (fn: (v: boolean) => boolean) => setLocalExp(fn(expanded))
@@ -276,6 +278,9 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
                         {d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : d === 2 ? 'In 2 days' : 'Next week'}
                       </DropdownMenuItem>
                     ))}
+                    <DropdownMenuItem onClick={() => setPickDate(task.due ?? today())}>
+                      <CalendarDays className="h-3.5 w-3.5 mr-2" />Pick a date…
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => { updateTask(task.id, { due: undefined }, 'due date cleared'); toast('Due date cleared') }}>
                       <span className="text-muted-foreground">Clear due date</span>
                     </DropdownMenuItem>
@@ -383,6 +388,36 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
         )}
       </div>
       {expanded && kids.map(k => <TaskRow key={k.id} task={k} showArea={false} depth={depth + 1} onOpen={onOpen} />)}
+
+      {/* "Pick a date" calendar picker — opened from the Schedule / set due menu. A dialog rather
+          than an in-menu field, because a native date input's calendar pop-up would dismiss the
+          menu. The native date input gives the OS/browser calendar picker. */}
+      {pickDate !== null && (
+        <Dialog open onOpenChange={o => { if (!o) setPickDate(null) }}>
+          <DialogContent className="sm:max-w-[340px]">
+            <DialogHeader>
+              <DialogTitle className="font-display text-base">Set due date</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 gap-2">
+              <Label className="text-xs">Due date</Label>
+              <Input type="date" value={pickDate} autoFocus onChange={e => setPickDate(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">Due today or earlier shows on <b>Today</b>; anything within the next 7 days shows on <b>This Week</b>.</p>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setPickDate(null)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  updateTask(task.id, { due: pickDate || undefined }, pickDate ? `due set to ${pickDate}` : 'due date cleared')
+                  toast.success(pickDate ? `Due ${fmtDate(pickDate)}` : 'Due date cleared')
+                  setPickDate(null)
+                }}
+              >
+                Set date
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </>
   )
 }

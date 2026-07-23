@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v52 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v53 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -394,3 +394,11 @@ None of these are things the rest of the app depends on to function — they're 
     Delete, at last. Until now the only ways to remove a task were **Done** and **Drop**, and both *archive* rather than remove — which is why anything you "removed" kept showing up under **Accomplished**. There is now a true **Delete permanently** that takes the task (and its subtasks) off the list entirely. It's in three places: the single-task "…" menu ("Delete permanently"), a **Delete** button in the bulk action bar when you've ticked tasks, and — importantly — a small trash button on every archived row in the **Accomplished** view, so you can finally clear out the items you'd dropped earlier. Every delete pops a short **Undo** (about six seconds) in case it was a mistake; after that it's gone for good, so it's genuinely permanent, unlike Done/Drop.
 
     Today now includes High. The app has four priority levels; in your High/Medium/Low labelling they read as Urgent / **High** / Medium / Low. Previously only **Urgent** tasks were pulled onto **Today** automatically, so imported **High** tasks (which is what your spreadsheet's "High" maps to) sat off Today even though they mattered. Today now surfaces **Urgent *and* High** tasks (alongside anything due today or overdue, and calls with no date). Medium and Low still wait until you give them a due date or bump their priority. This applies to both the Today page and the Today tab on Tasks.
+
+41. **v53** — Calendar date-picker on the schedule menu, and a smarter import for contacts and calls.
+
+    Pick any date. The "…" menu's **Schedule / set due** sub-menu now has a **Pick a date…** option below the quick choices. It opens a small calendar/date picker so you can set any specific due date on a task, not just Today / Tomorrow / In 2 days / Next week.
+
+    Import now creates contacts. The **Person** column on the import template is meant to link a task to a contact. Previously, if the name wasn't already in your People list it was dropped (flagged "not found") — so those names went nowhere. Now, any Person name that isn't a contact yet is **created as a new contact and linked to the task** on import. The preview flags each one ("… will be added to Contacts") so you can see it before committing, and the success message tells you how many contacts were added. Once linked, the contact shows on the task — a small person icon and name on the task row, and a contact block (name, phone, what the call's about) when you open it.
+
+    Import routes calls into the Calls list. The **Calls** queue is driven by a task's **Type** (call / follow-up), not by its Action label. So the importer now (a) promotes a to-do whose **Action is "Call"** to a proper **call** type, and (b) gives a call that has a contact but no due date **today's date**, since the Calls queue only surfaces a call once it has both a contact and a due date. The net effect: import a row that's a call to someone, and it shows up in your Calls list straight away instead of sitting silent. Both behaviours are flagged in the preview, and non-call tasks are never auto-dated.

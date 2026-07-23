@@ -623,10 +623,13 @@ async function downloadTemplate(state: ReturnType<typeof useStore>['state']) {
 interface ParsedRow {
   task: Partial<Task> & { title: string }
   warnings: string[]
+  // A Person name from the sheet that didn't match an existing contact — created (once) at commit
+  // time and linked to the task, rather than being dropped.
+  newPersonName?: string
 }
 
 function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { state, addTask } = useStore()
+  const { state, addTask, addPerson } = useStore()
   const [parsed, setParsed] = useState<ParsedRow[] | null>(null)
   const [fileName, setFileName] = useState('')
 
@@ -649,7 +652,7 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
         if (!title || title.startsWith('— DELETE THIS ROW')) continue
         const warnings: string[] = []
         const typeRaw = get(r, 'type').toLowerCase()
-        const type = (['todo', 'call', 'followup', 'follow-up'].includes(typeRaw) ? typeRaw.replace('follow-up', 'followup') : 'todo') as Task['type']
+        let type = (['todo', 'call', 'followup', 'follow-up'].includes(typeRaw) ? typeRaw.replace('follow-up', 'followup') : 'todo') as Task['type']
         if (typeRaw && type !== typeRaw && typeRaw !== 'follow-up') warnings.push(`type “${typeRaw}” → to-do`)
         const prRaw = get(r, 'priority').toLowerCase()
         const prMap: Record<string, Priority> = { 'p0': 'P0', 'p1': 'P1', 'p2': 'P2', 'p3': 'P3', 'urgent': 'P0', 'high': 'P1', 'medium': 'P2', 'low': 'P3', '1': 'P0', '2': 'P1', '3': 'P2', '4': 'P3' }
@@ -668,17 +671,38 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
         const action = byName(state.actions.filter(a => a.active), get(r, 'action'))
         if (get(r, 'action') && !action) warnings.push(`action “${get(r, 'action')}” not found`)
         const person = byName(state.people, get(r, 'person'))
-        if (get(r, 'person') && !person) warnings.push(`person “${get(r, 'person')}” not found`)
+        // A person name that doesn't match an existing contact is no longer dropped — we create the
+        // contact at commit time and link it. Flagged in the preview so it's not a surprise.
+        const newPersonName = get(r, 'person') && !person ? get(r, 'person') : undefined
+        if (newPersonName) warnings.push(`“${newPersonName}” will be added to Contacts`)
         const vendor = byName(state.vendors, get(r, 'vendor'))
         if (get(r, 'vendor') && !vendor) warnings.push(`vendor “${get(r, 'vendor')}” not found`)
+
+        // An "action" of Call (on a to-do) really means "this is a call" — promote it to a call
+        // type so it flows into the Calls list, which is driven by type, not by the action label.
+        if (type === 'todo' && get(r, 'action').trim().toLowerCase() === 'call') {
+          type = 'call'
+          warnings.push('action “Call” → typed as a call (shows in Calls)')
+        }
+
         const dateOk = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d)
-        const due = get(r, 'due date')
-        if (due && !dateOk(due)) warnings.push(`due “${due}” not YYYY-MM-DD — skipped`)
+        const dueRaw = get(r, 'due date')
+        if (dueRaw && !dateOk(dueRaw)) warnings.push(`due “${dueRaw}” not YYYY-MM-DD — skipped`)
         const fu = get(r, 'follow-up date')
         if (fu && !dateOk(fu)) warnings.push(`follow-up “${fu}” not YYYY-MM-DD — skipped`)
+        let due = dateOk(dueRaw) ? dueRaw : undefined
+
+        // The Calls queue only surfaces a call once it has a contact AND a due date. So a call that
+        // comes in with a person but no date gets today's date, so it lands in Calls straight away
+        // instead of sitting silent. (Non-call tasks are never auto-dated.)
+        if (type === 'call' && (person || newPersonName) && !due) {
+          due = today()
+          warnings.push('call with no date → due today so it appears in Calls')
+        }
 
         out.push({
           warnings,
+          newPersonName,
           task: {
             title, type, priority, status,
             areaId: project ? project.areaId : area?.id,
@@ -686,7 +710,7 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
             categoryIds: category ? [category.id] : [],
             actionIds: action ? [action.id] : undefined,
             personId: person?.id, vendorId: vendor?.id,
-            due: dateOk(due) ? due : undefined,
+            due,
             followUp: dateOk(fu) ? fu : undefined,
             callAbout: get(r, 'call about') || undefined,
             waitingOn: get(r, 'waiting on') || undefined,
@@ -702,8 +726,20 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
 
   function commit() {
     if (!parsed) return
+    // Create any brand-new contacts once (deduped by name, and re-checking existing people in case
+    // one was added since parse), then link them to their tasks before creating the tasks.
+    const created = new Map<string, string>() // lowercased name → new person id
+    let newContacts = 0
+    for (const p of parsed) {
+      if (!p.newPersonName) continue
+      const key = p.newPersonName.trim().toLowerCase()
+      let id = created.get(key) ?? state.people.find(x => x.name.trim().toLowerCase() === key)?.id
+      if (!id) { id = addPerson({ name: p.newPersonName.trim() }).id; newContacts++ }
+      created.set(key, id)
+      p.task.personId = id
+    }
     for (const p of parsed) addTask(p.task)
-    toast.success(`Imported ${parsed.length} tasks — each one is in the audit trail`)
+    toast.success(`Imported ${parsed.length} task${parsed.length === 1 ? '' : 's'}${newContacts > 0 ? ` · ${newContacts} new contact${newContacts === 1 ? '' : 's'} added` : ''} — all in the audit trail`)
     setParsed(null); setFileName(''); onClose()
   }
 
@@ -731,7 +767,7 @@ function ImportTasksDialog({ open, onClose }: { open: boolean; onClose: () => vo
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">3</span>
               <div className="flex-1">
-                Upload it — you'll get a preview before anything is created. Anything that doesn't match an existing area/project/category/person/vendor is flagged in the preview and imported anyway with that bit left blank — nothing ever fails the whole row.
+                Upload it — you'll get a preview before anything is created. Anything that doesn't match an existing area/project/category/vendor is flagged in the preview and imported anyway with that bit left blank; a Person who isn't a contact yet is created for you and linked. Nothing ever fails the whole row.
                 <label className="mt-1.5 border border-dashed border-input rounded-sm p-5 text-center text-[13px] text-muted-foreground cursor-pointer hover:bg-accent/50 block">
                   {fileName || 'Click to choose your filled .xlsx or .csv'}
                   <input type="file" accept={SPREADSHEET_ACCEPT} className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
