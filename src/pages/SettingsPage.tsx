@@ -10,7 +10,7 @@ import { ColorPicker } from '@/components/ui/color-picker'
 import { fallbackDot } from '@/lib/colors'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { ColumnType, PriorityScheme, Tier, TIER_LABELS, Tracker, TrackerColumn } from '@/lib/model'
+import { ColumnType, PriorityScheme, Tier, TIER_COLOR, TIER_LABELS, Tracker, TrackerColumn } from '@/lib/model'
 import { actionUsage, categoryUsage, composeLunchCheckinText, composeMorningBriefText, useStore } from '@/lib/store'
 import { Cloud } from '@/lib/cloud'
 import { THEMES } from '@/lib/themes'
@@ -578,13 +578,21 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           </div>
         </Section>
 
-        <Section title="Contacts & cadence" sub="Targets, not rules — override per person on their detail page.">
-          <div className="grid grid-cols-2 gap-3">
+        <Section title="Relationship tiers" sub="Name each tier to fit how you think about your contacts, and set how often you want to reach each one. The four tiers keep their colour; only the label and cadence change, and every contact stays where it is.">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {(Object.keys(TIER_LABELS) as Tier[]).map(t => (
-              <div key={t} className="grid grid-cols-1 gap-1">
-                <Label className="text-xs">{TIER_LABELS[t]} — every N days</Label>
-                <Input type="number" value={s.tierCadence[t]} className="h-8"
-                  onChange={e => updateSettings({ tierCadence: { ...s.tierCadence, [t]: Number(e.target.value) || 1 } })} />
+              <div key={t} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 border border-border rounded-sm px-2.5 py-2 bg-card">
+                <span className="h-3 w-3 rounded-full shrink-0" style={{ background: TIER_COLOR[t] }} title={`${TIER_LABELS[t]} tier colour`} />
+                <Input
+                  value={s.tierLabels?.[t] ?? TIER_LABELS[t]}
+                  placeholder={TIER_LABELS[t]}
+                  className="h-8 text-[13px]"
+                  onChange={e => updateSettings({ tierLabels: { ...s.tierLabels, [t]: e.target.value } })}
+                />
+                <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap">every
+                  <Input type="number" value={s.tierCadence[t]} className="h-7 w-14 text-[12px]"
+                    onChange={e => updateSettings({ tierCadence: { ...s.tierCadence, [t]: Number(e.target.value) || 1 } })} />
+                  d</span>
               </div>
             ))}
           </div>

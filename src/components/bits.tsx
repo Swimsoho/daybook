@@ -1,7 +1,7 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { Priority, PRIORITY_LABELS, relDue, Tier, TIER_LABELS } from '@/lib/model'
+import { Priority, PRIORITY_LABELS, relDue, Tier, tierLabel } from '@/lib/model'
 import { useStore } from '@/lib/store'
 
 export function PriorityChip({ p, className }: { p: Priority; className?: string }) {
@@ -46,13 +46,14 @@ export function DueChip({ due }: { due?: string }) {
 }
 
 export function TierBadge({ tier }: { tier: Tier }) {
+  const { state } = useStore()
   const styles: Record<Tier, string> = {
     inner: 'bg-[hsl(17_63%_47%)] text-[hsl(45_50%_96%)]',
     active: 'bg-[hsl(152_25%_32%)] text-[hsl(45_50%_96%)]',
     network: 'bg-[hsl(215_35%_88%)] text-[hsl(215_40%_28%)]',
     dormant: 'bg-muted text-muted-foreground',
   }
-  return <Badge className={cn('rounded-sm text-[10.5px] uppercase tracking-wide hover:opacity-90', styles[tier])}>{TIER_LABELS[tier]}</Badge>
+  return <Badge className={cn('rounded-sm text-[10.5px] uppercase tracking-wide hover:opacity-90', styles[tier])}>{tierLabel(state.settings, tier)}</Badge>
 }
 
 export function SectionTitle({ children, right, className }: { children: React.ReactNode; right?: React.ReactNode; className?: string }) {

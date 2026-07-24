@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v64 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v65 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -454,3 +454,11 @@ None of these are things the rest of the app depends on to function — they're 
 52. **v64** — Category chips: every chip has a colour dot, and the row wraps instead of scrolling.
 
     Two small fixes to the category chip row on the Tasks page. First, a few categories (e.g. Bills, Construction) had no colour set, so their chips showed no dot and looked half‑finished — every chip now shows a dot, falling back to a stable auto‑picked colour when a category has none of its own (nothing is written to your data; it's purely how it's drawn). Second, the row was a single horizontal strip you had to scroll sideways through; it now **wraps onto multiple lines** to fit the page width, so all your categories are visible at once without the awkward side‑scroll.
+
+53. **v65** — Personalise the relationship tiers, colour‑coded contacts, and Gmail/phone CSV import.
+
+    **Rename your tiers.** Settings now has a **Relationship tiers** section where you can rename each of the four tiers to fit how you think about your contacts (e.g. Inner → "Family", Network → "Acquaintances") and set each one's contact cadence, each shown with its colour. The four tiers keep their identity and colour and every contact stays exactly where it is — only the labels change, and the new names show everywhere a tier appears.
+
+    **Colour‑coded contacts.** The People table now carries a coloured left edge on each row by tier (Inner = terracotta, Active = green, Network = blue, Dormant = grey), matching the tier badges — so an imported contact list reads by relationship at a glance instead of a wall of identical rows.
+
+    **Import Gmail / phone contacts by CSV.** The contacts importer now understands the column names Google Contacts and phone exports use ("First Name", "Last Name", "Phone 1 - Value", "E‑mail 1 - Value", "Notes"). So you can export your Gmail or phone contacts to a CSV and import them straight in — first and last name are joined into the contact name automatically. (A true live two‑way sync with Google/phone is a separate, backend feature — see the note below; this CSV path is the no‑backend way to get them in today.)

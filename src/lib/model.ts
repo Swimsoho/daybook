@@ -262,6 +262,10 @@ export interface Settings {
   stallDays: number
   projectWipLimit: number
   tierCadence: Record<Tier, number>
+  // Optional custom display names for the four relationship tiers (Settings > Relationship tiers).
+  // Falls back to the built-in TIER_LABELS when a tier has no override. The underlying four tier
+  // keys don't change — only how they're labelled — so all existing contacts keep their tier.
+  tierLabels?: Partial<Record<Tier, string>>
   quickActions: { done: boolean; called: boolean; snooze: boolean; reassign: boolean }
   features: {
     whatsapp: boolean
@@ -394,6 +398,20 @@ export const TIER_LABELS: Record<Tier, string> = {
   active: 'Active',
   network: 'Network',
   dormant: 'Dormant',
+}
+
+// Tier accent colours — used for the coloured edge on contact rows and anywhere a tier needs a
+// dot/wash, so an imported contact list reads by relationship tier at a glance.
+export const TIER_COLOR: Record<Tier, string> = {
+  inner: 'hsl(17 63% 47%)',
+  active: 'hsl(152 30% 36%)',
+  network: 'hsl(215 55% 52%)',
+  dormant: 'hsl(220 9% 60%)',
+}
+
+// The tier's display name, honouring a user's custom label from Settings when present.
+export function tierLabel(s: { tierLabels?: Partial<Record<Tier, string>> }, t: Tier): string {
+  return s.tierLabels?.[t]?.trim() || TIER_LABELS[t]
 }
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { Person, Tier, TIER_LABELS, daysSince, fmtDate, personCadence, personOverdueBy } from '@/lib/model'
+import { Person, Tier, TIER_COLOR, TIER_LABELS, daysSince, fmtDate, personCadence, personOverdueBy, tierLabel } from '@/lib/model'
 import { buildCallList, useStore } from '@/lib/store'
 import { ClearFiltersButton, EmptyNote, SectionTitle, TierBadge } from '@/components/bits'
 import { LogCallDialog, PersonDetail, SentimentDot } from '@/components/people'
@@ -48,7 +48,7 @@ export default function PeoplePage() {
     // tier, how-you-know-them, topics, and notes.
     let ps = state.people.filter(p =>
       (tierFilter === 'all' || p.tier === tierFilter) &&
-      (!q || [p.name, p.phone, p.email, TIER_LABELS[p.tier], p.how, p.topics, p.notes]
+      (!q || [p.name, p.phone, p.email, tierLabel(state.settings, p.tier), p.how, p.topics, p.notes]
         .some(v => (v ?? '').toLowerCase().includes(q))),
     )
     const val = (p: Person): string | number => {
@@ -95,7 +95,7 @@ export default function PeoplePage() {
           <SelectTrigger className="h-8 w-36 bg-card text-[12.5px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All tiers</SelectItem>
-            {(Object.keys(TIER_LABELS) as Tier[]).map(t => <SelectItem key={t} value={t}>{TIER_LABELS[t]} — every {state.settings.tierCadence[t]}d</SelectItem>)}
+            {(Object.keys(TIER_LABELS) as Tier[]).map(t => <SelectItem key={t} value={t}>{tierLabel(state.settings, t)} — every {state.settings.tierCadence[t]}d</SelectItem>)}
           </SelectContent>
         </Select>
         <span className="text-[11px] text-muted-foreground hidden sm:inline">Click a column header to sort</span>
@@ -128,7 +128,7 @@ export default function PeoplePage() {
               const over = personOverdueBy(p, state.settings)
               const lastInt = state.interactions.find(i => i.personId === p.id)
               return (
-                <tr key={p.id} className="border-b border-border/60 last:border-0 hover:bg-accent/50 group">
+                <tr key={p.id} className="border-b border-border/60 last:border-0 hover:bg-accent/50 group" style={{ boxShadow: `inset 3px 0 0 ${TIER_COLOR[p.tier]}` }}>
                   <td className="px-4 py-2">
                     <button onClick={() => setViewPerson(p)} className="font-medium hover:text-[hsl(17_63%_47%)] text-left">
                       {p.name}{p.vip && <span className="text-[9.5px] align-top text-[hsl(40_65%_38%)] font-bold ml-1">VIP</span>}
@@ -165,6 +165,7 @@ export default function PeoplePage() {
 }
 
 function AddPersonDialog({ open, onClose, onAdd }: { open: boolean; onClose: () => void; onAdd: (p: Partial<Person> & { name: string }) => void }) {
+  const { state } = useStore()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [tier, setTier] = useState<Tier>('network')
@@ -181,7 +182,7 @@ function AddPersonDialog({ open, onClose, onAdd }: { open: boolean; onClose: () 
               <Label className="text-xs">Tier</Label>
               <Select value={tier} onValueChange={v => setTier(v as Tier)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{(Object.keys(TIER_LABELS) as Tier[]).map(t => <SelectItem key={t} value={t}>{TIER_LABELS[t]}</SelectItem>)}</SelectContent>
+                <SelectContent>{(Object.keys(TIER_LABELS) as Tier[]).map(t => <SelectItem key={t} value={t}>{tierLabel(state.settings, t)}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">How you know them</Label><Input value={how} onChange={e => setHow(e.target.value)} /></div>
@@ -265,7 +266,10 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
         const cadRaw = get(r, 'cadence')
         const cadence = cadRaw ? parseInt(cadRaw, 10) : undefined
         if (cadRaw && (!cadence || cadence < 1)) warnings.push(`cadence "${cadRaw}" ignored`)
-        const email = get(r, 'email')
+        // Tolerate Google Contacts / phone exports: email is "E-mail 1 - Value", phone is
+        // "Phone 1 - Value" (which already startsWith "phone"). So users can export their Gmail or
+        // phone contacts to CSV and import them here directly, no reformatting.
+        const email = get(r, 'email') || get(r, 'e-mail')
         const phone = get(r, 'phone')
         const existing = state.people.find(p =>
           (email && p.email && p.email.toLowerCase() === email.toLowerCase()) ||
