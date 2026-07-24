@@ -138,6 +138,7 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
   const roll = kids.length ? rollup(state, task.id) : null
   const person = state.people.find(p => p.id === task.personId)
   const project = state.projects.find(p => p.id === task.projectId)
+  const category = state.categories.find(c => task.categoryIds.includes(c.id))
   const qa = state.settings.quickActions
   const done = task.status === 'done' || task.status === 'dropped'
 
@@ -227,6 +228,12 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             {showArea && <AreaDot areaId={task.areaId} withName />}
+            {category && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap">
+                <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: category.color || 'hsl(215 20% 65%)' }} />
+                {category.name}
+              </span>
+            )}
             {project && <span className="text-[11px] text-muted-foreground truncate">› {project.name}</span>}
             {person && <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5"><User className="h-2.5 w-2.5" />{person.name}</span>}
             {task.status === 'waiting' && task.waitingOn && (

@@ -59,7 +59,9 @@ const VIEWS: { id: View; label: string }[] = [
 ]
 
 export default function TasksPage({ projectFilter, onClearProject }: { projectFilter?: string | null; onClearProject?: () => void }) {
-  const { state, updateTask, completeTask, dropTask, deleteTask, reinsertTasks } = useStore()
+  const { state, updateTask, completeTask, dropTask, deleteTask, reinsertTasks, updateSettings } = useStore()
+  // How rows are laid out: the concise column table (default) or the roomy stacked cards.
+  const viewMode = state.settings.taskViewMode ?? 'table'
   const [view, setView] = useState<View>('today')
   const [search, setSearch] = useState('')
   const [areaFilter, setAreaFilter] = useState('all')
@@ -255,8 +257,25 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
             {v.label}
           </button>
         ))}
-        <div className="ml-auto flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" className="h-8" onClick={() => setExpandAll(v => !v)}>{expandAll ? 'Collapse all' : 'Expand all'}</Button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {view !== 'list' && (
+            <div className="inline-flex rounded-md border border-border bg-card p-0.5" role="group" aria-label="Row layout">
+              {(['table', 'card'] as const).map(m => (
+                <button
+                  key={m}
+                  onClick={() => updateSettings({ taskViewMode: m })}
+                  className={cn(
+                    'h-7 px-2.5 text-[11.5px] rounded-[5px] transition-colors',
+                    viewMode === m ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  title={m === 'table' ? 'Concise columns with sortable, filterable headers' : 'Roomy stacked rows'}
+                >
+                  {m === 'table' ? 'Table' : 'Cards'}
+                </button>
+              ))}
+            </div>
+          )}
+          {viewMode === 'card' && <Button variant="outline" size="sm" className="h-8" onClick={() => setExpandAll(v => !v)}>{expandAll ? 'Collapse all' : 'Expand all'}</Button>}
           <Button variant="outline" size="sm" className="h-8" onClick={exportCsv}><Download className="h-3.5 w-3.5 mr-1.5" />Export</Button>
           <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}><FileUp className="h-3.5 w-3.5 mr-1.5" />Import</Button>
           <Button size="sm" className="h-8" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Add task</Button>
@@ -484,7 +503,9 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
                     <span className="text-[11px] tabular text-muted-foreground ml-auto">{g.tasks.length}</span>
                   )}
                 </div>
-                {g.tasks.map(t => (
+                {viewMode === 'table' ? (
+                  <TaskListTable tasks={g.tasks} selected={selected} onToggleSelect={toggleSelect} onOpen={setOpenTask} bare />
+                ) : g.tasks.map(t => (
                   <TaskRow key={t.id} task={t} onOpen={setOpenTask} expandAll={expandAll} selected={selected.has(t.id)} onToggleSelect={toggleSelect} />
                 ))}
               </section>
@@ -522,12 +543,16 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
               </div>
               <QuickAdd areaId={area.id} />
               {tasks.length === 0 && <EmptyNote>Nothing open here — type above or drag a task in.</EmptyNote>}
-              {tasks.map(t => (
+              {tasks.length > 0 && (viewMode === 'table' ? (
+                <TaskListTable tasks={tasks} selected={selected} onToggleSelect={toggleSelect} onOpen={setOpenTask} hideAreaCol bare />
+              ) : tasks.map(t => (
                 <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} expandAll={expandAll} selected={selected.has(t.id)} onToggleSelect={toggleSelect} />
-              ))}
+              )))}
             </section>
           ))}
         </div>
+      ) : viewMode === 'table' && view !== 'done' ? (
+        <TaskListTable tasks={sorted} selected={selected} onToggleSelect={toggleSelect} onOpen={setOpenTask} />
       ) : (
         <section className="border border-border bg-card shadow-sm rounded-lg">
           {sorted.length === 0 && <EmptyNote>Nothing in this view{view === 'someday' ? ' — the backlog rests until the weekly review' : ''}.</EmptyNote>}
@@ -563,15 +588,57 @@ const SORT_LABELS: Record<SortKey, string> = {
   title: 'Title', type: 'Type', area: 'Area', project: 'Project', category: 'Category', action: 'Action', priority: 'Priority', status: 'Status', due: 'Due',
 }
 
-export function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
+// Which header columns carry their own little filter control. Filtering lives right on the
+// header (as requested) and composes with — i.e. narrows further than — whatever page-level
+// filters already produced `tasks`.
+type ColFilterKey = 'area' | 'category' | 'priority' | 'status'
+
+export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAreaCol = false, bare = false }: {
   tasks: Task[]
   selected?: Set<string>
   onToggleSelect?: (id: string) => void
   onOpen: (t: Task) => void
+  // In the "By Area" grouping the area is already the section header, so the column would just
+  // repeat it — hide it there to keep rows tight.
+  hideAreaCol?: boolean
+  // When embedded inside a group card (By Day / By Area) drop the table's own card chrome so it
+  // doesn't render a border-inside-a-border.
+  bare?: boolean
 }) {
   const { state, updateTask } = useStore()
+  const scheme = state.settings.priorityScheme
   const [sortKey, setSortKey] = useState<SortKey>('priority')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  // Per-column header filters. 'all' = no constraint. Values are ids for area/category, the raw
+  // Priority/Status codes for those two.
+  const [colFilter, setColFilter] = useState<Record<ColFilterKey, string>>({ area: 'all', category: 'all', priority: 'all', status: 'all' })
+  const setCF = (k: ColFilterKey, v: string) => setColFilter(f => ({ ...f, [k]: v }))
+  const cfActive = Object.values(colFilter).some(v => v !== 'all')
+
+  // Options for each header filter are built from what's actually present in these rows, so the
+  // dropdowns never offer a value that would show nothing.
+  const filterOpts = useMemo(() => {
+    const areaIds = new Set<string>(), catIds = new Set<string>(), prios = new Set<string>(), stats = new Set<string>()
+    for (const t of tasks) {
+      if (t.areaId) areaIds.add(t.areaId)
+      t.categoryIds.forEach(c => catIds.add(c))
+      prios.add(t.priority)
+      stats.add(t.status)
+    }
+    return {
+      areas: state.areas.filter(a => areaIds.has(a.id)),
+      cats: state.categories.filter(c => catIds.has(c.id)),
+      prios: (['P0', 'P1', 'P2', 'P3'] as Priority[]).filter(p => prios.has(p)),
+      stats: (['inbox', 'next', 'in-progress', 'waiting', 'done', 'dropped'] as TaskStatus[]).filter(s => stats.has(s)),
+    }
+  }, [tasks, state.areas, state.categories])
+
+  const filtered = useMemo(() => tasks.filter(t =>
+    (colFilter.area === 'all' || t.areaId === colFilter.area) &&
+    (colFilter.category === 'all' || t.categoryIds.includes(colFilter.category)) &&
+    (colFilter.priority === 'all' || t.priority === colFilter.priority) &&
+    (colFilter.status === 'all' || t.status === colFilter.status)
+  ), [tasks, colFilter])
 
   function valueFor(t: Task, key: SortKey): string {
     switch (key) {
@@ -588,34 +655,71 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
   }
 
   const rows = useMemo(() => {
-    const arr = [...tasks].sort((a, b) => valueFor(a, sortKey).localeCompare(valueFor(b, sortKey)))
+    const arr = [...filtered].sort((a, b) => valueFor(a, sortKey).localeCompare(valueFor(b, sortKey)))
     return sortDir === 'asc' ? arr : arr.reverse()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks, sortKey, sortDir, state.areas, state.projects, state.categories, state.actions])
+  }, [filtered, sortKey, sortDir, state.areas, state.projects, state.categories, state.actions])
 
   function headerClick(key: SortKey) {
     if (key === sortKey) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
     else { setSortKey(key); setSortDir('asc') }
   }
 
-  if (rows.length === 0) return <EmptyNote>Nothing matches the current filters.</EmptyNote>
+  const columns = (['title', 'type', 'area', 'project', 'category', 'action', 'priority', 'status', 'due'] as SortKey[])
+    .filter(k => !(hideAreaCol && k === 'area'))
+
+  // The tiny filter control that sits under a sortable header label. Stops click-to-sort from
+  // firing when you interact with the dropdown.
+  function HeaderFilter({ ckey, options }: { ckey: ColFilterKey; options: { value: string; label: string }[] }) {
+    return (
+      <select
+        value={colFilter[ckey]}
+        onClick={e => e.stopPropagation()}
+        onChange={e => { e.stopPropagation(); setCF(ckey, e.target.value) }}
+        className={cn(
+          'mt-1 block h-5 max-w-[110px] rounded-sm border bg-background px-1 text-[10px] font-normal normal-case tracking-normal cursor-pointer outline-none',
+          colFilter[ckey] === 'all' ? 'border-border text-muted-foreground' : 'border-[hsl(17_63%_47%)] text-foreground',
+        )}
+      >
+        <option value="all">All</option>
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    )
+  }
+
+  if (tasks.length === 0) return <EmptyNote>Nothing matches the current filters.</EmptyNote>
 
   return (
-    <section className="border border-border bg-card shadow-sm rounded-lg overflow-x-auto">
+    <section className={cn('overflow-x-auto', !bare && 'border border-border bg-card shadow-sm rounded-lg')}>
+      {cfActive && (
+        <div className="flex items-center gap-2 px-2.5 py-1.5 border-b border-border bg-accent/20 text-[11px] text-muted-foreground">
+          <span>Column filters active — showing {rows.length} of {tasks.length}.</span>
+          <button
+            onClick={() => setColFilter({ area: 'all', category: 'all', priority: 'all', status: 'all' })}
+            className="text-[hsl(17_63%_47%)] hover:underline font-medium"
+          >
+            Clear column filters
+          </button>
+        </div>
+      )}
       <table className="w-full text-[12.5px] border-collapse min-w-[820px]">
         <thead className="border-b border-border bg-accent/30">
           <tr>
-            {onToggleSelect && <th className="px-2.5 py-2 w-8" />}
-            {(['title', 'type', 'area', 'project', 'category', 'action', 'priority', 'status', 'due'] as SortKey[]).map(k => (
+            {onToggleSelect && <th className="px-2.5 py-2 w-8 align-top" />}
+            {columns.map(k => (
               <th
                 key={k}
                 onClick={() => headerClick(k)}
-                className="px-2.5 py-2 text-left text-[10.5px] uppercase tracking-wide text-muted-foreground font-medium cursor-pointer select-none hover:text-foreground whitespace-nowrap"
+                className="px-2.5 py-2 text-left text-[10.5px] uppercase tracking-wide text-muted-foreground font-medium cursor-pointer select-none hover:text-foreground whitespace-nowrap align-top"
               >
                 <span className="inline-flex items-center gap-1">
                   {SORT_LABELS[k]}
                   {sortKey === k && <ArrowUpDown className="h-2.5 w-2.5" />}
                 </span>
+                {k === 'area' && <HeaderFilter ckey="area" options={filterOpts.areas.map(a => ({ value: a.id, label: a.name }))} />}
+                {k === 'category' && <HeaderFilter ckey="category" options={filterOpts.cats.map(c => ({ value: c.id, label: c.name }))} />}
+                {k === 'priority' && <HeaderFilter ckey="priority" options={filterOpts.prios.map(p => ({ value: p, label: PRIORITY_LABELS[scheme][p] }))} />}
+                {k === 'status' && <HeaderFilter ckey="status" options={filterOpts.stats.map(s => ({ value: s, label: STATUS_LABELS[s] }))} />}
               </th>
             ))}
           </tr>
@@ -642,11 +746,13 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
                   <button onClick={() => onOpen(t)} className="truncate text-left hover:underline block w-full">{t.title}</button>
                 </td>
                 <td className="px-2.5 py-1.5 text-muted-foreground whitespace-nowrap">{TYPE_LABELS[t.type]}</td>
-                <td className="px-2.5 py-1.5 whitespace-nowrap">
-                  {area ? (
-                    <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full shrink-0" style={{ background: area.color }} />{area.name}</span>
-                  ) : <span className="text-muted-foreground">—</span>}
-                </td>
+                {!hideAreaCol && (
+                  <td className="px-2.5 py-1.5 whitespace-nowrap">
+                    {area ? (
+                      <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full shrink-0" style={{ background: area.color }} />{area.name}</span>
+                    ) : <span className="text-muted-foreground">—</span>}
+                  </td>
+                )}
                 <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[160px]">{project?.name ?? '—'}</td>
                 <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[130px]">{category?.name ?? '—'}</td>
                 <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[110px]">{action?.name ?? '—'}</td>
@@ -660,15 +766,24 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen }: {
                     }}
                     className="h-6 text-[11px] border border-border rounded-sm bg-background px-1 text-muted-foreground hover:border-input hover:text-foreground cursor-pointer outline-none"
                   >
-                    {(['inbox', 'next', 'in-progress', 'waiting'] as TaskStatus[]).filter(s => s !== 'inbox' || t.status === 'inbox').map(s => (
-                      <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                    ))}
+                    {(['inbox', 'next', 'in-progress', 'waiting', 'done', 'dropped'] as TaskStatus[])
+                      .filter(s => (['next', 'in-progress', 'waiting'] as TaskStatus[]).includes(s) || s === t.status)
+                      .map(s => (
+                        <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                      ))}
                   </select>
                 </td>
                 <td className="px-2.5 py-1.5 whitespace-nowrap"><DueChip due={t.due} /></td>
               </tr>
             )
           })}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={columns.length + (onToggleSelect ? 1 : 0)} className="px-2.5 py-4 text-center text-[12px] text-muted-foreground italic">
+                No tasks match the column filters.
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </section>

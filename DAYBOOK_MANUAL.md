@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v69 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v70 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -480,3 +480,9 @@ None of these are things the rest of the app depends on to function — they're 
 57. **v69** — Reorder your trackers (drag, or up/down arrows).
 
     Under Settings → Notes & Collections, the trackers inside each collection can now be **reordered** — grab the drag handle (the grip on the left of each tracker row) and drop it where you want, or use the small **up/down arrows**. The order is per‑collection (a tracker only moves among the trackers in its own collection), and it's the order they'll appear in. Two ways to do it so it's easy either way: drag for speed, arrows for precision.
+
+58. **v70** — Tasks: a concise **Table** layout with sortable, filterable column headers (now the default), and area + category shown on every row.
+
+    The task list can now render two ways, switched with the **Table / Cards** toggle at the top‑right of the Tasks page. **Table** (the new default) is the compact, spreadsheet‑style view you asked for: each task is a single tight row with proper columns — **Title · Type · Area · Project · Category · Action · Priority · Status · Due**. So the **area now sits right next to the task** instead of stacked underneath, and the **category has its own column** rather than being hidden. **Cards** is the original roomier layout, kept for anyone who prefers it (and it now also shows the category as a small chip next to the area).
+
+    **Sort and filter live on the headers.** Click any column header to sort by it (click again to flip the direction — the ⇅ marks the active column). And four columns — **Area, Category, Priority, Status** — carry a little **filter dropdown right in the header**: pick a value to narrow the list to just those rows, stack several together, and a "Clear column filters" strip appears so you always know when a filter is on and how many rows it's hiding. These header filters work on top of the existing search/area/priority filter bar, so you can be as coarse or precise as you like. The choice of Table vs Cards is remembered per user and applies across every list view (Today, This Week, By Day, By Area, Waiting, Someday, Everything, Accomplished). Accomplished stays as cards so it can keep showing the completed/dropped date under each item.

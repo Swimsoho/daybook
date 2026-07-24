@@ -247,6 +247,11 @@ export type ThemeId = 'sage' | 'clay' | 'ocean' | 'plum' | 'slate' | 'ink' | 'bu
 export interface Settings {
   theme: ThemeId
   priorityScheme: PriorityScheme
+  // How the Tasks page lists items: 'card' = the roomy stacked rows, 'table' = the concise
+  // column layout (Task · Area · Category · Priority · Status · Due) with sortable, filterable
+  // headers. Absent = 'table' (the default the UI falls back to). Applies to every list-style
+  // view (Today, This Week, Waiting, Someday, Everything, Accomplished, By Area, By Day).
+  taskViewMode?: 'card' | 'table'
   eisenhower: boolean
   dailyCapacity: number
   callGoal: number
