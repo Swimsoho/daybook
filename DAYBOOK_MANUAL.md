@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v63 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v64 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -450,3 +450,7 @@ None of these are things the rest of the app depends on to function — they're 
 51. **v63** — The Today summary tiles now drill into the exact items behind the number.
 
     Clicking a tile on the Today page used to dump you on a whole page (all tasks, everyone), which didn't tell you *which* items the number referred to — and the counts didn't even line up, because the tiles deliberately exclude calls while the Tasks page lists everything. Now each tile opens a focused pop‑up listing **exactly** the items it counts: **Today** shows the day's tasks, **Overdue** shows the specific overdue tasks (calls excluded — they're under Calls), and **Calls** shows the specific calls to make (call‑tasks plus the cadence people). Click any item in the pop‑up to open it. So the number and the list always agree, and it's clear what each figure is alerting you to. (Inbox still opens the Inbox page, which already *is* the exact list of items to confirm.) This also explains the earlier "1 vs 2 overdue" confusion: the Overdue tile counts non‑call overdue items, and any overdue **call** shows under Calls instead.
+
+52. **v64** — Category chips: every chip has a colour dot, and the row wraps instead of scrolling.
+
+    Two small fixes to the category chip row on the Tasks page. First, a few categories (e.g. Bills, Construction) had no colour set, so their chips showed no dot and looked half‑finished — every chip now shows a dot, falling back to a stable auto‑picked colour when a category has none of its own (nothing is written to your data; it's purely how it's drawn). Second, the row was a single horizontal strip you had to scroll sideways through; it now **wraps onto multiple lines** to fit the page width, so all your categories are visible at once without the awkward side‑scroll.

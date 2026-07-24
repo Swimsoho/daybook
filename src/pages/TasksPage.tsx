@@ -23,6 +23,21 @@ const SORT_BY_LABELS: Record<SortBy, string> = {
   due: 'Due date', priority: 'Priority', title: 'Title (A–Z)', created: 'Recently added', area: 'Area',
 }
 
+// Category chips should always carry a colour dot. When a category has no colour of its own, fall
+// back to a stable colour picked from this palette by hashing its id — so "Bills", "Construction"
+// etc. get a consistent dot instead of a blank chip, without writing anything to the data.
+const CATEGORY_DOT_FALLBACKS = [
+  'hsl(215 48% 52%)', 'hsl(152 32% 40%)', 'hsl(28 65% 50%)', 'hsl(280 35% 55%)',
+  'hsl(8 60% 52%)', 'hsl(175 40% 40%)', 'hsl(45 60% 45%)', 'hsl(330 42% 55%)',
+  'hsl(255 40% 58%)', 'hsl(120 30% 42%)', 'hsl(200 45% 45%)', 'hsl(15 55% 50%)',
+]
+function categoryDot(c: { id: string; color?: string }): string {
+  if (c.color) return c.color
+  let h = 0
+  for (let i = 0; i < c.id.length; i++) h = (h * 31 + c.id.charCodeAt(i)) >>> 0
+  return CATEGORY_DOT_FALLBACKS[h % CATEGORY_DOT_FALLBACKS.length]
+}
+
 // "End of this week" for the bulk due-date picker — the upcoming Friday (today if it's already
 // Friday). Any due date inside the next 7 days lands a task in the This Week view, so this is a
 // natural, meaningful target for "schedule these for this week".
@@ -293,7 +308,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       </div>
 
       {/* Category chips — click to filter, drag a task onto one to re-categorize */}
-      <div className="flex items-center gap-1.5 overflow-x-auto -mt-1">
+      <div className="flex flex-wrap items-center gap-1.5 -mt-1">
         <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground shrink-0 mr-1">Categories</span>
         {state.categories.filter(c => c.active && c.level === 0).map(c => (
           <button
@@ -314,11 +329,11 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
               dragCat === c.id && 'ring-2 ring-[hsl(17_63%_47%)] scale-105 border-[hsl(17_63%_47%)]',
             )}
           >
-            {c.color && <span className="h-2 w-2 rounded-full" style={{ background: c.color }} />}
+            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: categoryDot(c) }} />
             {c.name}
           </button>
         ))}
-        <span className="text-[10.5px] text-muted-foreground italic shrink-0 ml-1">drag a task onto a chip to re-categorize</span>
+        <span className="text-[10.5px] text-muted-foreground italic ml-1">drag a task onto a chip to re-categorize</span>
       </div>
 
       {/* Bulk selection + actions */}
