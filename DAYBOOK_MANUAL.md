@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v67 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v68 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -470,3 +470,9 @@ None of these are things the rest of the app depends on to function — they're 
 55. **v67** — Relationship tiers are now fully add / delete, not just the fixed four.
 
     The four tiers were previously hard‑wired; you could rename them but not change how many there were. Now they're **your own list** (Settings → Contacts → Relationship tiers): **add** a tier, **delete** one (its contacts are automatically moved to your first tier so none are lost — you can't delete the last remaining tier), and for each one set the **name**, **colour** (a proper colour picker), and **contact cadence**. Everything that uses tiers follows your list — the contact table's colour edges and tier badges, the tier filter and column sort, the "Contacts by tier" report, the add‑contact form, the per‑contact tier picker, and the import (which matches your tier names, and whose Excel template's Tier dropdown is built from them). Your existing contacts keep their tier throughout; the built‑in four are simply the starting point you can now reshape.
+
+56. **v68** — Import contacts from Gmail / iCloud / Outlook (vCard support), and Settings tabs left‑aligned.
+
+    **Bring in your existing contacts, no re‑typing, no duplicates.** The contacts importer now reads **vCard (.vcf)** files directly — the format iPhone/iCloud and Outlook export — on top of the Google/phone CSV support added earlier. So you can export your address book from **Gmail** (Contacts → Export → Google CSV or vCard), **iPhone/iCloud** (iCloud.com → Contacts → Export vCard), or **Outlook** (People → Export → CSV) and drop the file straight into Import contacts. Crucially, it **merges, never recreates**: a contact matching an existing one by email or name updates that record instead of adding a duplicate, so you can re‑import any time to pull in new people and refresh details without making a mess. (A live, always‑in‑sync connection is a separate backend/OAuth project — this file import is the no‑setup way to get them all in now.)
+
+    **Settings tabs left‑aligned.** After the settings page was split into tabs, some tabs' sections were showing pushed to the right (a leftover of the old two‑column layout). Every tab's content now starts cleanly from the left in a single, comfortably‑sized column.

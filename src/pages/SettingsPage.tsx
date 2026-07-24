@@ -363,7 +363,9 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
       </div>
 
       <SettingsCatCtx.Provider value={activeCat}>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 items-start">
+      {/* Single left-aligned column (capped width) so a tab's sections always start from the left,
+          rather than landing in whichever half of the old two-column grid they used to sit in. */}
+      <div className="grid grid-cols-1 gap-4 max-w-3xl">
       <div className="grid grid-cols-1 gap-4">
         <Section cat="appearance" title="Appearance" sub="Pick a colour palette and display size for the whole app — takes effect immediately, everywhere.">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">

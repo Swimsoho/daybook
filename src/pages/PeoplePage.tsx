@@ -231,6 +231,36 @@ function normalizeBirthday(raw: string): string | undefined {
   return iso
 }
 
+// Parse a vCard (.vcf) export — the format iPhone/iCloud, Outlook and Google Contacts all offer —
+// into the same row shape the CSV importer already understands (First name / Last name / Phone /
+// Email / Notes). So Apple/phone contacts import natively without converting to CSV first.
+function parseVCards(text: string): string[][] {
+  const header = ['First name', 'Last name', 'Phone / WhatsApp', 'Email', 'Notes']
+  const rows: string[][] = [header]
+  const unesc = (v: string) => v.replace(/\\n/gi, ' ').replace(/\\,/g, ',').replace(/\\;/g, ';').replace(/\\\\/g, '\\').trim()
+  // Unfold RFC-6350 folded lines (a continuation line starts with a space or tab).
+  const unfolded = text.replace(/\r\n/g, '\n').replace(/\n[ \t]/g, '')
+  for (const card of unfolded.split(/BEGIN:VCARD/i).slice(1)) {
+    const body = card.split(/END:VCARD/i)[0]
+    let first = '', last = '', fn = '', tel = '', email = '', note = ''
+    for (const line of body.split('\n')) {
+      const idx = line.indexOf(':')
+      if (idx === -1) continue
+      const key = line.slice(0, idx).split(';')[0].toUpperCase()
+      const val = unesc(line.slice(idx + 1))
+      if (key === 'N') { const parts = val.split(';'); last = parts[0] || ''; first = parts[1] || '' }
+      else if (key === 'FN' && !fn) fn = val
+      else if (key === 'TEL' && !tel) tel = val
+      else if (key === 'EMAIL' && !email) email = val
+      else if (key === 'NOTE' && !note) note = val
+    }
+    if (!first && !last && fn) { const sp = fn.split(/\s+/); first = sp.shift() || ''; last = sp.join(' ') }
+    if (!([first, last].filter(Boolean).join(' ') || fn).trim()) continue
+    rows.push([first, last, tel, email, note])
+  }
+  return rows
+}
+
 interface ParsedPerson {
   person: Partial<Person> & { name: string }
   mergeWith?: Person
@@ -244,7 +274,10 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
 
   function handleFile(f: File) {
     setFileName(f.name)
-    parseSpreadsheetFile(f).then(rows => {
+    // .vcf (vCard) exports are read as text and converted to rows; everything else goes through the
+    // spreadsheet parser. Both then run the identical merge/preview pipeline below.
+    const loader = /\.vcf$/i.test(f.name) || f.type.includes('vcard') ? f.text().then(parseVCards) : parseSpreadsheetFile(f)
+    loader.then(rows => {
       if (rows.length < 2) { toast.error('No data rows found - start from the template'); return }
       const header = rows[0].map(h => h.trim().toLowerCase())
       const col = (n: string) => header.findIndex(h => h.startsWith(n))
@@ -330,21 +363,22 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">1</span>
               <div>
-                Download the Excel template - all fields, example rows, allowed values.
-                <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={() => downloadContactsTemplate(resolveTiers(state.settings).map(t => t.name))}>Download template (.xlsx)</Button></div>
+                <b>Bring in contacts you already have.</b> Export them from Gmail, iCloud/iPhone, or Outlook and drop the file in below — or fill the Excel template if you're starting fresh.
+                <ul className="mt-1 text-[12px] text-muted-foreground list-disc pl-4 space-y-0.5">
+                  <li><b>Gmail:</b> Google Contacts → Export → <i>Google CSV</i> (or vCard).</li>
+                  <li><b>iPhone / iCloud:</b> iCloud.com → Contacts → select all → Export vCard (<code>.vcf</code>).</li>
+                  <li><b>Outlook:</b> People → Manage → Export contacts → CSV.</li>
+                </ul>
+                <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={() => downloadContactsTemplate(resolveTiers(state.settings).map(t => t.name))}>Or download the Excel template (.xlsx)</Button></div>
               </div>
             </div>
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">2</span>
-              <span>Fill it in - one person per row, only <b>Name</b> required - and save it (.xlsx or .csv both work).</span>
-            </div>
-            <div className="flex items-start gap-3 text-[13px]">
-              <span className="font-display font-semibold text-muted-foreground">3</span>
               <div className="flex-1">
-                Upload for a preview. Duplicates (same email or name) are detected and merged, never doubled.
+                Drop your file in — <b>.vcf, .csv or .xlsx</b> all work. You'll get a preview first, and <b>duplicates (same email or name) are merged into the existing contact, never doubled</b> — so importing again later just updates and adds, it never recreates.
                 <label className={cn('mt-1.5 border border-dashed border-input rounded-sm p-5 text-center text-[13px] text-muted-foreground cursor-pointer hover:bg-accent/50 block')}>
-                  {fileName || 'Click to choose your filled .xlsx or .csv'}
-                  <input type="file" accept={SPREADSHEET_ACCEPT} className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                  {fileName || 'Click to choose a .vcf, .csv or .xlsx file'}
+                  <input type="file" accept={`${SPREADSHEET_ACCEPT},.vcf,text/vcard,text/x-vcard`} className="hidden" onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])} />
                 </label>
               </div>
             </div>
