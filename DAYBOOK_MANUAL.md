@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v68 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v69 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -476,3 +476,7 @@ None of these are things the rest of the app depends on to function — they're 
     **Bring in your existing contacts, no re‑typing, no duplicates.** The contacts importer now reads **vCard (.vcf)** files directly — the format iPhone/iCloud and Outlook export — on top of the Google/phone CSV support added earlier. So you can export your address book from **Gmail** (Contacts → Export → Google CSV or vCard), **iPhone/iCloud** (iCloud.com → Contacts → Export vCard), or **Outlook** (People → Export → CSV) and drop the file straight into Import contacts. Crucially, it **merges, never recreates**: a contact matching an existing one by email or name updates that record instead of adding a duplicate, so you can re‑import any time to pull in new people and refresh details without making a mess. (A live, always‑in‑sync connection is a separate backend/OAuth project — this file import is the no‑setup way to get them all in now.)
 
     **Settings tabs left‑aligned.** After the settings page was split into tabs, some tabs' sections were showing pushed to the right (a leftover of the old two‑column layout). Every tab's content now starts cleanly from the left in a single, comfortably‑sized column.
+
+57. **v69** — Reorder your trackers (drag, or up/down arrows).
+
+    Under Settings → Notes & Collections, the trackers inside each collection can now be **reordered** — grab the drag handle (the grip on the left of each tracker row) and drop it where you want, or use the small **up/down arrows**. The order is per‑collection (a tracker only moves among the trackers in its own collection), and it's the order they'll appear in. Two ways to do it so it's easy either way: drag for speed, arrows for precision.

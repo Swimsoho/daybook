@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowDownAZ, Check, ChevronDown, ChevronRight, ChevronUp, Plus, Trash2 } from 'lucide-react'
+import { ArrowDownAZ, Check, ChevronDown, ChevronRight, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -93,11 +93,17 @@ function ReorderArrows({ onUp, onDown }: { onUp: () => void; onDown: () => void 
   )
 }
 
-function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
+function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate, onUp, onDown, onDragStart, onDragOver, onDrop, dragging }: {
   tracker: Tracker
   expanded: boolean
   onToggle: () => void
   onUpdate: (patch: Partial<Tracker>) => void
+  onUp?: () => void
+  onDown?: () => void
+  onDragStart?: () => void
+  onDragOver?: (e: React.DragEvent) => void
+  onDrop?: (e: React.DragEvent) => void
+  dragging?: boolean
 }) {
   const columns = tracker.columns
   const setColumns = (next: TrackerColumn[]) => onUpdate({ columns: next })
@@ -129,8 +135,22 @@ function TrackerSetupRow({ tracker, expanded, onToggle, onUpdate }: {
   const optionColumns = columns.filter(c => c.type === 'select' || c.type === 'status' || c.type === 'checkbox')
 
   return (
-    <div className={cn('border border-border rounded-sm bg-background', !tracker.active && 'opacity-60')}>
-      <div className="flex items-center gap-2 px-2 py-1.5">
+    <div
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={cn('border border-border rounded-sm bg-background transition-shadow', !tracker.active && 'opacity-60', dragging && 'opacity-40 ring-1 ring-primary')}
+    >
+      <div className="flex items-center gap-1.5 px-2 py-1.5">
+        {/* Drag handle to reorder, plus up/down arrows as a reliable fallback. */}
+        <span
+          draggable={!!onDragStart}
+          onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart?.() }}
+          title="Drag to reorder"
+          className={cn('shrink-0 text-muted-foreground/60', onDragStart ? 'cursor-grab active:cursor-grabbing hover:text-foreground' : 'opacity-0')}
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </span>
+        {(onUp || onDown) && <ReorderArrows onUp={() => onUp?.()} onDown={() => onDown?.()} />}
         <button onClick={onToggle} className="text-muted-foreground hover:text-foreground shrink-0">
           {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </button>
@@ -256,10 +276,11 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
     addAction, updateAction, deleteAction,
     addCollection, updateCollection, addTracker, updateTracker,
     reorderArea, reorderCategory, reorderAction, sortAreasByName, sortCategoriesByName, sortActionsByName,
-    addTier, updateTier, deleteTier,
+    addTier, updateTier, deleteTier, reorderTracker,
   } = useStore()
   const s = state.settings
   const [activeCat, setActiveCat] = useState<string>('appearance')
+  const [dragTracker, setDragTracker] = useState<string | null>(null)
   const [newArea, setNewArea] = useState('')
   const [newCat, setNewCat] = useState('')
   const [newCatParent, setNewCatParent] = useState('none')
@@ -687,13 +708,19 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
                     </Button>
                   </div>
                   <div className="grid grid-cols-1 gap-1.5 p-2">
-                    {state.trackers.filter(t => t.collectionId === col.id).map(trk => (
+                    {state.trackers.filter(t => t.collectionId === col.id).map((trk, i, arr) => (
                       <TrackerSetupRow
                         key={trk.id}
                         tracker={trk}
                         expanded={expandedTracker === trk.id}
                         onToggle={() => setExpandedTracker(x => x === trk.id ? null : trk.id)}
                         onUpdate={patch => updateTracker(trk.id, patch)}
+                        onUp={i > 0 ? () => reorderTracker(trk.id, 'up') : undefined}
+                        onDown={i < arr.length - 1 ? () => reorderTracker(trk.id, 'down') : undefined}
+                        dragging={dragTracker === trk.id}
+                        onDragStart={() => setDragTracker(trk.id)}
+                        onDragOver={e => { if (dragTracker && dragTracker !== trk.id) e.preventDefault() }}
+                        onDrop={e => { e.preventDefault(); if (dragTracker && dragTracker !== trk.id) reorderTracker(dragTracker, { before: trk.id }); setDragTracker(null) }}
                       />
                     ))}
                     <div className="flex gap-2 mt-0.5">

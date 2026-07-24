@@ -130,6 +130,9 @@ export interface Store {
   reorderArea: (id: string, dir: 'up' | 'down') => void
   reorderCategory: (id: string, dir: 'up' | 'down') => void
   reorderAction: (id: string, dir: 'up' | 'down') => void
+  // Reorder a tracker within its collection. `dir` handles the up/down arrows; `targetId` handles a
+  // drag-and-drop (move this tracker to just before that one). Only reorders within one collection.
+  reorderTracker: (id: string, arg: 'up' | 'down' | { before: string }) => void
   sortAreasByName: () => void
   sortCategoriesByName: () => void
   sortActionsByName: () => void
@@ -701,6 +704,25 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         }
         withAudit(s => ({ ...s, trackers: [...s.trackers, trk] }), auditEvent('created', 'tracker', trk.id, trk.name))
         return trk
+      },
+      reorderTracker(id, arg) {
+        withAudit(s => {
+          const moving = s.trackers.find(t => t.id === id)
+          if (!moving) return s
+          // Work within the moving tracker's collection only; other collections stay untouched.
+          const siblings = s.trackers.filter(t => t.collectionId === moving.collectionId)
+          const others = s.trackers.filter(t => t.collectionId !== moving.collectionId)
+          const from = siblings.findIndex(t => t.id === id)
+          let to: number
+          if (arg === 'up') to = from - 1
+          else if (arg === 'down') to = from + 1
+          else { const t = siblings.findIndex(x => x.id === arg.before); to = t < 0 ? from : (t > from ? t - 1 : t) }
+          if (to < 0 || to >= siblings.length || to === from) return s
+          const next = [...siblings]
+          next.splice(to, 0, next.splice(from, 1)[0])
+          // Rebuild the flat trackers array preserving the (unchanged) relative order of others.
+          return { ...s, trackers: [...others, ...next] }
+        }, auditEvent('reordered', 'tracker', id, 'moved'))
       },
       updateTracker(id, patch) {
         withAudit(s => ({ ...s, trackers: s.trackers.map(t => t.id === id ? { ...t, ...patch } : t) }), auditEvent('updated', 'tracker', id, Object.keys(patch).join(', ') + ' changed'))
