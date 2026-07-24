@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v65 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v67 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -462,3 +462,11 @@ None of these are things the rest of the app depends on to function — they're 
     **Colour‑coded contacts.** The People table now carries a coloured left edge on each row by tier (Inner = terracotta, Active = green, Network = blue, Dormant = grey), matching the tier badges — so an imported contact list reads by relationship at a glance instead of a wall of identical rows.
 
     **Import Gmail / phone contacts by CSV.** The contacts importer now understands the column names Google Contacts and phone exports use ("First Name", "Last Name", "Phone 1 - Value", "E‑mail 1 - Value", "Notes"). So you can export your Gmail or phone contacts to a CSV and import them straight in — first and last name are joined into the contact name automatically. (A true live two‑way sync with Google/phone is a separate, backend feature — see the note below; this CSV path is the no‑backend way to get them in today.)
+
+54. **v66** — The Settings page is now organised into tabs.
+
+    Settings had grown into one long page that was hard to scan. It's now split into **category tabs** across the top — **Appearance**, **Tasks**, **Contacts**, **Notes & Collections**, **Notifications**, **Features & account** — and clicking a tab shows only that group's settings. So the relationship‑tier editor (rename your tiers, set colours and cadence) lives clearly under **Contacts**; the morning/lunch push and Telegram/Slack setup are under **Notifications**; focus areas, categories, actions, priority scheme, capacity and quick actions are under **Tasks**; and so on. Nothing was removed — everything's the same, just grouped so it's findable at a glance instead of a long scroll.
+
+55. **v67** — Relationship tiers are now fully add / delete, not just the fixed four.
+
+    The four tiers were previously hard‑wired; you could rename them but not change how many there were. Now they're **your own list** (Settings → Contacts → Relationship tiers): **add** a tier, **delete** one (its contacts are automatically moved to your first tier so none are lost — you can't delete the last remaining tier), and for each one set the **name**, **colour** (a proper colour picker), and **contact cadence**. Everything that uses tiers follows your list — the contact table's colour edges and tier badges, the tier filter and column sort, the "Contacts by tier" report, the add‑contact form, the per‑contact tier picker, and the import (which matches your tier names, and whose Excel template's Tier dropdown is built from them). Your existing contacts keep their tier throughout; the built‑in four are simply the starting point you can now reshape.

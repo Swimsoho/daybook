@@ -7,14 +7,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { Person, Tier, TIER_COLOR, TIER_LABELS, daysSince, fmtDate, personCadence, personOverdueBy, tierLabel } from '@/lib/model'
+import { Person, daysSince, fmtDate, personCadence, personOverdueBy, resolveTiers, tierColorOf, tierLabel } from '@/lib/model'
 import { buildCallList, useStore } from '@/lib/store'
 import { ClearFiltersButton, EmptyNote, SectionTitle, TierBadge } from '@/components/bits'
 import { LogCallDialog, PersonDetail, SentimentDot } from '@/components/people'
 import { SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
 type PeopleSortKey = 'name' | 'tier' | 'lastContact' | 'cadence' | 'status' | 'sentiment'
-const TIER_ORDER: Record<Tier, number> = { inner: 0, active: 1, network: 2, dormant: 3 }
 // Warmest → coolest, so a "sentiment" sort groups the good and the strained ends together.
 const SENTIMENT_ORDER: Record<string, number> = { positive: 0, 'follow-up': 1, neutral: 2, concerned: 3, negative: 4 }
 
@@ -44,6 +43,7 @@ export default function PeoplePage() {
   const people = useMemo(() => {
     const q = search.trim().toLowerCase()
     const lastSentiment = (id: string) => state.interactions.find(i => i.personId === id)?.sentiment ?? ''
+    const tierOrder = new Map(resolveTiers(state.settings).map((t, i) => [t.id, i]))
     // Search now matches across every contact column, not just name/topics — name, phone, email,
     // tier, how-you-know-them, topics, and notes.
     let ps = state.people.filter(p =>
@@ -54,7 +54,7 @@ export default function PeoplePage() {
     const val = (p: Person): string | number => {
       switch (sortKey) {
         case 'name': return p.name.toLowerCase()
-        case 'tier': return TIER_ORDER[p.tier]
+        case 'tier': return tierOrder.get(p.tier) ?? 99
         case 'lastContact': return p.lastContact ? daysSince(p.lastContact) : 1e9 // never-contacted sorts last for "recent"
         case 'cadence': return personCadence(p, state.settings)
         case 'status': return personOverdueBy(p, state.settings)
@@ -95,13 +95,13 @@ export default function PeoplePage() {
           <SelectTrigger className="h-8 w-36 bg-card text-[12.5px]"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All tiers</SelectItem>
-            {(Object.keys(TIER_LABELS) as Tier[]).map(t => <SelectItem key={t} value={t}>{tierLabel(state.settings, t)} — every {state.settings.tierCadence[t]}d</SelectItem>)}
+            {resolveTiers(state.settings).map(t => <SelectItem key={t.id} value={t.id}>{t.name} — every {t.cadenceDays}d</SelectItem>)}
           </SelectContent>
         </Select>
         <span className="text-[11px] text-muted-foreground hidden sm:inline">Click a column header to sort</span>
         <ClearFiltersButton active={!!search || tierFilter !== 'all'} onClear={() => { setSearch(''); setTierFilter('all') }} />
         <div className="ml-auto flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" className="h-8" onClick={downloadContactsTemplate}><Download className="h-3.5 w-3.5 mr-1.5" />Excel template</Button>
+          <Button variant="outline" size="sm" className="h-8" onClick={() => downloadContactsTemplate(resolveTiers(state.settings).map(t => t.name))}><Download className="h-3.5 w-3.5 mr-1.5" />Excel template</Button>
           <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}><Upload className="h-3.5 w-3.5 mr-1.5" />Import contacts</Button>
           <Button size="sm" className="h-8" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Add person</Button>
         </div>
@@ -128,7 +128,7 @@ export default function PeoplePage() {
               const over = personOverdueBy(p, state.settings)
               const lastInt = state.interactions.find(i => i.personId === p.id)
               return (
-                <tr key={p.id} className="border-b border-border/60 last:border-0 hover:bg-accent/50 group" style={{ boxShadow: `inset 3px 0 0 ${TIER_COLOR[p.tier]}` }}>
+                <tr key={p.id} className="border-b border-border/60 last:border-0 hover:bg-accent/50 group" style={{ boxShadow: `inset 3px 0 0 ${tierColorOf(state.settings, p.tier)}` }}>
                   <td className="px-4 py-2">
                     <button onClick={() => setViewPerson(p)} className="font-medium hover:text-[hsl(17_63%_47%)] text-left">
                       {p.name}{p.vip && <span className="text-[9.5px] align-top text-[hsl(40_65%_38%)] font-bold ml-1">VIP</span>}
@@ -166,9 +166,10 @@ export default function PeoplePage() {
 
 function AddPersonDialog({ open, onClose, onAdd }: { open: boolean; onClose: () => void; onAdd: (p: Partial<Person> & { name: string }) => void }) {
   const { state } = useStore()
+  const tiers = resolveTiers(state.settings)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
-  const [tier, setTier] = useState<Tier>('network')
+  const [tier, setTier] = useState<string>(() => tiers.find(t => t.id === 'network')?.id ?? tiers[0]?.id ?? 'network')
   const [how, setHow] = useState('')
   return (
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
@@ -180,9 +181,9 @@ function AddPersonDialog({ open, onClose, onAdd }: { open: boolean; onClose: () 
           <div className="grid grid-cols-2 gap-3">
             <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Tier</Label>
-              <Select value={tier} onValueChange={v => setTier(v as Tier)}>
+              <Select value={tier} onValueChange={setTier}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{(Object.keys(TIER_LABELS) as Tier[]).map(t => <SelectItem key={t} value={t}>{tierLabel(state.settings, t)}</SelectItem>)}</SelectContent>
+                <SelectContent>{tiers.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">How you know them</Label><Input value={how} onChange={e => setHow(e.target.value)} /></div>
@@ -199,18 +200,20 @@ function AddPersonDialog({ open, onClose, onAdd }: { open: boolean; onClose: () 
 
 // ---------- Contacts bulk import: template + preview + merge ----------
 
-async function downloadContactsTemplate() {
+async function downloadContactsTemplate(tierNames: string[]) {
   // First name + Last name are separate columns for easy filling; on import they're joined into the
   // single contact Name. (A legacy single "Name" column is still accepted by the importer.)
+  const t0 = tierNames[Math.min(1, tierNames.length - 1)] ?? 'Active'
+  const t1 = tierNames[0] ?? 'Inner'
   const rows = [
     ['First name', 'Last name', 'Phone / WhatsApp', 'Email', 'Tier', 'Cadence days', 'How you know them', 'Topics', 'VIP', 'Birthday', 'Notes'],
-    ['David', 'Feldman', '+44 7700 900010', 'david@feldman.co', 'active', '', 'Old colleague', 'Consulting, governors', 'yes', '1975-04-12', 'Owes me an intro'],
-    ['Mum', '', '+44 7700 900001', '', 'inner', '3', 'Family', 'Family, weekend plans', '', '1958-08-02', 'Call every few days'],
-    ['Ella', 'Rosen', '', 'ella.rosen@gmail.com', 'dormant', '', 'Former client', 'Marketing', '', '', ''],
-    ['- DELETE THIS ROW - First + Last name are joined into the contact name (at least one required). Tier = inner | active | network | dormant. Cadence days = number (blank = tier default). VIP = yes/no. Birthday = date YYYY-MM-DD (also lands in Upcoming dates).', '', '', '', '', '', '', '', '', '', ''],
+    ['David', 'Feldman', '+44 7700 900010', 'david@feldman.co', t0, '', 'Old colleague', 'Consulting, governors', 'yes', '1975-04-12', 'Owes me an intro'],
+    ['Mum', '', '+44 7700 900001', '', t1, '3', 'Family', 'Family, weekend plans', '', '1958-08-02', 'Call every few days'],
+    ['Ella', 'Rosen', '', 'ella.rosen@gmail.com', tierNames[tierNames.length - 1] ?? 'Dormant', '', 'Former client', 'Marketing', '', '', ''],
+    [`- DELETE THIS ROW - First + Last name are joined into the contact name (at least one required). Tier = ${tierNames.join(' | ')}. Cadence days = number (blank = tier default). VIP = yes/no. Birthday = date YYYY-MM-DD (also lands in Upcoming dates).`, '', '', '', '', '', '', '', '', '', ''],
   ]
   await downloadXlsxTemplateWithDropdowns('daybook-contacts-template.xlsx', 'Contacts', rows, [
-    { col: 4, values: ['inner', 'active', 'network', 'dormant'] }, // Tier
+    { col: 4, values: tierNames }, // Tier
     { col: 8, values: ['yes', 'no'] }, // VIP
   ])
   toast.success('Excel template downloaded — First/Last name join into the contact name; Tier and VIP are dropdowns')
@@ -254,6 +257,12 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
         return joined || (iName !== -1 ? (r[iName] ?? '').trim() : '')
       }
 
+      // Match an imported tier against the account's own tiers, by id or by name (case-insensitive),
+      // so custom tier names work. Anything unrecognised falls back to the first tier.
+      const tiers = resolveTiers(state.settings)
+      const tierMap = new Map(tiers.flatMap(t => [[t.id.toLowerCase(), t.id], [t.name.toLowerCase(), t.id]] as [string, string][]))
+      const defaultTier = tiers.find(t => t.id === 'network')?.id ?? tiers[0]?.id ?? 'network'
+
       const out: ParsedPerson[] = []
       for (const r of rows.slice(1)) {
         const name = nameOf(r)
@@ -261,8 +270,8 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
         if (!name || firstCell.startsWith('- DELETE THIS ROW')) continue
         const warnings: string[] = []
         const tierRaw = get(r, 'tier').toLowerCase()
-        const tier = (['inner', 'active', 'network', 'dormant'].includes(tierRaw) ? tierRaw : 'network') as Tier
-        if (tierRaw && tier !== tierRaw) warnings.push(`tier "${tierRaw}" -> network`)
+        const tier = tierMap.get(tierRaw) ?? defaultTier
+        if (tierRaw && !tierMap.has(tierRaw)) warnings.push(`tier "${tierRaw}" -> ${tiers.find(t => t.id === defaultTier)?.name}`)
         const cadRaw = get(r, 'cadence')
         const cadence = cadRaw ? parseInt(cadRaw, 10) : undefined
         if (cadRaw && (!cadence || cadence < 1)) warnings.push(`cadence "${cadRaw}" ignored`)
@@ -322,7 +331,7 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
               <span className="font-display font-semibold text-muted-foreground">1</span>
               <div>
                 Download the Excel template - all fields, example rows, allowed values.
-                <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={downloadContactsTemplate}>Download template (.xlsx)</Button></div>
+                <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={() => downloadContactsTemplate(resolveTiers(state.settings).map(t => t.name))}>Download template (.xlsx)</Button></div>
               </div>
             </div>
             <div className="flex items-start gap-3 text-[13px]">

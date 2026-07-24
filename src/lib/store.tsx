@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useMemo, useState } from 'react'
 import {
   Action, AdminUser, AppState, AuditEvent, Capture, Category, Collection, Entry, Interaction, Person, Priority,
-  RoutingProposal, Settings, Task, TaskAttachment, TaskStatus, Tracker, addDays, personOverdueBy,
-  daysSince, today, uid,
+  RoutingProposal, Settings, Task, TaskAttachment, TaskStatus, TierDef, Tracker, addDays, personCadence, personOverdueBy,
+  daysSince, resolveTiers, tierLabel, today, uid,
 } from './model'
 import { seedState } from './seed'
 import { nextDot } from './colors'
@@ -94,6 +94,11 @@ export interface Store {
   addPerson: (p: Partial<Person> & { name: string }) => Person
   updatePerson: (id: string, patch: Partial<Person>, auditLabel?: string) => void
   setBirthday: (personId: string, date: string | undefined) => void
+  // Editable relationship tiers (Settings > Contacts). addTier appends a new tier; updateTier edits
+  // one; deleteTier removes it and moves any contacts on it to a fallback tier so none are orphaned.
+  addTier: (name: string) => void
+  updateTier: (id: string, patch: Partial<TierDef>) => void
+  deleteTier: (id: string) => void
   logInteraction: (i: Omit<Interaction, 'id'>, opts?: { followUpTitle?: string }) => void
   capture: (text: string, source: Capture['source']) => Capture
   // `trackerId` lets the Inbox redirect a pending capture to a different destination than
@@ -448,6 +453,33 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
           return { ...s, people, entries }
         }, auditEvent('updated', 'person', personId, date ? 'birthday set' : 'birthday cleared'))
       },
+      addTier(name) {
+        const palette = ['hsl(280 35% 55%)', 'hsl(28 65% 50%)', 'hsl(175 40% 40%)', 'hsl(330 42% 55%)', 'hsl(200 45% 45%)', 'hsl(120 30% 42%)']
+        withAudit(s => {
+          const tiers = resolveTiers(s.settings)
+          const id = uid('tier')
+          const color = palette[tiers.length % palette.length]
+          const next: TierDef = { id, name: name.trim() || `Tier ${tiers.length + 1}`, color, cadenceDays: 30 }
+          return { ...s, settings: { ...s.settings, tiers: [...tiers, next] } }
+        }, auditEvent('created', 'user', 'tier', `tier “${name}” added`, 'Craig'))
+      },
+      updateTier(id, patch) {
+        withAudit(s => {
+          const tiers = resolveTiers(s.settings).map(t => t.id === id ? { ...t, ...patch } : t)
+          return { ...s, settings: { ...s.settings, tiers } }
+        }, auditEvent('updated', 'user', 'tier', `tier ${id} edited`, 'Craig'))
+      },
+      deleteTier(id) {
+        withAudit(s => {
+          const tiers = resolveTiers(s.settings)
+          if (tiers.length <= 1) return s // never delete the last tier
+          const remaining = tiers.filter(t => t.id !== id)
+          const fallback = remaining[0].id
+          // Move any contacts on the deleted tier to the first remaining tier, so nobody is orphaned.
+          const people = s.people.map(p => p.tier === id ? { ...p, tier: fallback } : p)
+          return { ...s, people, settings: { ...s.settings, tiers: remaining } }
+        }, auditEvent('deleted', 'user', 'tier', `tier ${id} deleted — contacts moved to the first tier`, 'Craig'))
+      },
       logInteraction(i, opts) {
         const inter: Interaction = { ...i, id: uid('i') }
         const followTask: Task | null = i.followUpDate ? {
@@ -763,7 +795,7 @@ export function buildCallList(s: AppState): CallSuggestion[] {
   const over = s.people
     .filter(p => p.tier !== 'dormant' && personOverdueBy(p, s.settings) > 0)
     .sort((a, b) => personOverdueBy(b, s.settings) - personOverdueBy(a, s.settings))
-  for (const p of over) add(p, `${daysSince(p.lastContact)} days since contact — ${p.tier} tier target is every ${p.cadenceDays ?? s.settings.tierCadence[p.tier]}`, 'overdue')
+  for (const p of over) add(p, `${daysSince(p.lastContact)} days since contact — ${tierLabel(s.settings, p.tier)} tier target is every ${personCadence(p, s.settings)}`, 'overdue')
   // one dormant reconnect
   const dorm = s.people.filter(p => p.tier === 'dormant').sort((a, b) => daysSince(b.lastContact) - daysSince(a.lastContact))[0]
   if (dorm) add(dorm, `Reconnect — ${daysSince(dorm.lastContact)} days since you spoke`, 'reconnect')

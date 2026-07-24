@@ -3,7 +3,11 @@
 export type Priority = 'P0' | 'P1' | 'P2' | 'P3'
 export type TaskStatus = 'inbox' | 'next' | 'in-progress' | 'waiting' | 'done' | 'dropped'
 export type TaskType = 'todo' | 'call' | 'followup'
-export type Tier = 'inner' | 'active' | 'network' | 'dormant'
+// A tier is now just a string id, so users can add/rename/delete their own. The four built-ins
+// (inner/active/network/dormant) remain the defaults every account starts with; a contact's
+// `tier` holds whichever tier id it belongs to.
+export type Tier = string
+export interface TierDef { id: string; name: string; color: string; cadenceDays: number }
 export type Channel = 'call' | 'whatsapp' | 'email' | 'in-person'
 export type Sentiment = 'positive' | 'neutral' | 'needs-attention'
 export type Source = 'whatsapp' | 'sms' | 'email' | 'voice' | 'manual'
@@ -262,10 +266,12 @@ export interface Settings {
   stallDays: number
   projectWipLimit: number
   tierCadence: Record<Tier, number>
-  // Optional custom display names for the four relationship tiers (Settings > Relationship tiers).
-  // Falls back to the built-in TIER_LABELS when a tier has no override. The underlying four tier
-  // keys don't change — only how they're labelled — so all existing contacts keep their tier.
+  // Legacy per-tier label overrides (pre-editable-tiers). Still honoured when building the default
+  // tier list, but superseded by `tiers` below once the user customises.
   tierLabels?: Partial<Record<Tier, string>>
+  // The user's editable list of relationship tiers (add / rename / recolour / delete). When set,
+  // it's the source of truth; when absent, the four built-ins are used. See resolveTiers().
+  tiers?: TierDef[]
   quickActions: { done: boolean; called: boolean; snooze: boolean; reassign: boolean }
   features: {
     whatsapp: boolean
@@ -409,9 +415,36 @@ export const TIER_COLOR: Record<Tier, string> = {
   dormant: 'hsl(220 9% 60%)',
 }
 
-// The tier's display name, honouring a user's custom label from Settings when present.
-export function tierLabel(s: { tierLabels?: Partial<Record<Tier, string>> }, t: Tier): string {
-  return s.tierLabels?.[t]?.trim() || TIER_LABELS[t]
+// Default cadence (days) for the four built-in tiers — used when building the default tier list
+// for accounts that haven't customised theirs.
+const DEFAULT_TIER_CADENCE: Record<string, number> = { inner: 7, active: 14, network: 30, dormant: 90 }
+
+// The authoritative list of tiers for an account. If the user has customised tiers, that list is
+// used verbatim; otherwise the four built-ins are returned, honouring any per-tier label/cadence
+// overrides an older account saved (from before tiers were fully editable). Either way this is the
+// single source every screen reads, so add/rename/delete/reorder all just work.
+export function resolveTiers(s: { tiers?: TierDef[]; tierLabels?: Partial<Record<string, string>>; tierCadence?: Record<string, number> }): TierDef[] {
+  if (s.tiers && s.tiers.length) return s.tiers
+  return (Object.keys(TIER_LABELS) as Tier[]).map(id => ({
+    id,
+    name: s.tierLabels?.[id]?.trim() || TIER_LABELS[id],
+    color: TIER_COLOR[id],
+    cadenceDays: s.tierCadence?.[id] ?? DEFAULT_TIER_CADENCE[id] ?? 30,
+  }))
+}
+export function tierDef(s: Parameters<typeof resolveTiers>[0], id: Tier): TierDef | undefined {
+  return resolveTiers(s).find(t => t.id === id)
+}
+// The tier's display name / colour / cadence, resolved from the account's tier list with sensible
+// fallbacks so a contact whose tier was deleted still renders instead of breaking.
+export function tierLabel(s: Parameters<typeof resolveTiers>[0], t: Tier): string {
+  return tierDef(s, t)?.name || TIER_LABELS[t] || t || 'Untiered'
+}
+export function tierColorOf(s: Parameters<typeof resolveTiers>[0], t: Tier): string {
+  return tierDef(s, t)?.color || TIER_COLOR[t] || 'hsl(220 9% 60%)'
+}
+export function tierCadenceOf(s: Parameters<typeof resolveTiers>[0], t: Tier): number {
+  return tierDef(s, t)?.cadenceDays ?? DEFAULT_TIER_CADENCE[t] ?? 30
 }
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {
@@ -430,7 +463,7 @@ export const TYPE_LABELS: Record<TaskType, string> = {
 }
 
 export function personCadence(p: Person, s: Settings): number {
-  return p.cadenceDays ?? s.tierCadence[p.tier]
+  return p.cadenceDays ?? tierCadenceOf(s, p.tier)
 }
 
 export function personOverdueBy(p: Person, s: Settings): number {

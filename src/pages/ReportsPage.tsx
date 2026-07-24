@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { daysSince, fmtDate, personOverdueBy, today } from '@/lib/model'
+import { daysSince, fmtDate, personOverdueBy, resolveTiers, today } from '@/lib/model'
 import { isOverdue, openTasks, stalledProjects, useStore } from '@/lib/store'
 import { SectionTitle } from '@/components/bits'
 
@@ -20,7 +20,7 @@ export default function ReportsPage() {
   const byArea = state.areas.filter(a => a.active).map(a => ({ a, n: open.filter(t => t.areaId === a.id).length }))
   const maxArea = Math.max(1, ...byArea.map(x => x.n))
   const byPriority = (['P0', 'P1', 'P2', 'P3'] as const).map(p => ({ p, n: open.filter(t => t.priority === p).length }))
-  const byTier = (['inner', 'active', 'network', 'dormant'] as const).map(t => ({ t, n: state.people.filter(p => p.tier === t).length }))
+  const byTier = resolveTiers(state.settings).map(t => ({ id: t.id, name: t.name, color: t.color, n: state.people.filter(p => p.tier === t.id).length }))
   const callDays = [...Array(7)].map((_, i) => {
     const d = daysSince
     void d
@@ -119,11 +119,11 @@ export default function ReportsPage() {
           <section className="border border-border bg-card shadow-sm rounded-lg p-4">
             <SectionTitle>Contacts by tier</SectionTitle>
             <div className="grid grid-cols-1 gap-2">
-              {byTier.map(({ t, n }) => (
-                <div key={t} className="flex items-center gap-2.5 text-[12.5px]">
-                  <span className="w-20 capitalize">{t}</span>
+              {byTier.map(({ id, name, color, n }) => (
+                <div key={id} className="flex items-center gap-2.5 text-[12.5px]">
+                  <span className="w-24 truncate inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full shrink-0" style={{ background: color }} />{name}</span>
                   <div className="flex-1 h-4 bg-muted overflow-hidden rounded-sm">
-                    <div className="h-full bg-[hsl(215_35%_45%)]" style={{ width: `${(n / Math.max(1, ...byTier.map(x => x.n))) * 100}%` }} />
+                    <div className="h-full" style={{ width: `${(n / Math.max(1, ...byTier.map(x => x.n))) * 100}%`, background: color }} />
                   </div>
                   <span className="tabular w-5 text-right">{n}</span>
                 </div>

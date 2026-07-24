@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
-  Channel, Person, Sentiment, Tier, TIER_LABELS, addDays, daysSince, fmtDate, personCadence, today,
+  Channel, Person, Sentiment, addDays, daysSince, fmtDate, personCadence, resolveTiers, today,
 } from '@/lib/model'
 import { useStore } from '@/lib/store'
 import { TierBadge } from './bits'
@@ -151,16 +151,16 @@ export function PersonDetail({ person, onClose, onLog }: { person: Person | null
             {person.flaggedForCall ? 'Unflag' : '⚑ Call this week'}
           </Button>
           <span className="text-[10px] uppercase tracking-wide text-muted-foreground ml-1 mr-0.5">Tier</span>
-          {(Object.keys(TIER_LABELS) as Tier[]).map(t => (
+          {resolveTiers(state.settings).map(t => (
             <button
-              key={t}
-              onClick={() => { updatePerson(person.id, { tier: t }, `tier → ${TIER_LABELS[t]}`); toast(`${person.name} → ${TIER_LABELS[t]} (every ${state.settings.tierCadence[t]}d)`) }}
+              key={t.id}
+              onClick={() => { updatePerson(person.id, { tier: t.id }, `tier → ${t.name}`); toast(`${person.name} → ${t.name} (every ${t.cadenceDays}d)`) }}
               className={cn(
-                'px-2 py-0.5 text-[11px] border rounded-sm transition-colors',
-                person.tier === t ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-card hover:bg-accent',
+                'px-2 py-0.5 text-[11px] border rounded-sm transition-colors inline-flex items-center gap-1.5',
+                person.tier === t.id ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-card hover:bg-accent',
               )}
             >
-              {TIER_LABELS[t]}
+              <span className="h-2 w-2 rounded-full" style={{ background: t.color }} />{t.name}
             </button>
           ))}
         </div>

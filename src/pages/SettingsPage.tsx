@@ -10,7 +10,7 @@ import { ColorPicker } from '@/components/ui/color-picker'
 import { fallbackDot } from '@/lib/colors'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { ColumnType, PriorityScheme, Tier, TIER_COLOR, TIER_LABELS, Tracker, TrackerColumn } from '@/lib/model'
+import { ColumnType, PriorityScheme, Tracker, TrackerColumn, resolveTiers } from '@/lib/model'
 import { actionUsage, categoryUsage, composeLunchCheckinText, composeMorningBriefText, useStore } from '@/lib/store'
 import { Cloud } from '@/lib/cloud'
 import { THEMES } from '@/lib/themes'
@@ -54,7 +54,21 @@ function slugKey(name: string, existing: string[]): string {
   return key
 }
 
-function Section({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
+// Settings are grouped into categories shown as tabs, so the page is navigable instead of one long
+// scroll. Each Section declares its category and hides itself unless that tab is active.
+const SETTINGS_CATS = [
+  { id: 'appearance', label: 'Appearance' },
+  { id: 'tasks', label: 'Tasks' },
+  { id: 'contacts', label: 'Contacts' },
+  { id: 'collections', label: 'Notes & Collections' },
+  { id: 'channels', label: 'Notifications' },
+  { id: 'features', label: 'Features & account' },
+] as const
+const SettingsCatCtx = React.createContext<string>('appearance')
+
+function Section({ title, sub, cat, children }: { title: string; sub?: string; cat?: string; children: React.ReactNode }) {
+  const active = React.useContext(SettingsCatCtx)
+  if (cat && active !== cat) return null
   return (
     <section className="border border-border bg-card shadow-sm rounded-lg overflow-hidden">
       <div className="px-4 py-3 border-b border-border bg-muted/40">
@@ -242,8 +256,10 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
     addAction, updateAction, deleteAction,
     addCollection, updateCollection, addTracker, updateTracker,
     reorderArea, reorderCategory, reorderAction, sortAreasByName, sortCategoriesByName, sortActionsByName,
+    addTier, updateTier, deleteTier,
   } = useStore()
   const s = state.settings
+  const [activeCat, setActiveCat] = useState<string>('appearance')
   const [newArea, setNewArea] = useState('')
   const [newCat, setNewCat] = useState('')
   const [newCatParent, setNewCatParent] = useState('none')
@@ -329,9 +345,27 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           <Check className="h-3.5 w-3.5 mr-1" />Save
         </Button>
       </div>
+
+      {/* Category tabs — pick a group and see only its settings, instead of one long page. */}
+      <div className="sticky top-[52px] z-10 -mx-1 px-1 py-2 bg-[hsl(var(--background)_/_0.92)] backdrop-blur flex flex-wrap gap-1.5">
+        {SETTINGS_CATS.map(c => (
+          <button
+            key={c.id}
+            onClick={() => setActiveCat(c.id)}
+            className={cn(
+              'px-3 py-1.5 text-[12.5px] border rounded-full transition-colors',
+              activeCat === c.id ? 'bg-primary text-primary-foreground border-primary' : 'bg-card border-border hover:bg-accent',
+            )}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
+      <SettingsCatCtx.Provider value={activeCat}>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 items-start">
       <div className="grid grid-cols-1 gap-4">
-        <Section title="Appearance" sub="Pick a colour palette and display size for the whole app — takes effect immediately, everywhere.">
+        <Section cat="appearance" title="Appearance" sub="Pick a colour palette and display size for the whole app — takes effect immediately, everywhere.">
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {THEMES.map(t => {
               const active = s.theme === t.id
@@ -388,7 +422,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
             </p>
           </div>
         </Section>
-        <Section title="Focus areas" sub="Add, rename, colour, retire — archiving preserves all history. Keep to 3–6.">
+        <Section cat="tasks" title="Focus areas" sub="Add, rename, colour, retire — archiving preserves all history. Keep to 3–6.">
           {state.areas.map(a => (
             <div key={a.id} className="flex items-center gap-2.5">
               <ReorderArrows onUp={() => reorderArea(a.id, 'up')} onDown={() => reorderArea(a.id, 'down')} />
@@ -413,7 +447,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           </div>
         </Section>
 
-        <Section title="Priority scheme" sub="Choose the model that matches how you think about urgency.">
+        <Section cat="tasks" title="Priority scheme" sub="Choose the model that matches how you think about urgency.">
           <div className="flex gap-1.5">
             {([['p', 'P0–P3'], ['hml', 'High / Med / Low'], ['num', '1–5 scale']] as [PriorityScheme, string][]).map(([v, l]) => (
               <button key={v} onClick={() => { updateSettings({ priorityScheme: v }); toast(`Priorities now shown as ${l} everywhere`) }}
@@ -428,7 +462,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           </label>
         </Section>
 
-        <Section title="Categories — main / sub / secondary" sub="Rename, retire, or bring back — archiving preserves all history. Cross-cutting labels used on tasks, contacts and vendors; every one is reportable. Tag a category to specific focus areas and it only shows up there — leave it untagged to keep it everywhere.">
+        <Section cat="tasks" title="Categories — main / sub / secondary" sub="Rename, retire, or bring back — archiving preserves all history. Cross-cutting labels used on tasks, contacts and vendors; every one is reportable. Tag a category to specific focus areas and it only shows up there — leave it untagged to keep it everywhere.">
           <div className="grid grid-cols-1 gap-2">
             {sortedCategories.map(c => {
               const tagged = c.areaIds ?? []
@@ -526,7 +560,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           </div>
         </Section>
 
-        <Section title="Actions" sub="What kind of action a task is — Call, Meeting, Decide, Email… A flat, separate list from Category (the sub-topic under a focus area) and from the task's Type field, which it supplements rather than replaces.">
+        <Section cat="tasks" title="Actions" sub="What kind of action a task is — Call, Meeting, Decide, Email… A flat, separate list from Category (the sub-topic under a focus area) and from the task's Type field, which it supplements rather than replaces.">
           <div className="grid grid-cols-1 gap-2">
             {state.actions.map(a => {
               const usage = actionUsage(state, a.id)
@@ -578,23 +612,35 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           </div>
         </Section>
 
-        <Section title="Relationship tiers" sub="Name each tier to fit how you think about your contacts, and set how often you want to reach each one. The four tiers keep their colour; only the label and cadence change, and every contact stays where it is.">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {(Object.keys(TIER_LABELS) as Tier[]).map(t => (
-              <div key={t} className="grid grid-cols-[auto_1fr_auto] items-center gap-2 border border-border rounded-sm px-2.5 py-2 bg-card">
-                <span className="h-3 w-3 rounded-full shrink-0" style={{ background: TIER_COLOR[t] }} title={`${TIER_LABELS[t]} tier colour`} />
+        <Section cat="contacts" title="Relationship tiers" sub="Your own set of relationship tiers — add, rename, recolour, set a contact cadence, or delete. Deleting a tier moves its contacts to the first tier so none are lost. Each contact keeps whichever tier it's on.">
+          <div className="grid grid-cols-1 gap-2">
+            {resolveTiers(s).map(t => (
+              <div key={t.id} className="grid grid-cols-[auto_1fr_auto_auto] items-center gap-2 border border-border rounded-sm px-2.5 py-2 bg-card">
+                <ColorPicker value={t.color} onChange={c => updateTier(t.id, { color: c })} />
                 <Input
-                  value={s.tierLabels?.[t] ?? TIER_LABELS[t]}
-                  placeholder={TIER_LABELS[t]}
+                  value={t.name}
                   className="h-8 text-[13px]"
-                  onChange={e => updateSettings({ tierLabels: { ...s.tierLabels, [t]: e.target.value } })}
+                  onChange={e => updateTier(t.id, { name: e.target.value })}
                 />
                 <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap">every
-                  <Input type="number" value={s.tierCadence[t]} className="h-7 w-14 text-[12px]"
-                    onChange={e => updateSettings({ tierCadence: { ...s.tierCadence, [t]: Number(e.target.value) || 1 } })} />
+                  <Input type="number" value={t.cadenceDays} className="h-7 w-14 text-[12px]"
+                    onChange={e => updateTier(t.id, { cadenceDays: Number(e.target.value) || 1 })} />
                   d</span>
+                <button
+                  onClick={() => { if (resolveTiers(s).length <= 1) { toast.error('Keep at least one tier'); return } deleteTier(t.id); toast(`“${t.name}” deleted — its contacts moved to ${resolveTiers(s).find(x => x.id !== t.id)?.name}`) }}
+                  title="Delete tier"
+                  className="h-7 w-7 grid place-items-center rounded-sm text-muted-foreground hover:text-[hsl(8_60%_41%)] hover:bg-[hsl(8_60%_41%_/_0.08)] shrink-0"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
             ))}
+            <button
+              onClick={() => addTier('New tier')}
+              className="inline-flex items-center gap-1.5 self-start mt-0.5 h-8 px-2.5 text-[12px] border border-dashed border-input rounded-sm text-muted-foreground hover:bg-accent"
+            >
+              <Plus className="h-3.5 w-3.5" />Add a tier
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid grid-cols-1 gap-1">
@@ -610,7 +656,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        <Section title="Turn features on and off" sub="The switchboard — off hides its fields and menus everywhere.">
+        <Section cat="features" title="Turn features on and off" sub="The switchboard — off hides its fields and menus everywhere.">
           {features.map(f => (
             <label key={f.key} className="flex items-center gap-3 cursor-pointer">
               <Switch checked={s.features[f.key]} onCheckedChange={v => { updateFeatures({ [f.key]: v }); toast(`${f.label} ${v ? 'on' : 'off — hidden everywhere'}`) }} />
@@ -620,7 +666,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
         </Section>
 
         {s.features.collections && (
-          <Section title="Notes & Collections — set up your own trackers" sub="Build whatever custom lists you want — movies, subscriptions, vendors to compare — with your own fields on each. Every field you add here shows up automatically in that tracker's table/board/gallery views and its Excel import/export template.">
+          <Section cat="collections" title="Notes & Collections — set up your own trackers" sub="Build whatever custom lists you want — movies, subscriptions, vendors to compare — with your own fields on each. Every field you add here shows up automatically in that tracker's table/board/gallery views and its Excel import/export template.">
             <div className="grid grid-cols-1 gap-3">
               {state.collections.map(col => (
                 <div key={col.id} className="border border-border rounded-sm">
@@ -690,7 +736,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           </Section>
         )}
 
-        <Section title="Text-in capture number" sub="Register your own phone number — a text or WhatsApp message sent from it is matched to your account and filed straight into your Inbox.">
+        <Section cat="channels" title="Text-in capture number" sub="Register your own phone number — a text or WhatsApp message sent from it is matched to your account and filed straight into your Inbox.">
           {cloud ? (
             <>
               <div className="flex gap-2">
@@ -716,7 +762,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           )}
         </Section>
 
-        <Section title="Telegram & Slack (new in v28)" sub="Two-way messaging: send either one a message and it lands in your Inbox like text/WhatsApp capture; Daybook can also push the morning brief and nudges there instead of (or alongside) WhatsApp/email.">
+        <Section cat="channels" title="Telegram & Slack (new in v28)" sub="Two-way messaging: send either one a message and it lands in your Inbox like text/WhatsApp capture; Daybook can also push the morning brief and nudges there instead of (or alongside) WhatsApp/email.">
           {cloud ? (
             <div className="grid grid-cols-1 gap-4">
               <div className="grid grid-cols-1 gap-1.5">
@@ -826,7 +872,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           )}
         </Section>
 
-        <Section title="Daily capacity & rebalancing" sub="When a day overflows, the lowest-priority non-time-critical items move to the next open day — and you’re told exactly what shifted.">
+        <Section cat="tasks" title="Daily capacity & rebalancing" sub="When a day overflows, the lowest-priority non-time-critical items move to the next open day — and you’re told exactly what shifted.">
           <div className="grid grid-cols-2 gap-3">
             <div className="grid grid-cols-1 gap-1">
               <Label className="text-xs">Tasks per day before overflow</Label>
@@ -843,7 +889,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           </div>
         </Section>
 
-        <Section title="Morning brief & nudges" sub="The in-app card below always shows the Channel/Send-time you set here for reference — the actual Telegram/Slack push (see Telegram & Slack above) uses the Morning and Lunch times right below instead, checked against your Timezone.">
+        <Section cat="channels" title="Morning brief & nudges" sub="The in-app card below always shows the Channel/Send-time you set here for reference — the actual Telegram/Slack push (see Telegram & Slack above) uses the Morning and Lunch times right below instead, checked against your Timezone.">
           <div className="grid grid-cols-2 gap-3">
             <div className="grid grid-cols-1 gap-1">
               <Label className="text-xs">Channel (in-app card only)</Label>
@@ -895,7 +941,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           </p>
         </Section>
 
-        <Section title="Quick actions" sub="Pick the one-tap buttons on task and contact rows.">
+        <Section cat="tasks" title="Quick actions" sub="Pick the one-tap buttons on task and contact rows.">
           {([['done', 'Done / Complete'], ['called', 'Called — needs follow-up'], ['snooze', 'Snooze / defer'], ['reassign', 'Reassign area']] as const).map(([k, l]) => (
             <label key={k} className="flex items-center gap-3 cursor-pointer">
               <Switch checked={s.quickActions[k]} onCheckedChange={v => updateSettings({ quickActions: { ...s.quickActions, [k]: v } })} />
@@ -904,7 +950,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           ))}
         </Section>
 
-        <Section title="Multi-user & accounts" sub="Later phase — the data model won’t block it.">
+        <Section cat="features" title="Multi-user & accounts" sub="Later phase — the data model won’t block it.">
           <p className="text-[12.5px] text-muted-foreground leading-relaxed">
             Sign-up, log-in and password reset · roles (owner / member / view-only) · per-user settings and isolation ·
             a super-admin login that can impersonate for support, with every such action clearly marked in the audit trail.
@@ -913,6 +959,7 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
         </Section>
       </div>
       </div>
+      </SettingsCatCtx.Provider>
     </div>
   )
 }
