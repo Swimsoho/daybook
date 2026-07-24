@@ -863,6 +863,20 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                 </button>
               ))}
             </div>
+            {/* Due date — the date this task is set for, shown and editable the moment you open the
+                task. Change it inline or clear it; empty means no date (it won't sit on Today). */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-0.5">Due</span>
+              <input
+                type="date"
+                value={task.due ?? ''}
+                onChange={e => updateTask(task.id, { due: e.target.value || undefined }, e.target.value ? `due → ${e.target.value}` : 'due date cleared')}
+                className="h-7 px-1.5 text-[11.5px] border border-border rounded-sm bg-card text-foreground outline-none cursor-pointer"
+              />
+              {task.due
+                ? <button onClick={() => updateTask(task.id, { due: undefined }, 'due date cleared')} className="text-[11px] text-muted-foreground hover:text-foreground">clear</button>
+                : <span className="text-[11px] text-muted-foreground italic">no date set</span>}
+            </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-0.5">Move to</span>
               {(() => {

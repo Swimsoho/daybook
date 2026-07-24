@@ -13,11 +13,17 @@ import { ClearFiltersButton, EmptyNote, SectionTitle, TierBadge } from '@/compon
 import { LogCallDialog, PersonDetail, SentimentDot } from '@/components/people'
 import { SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
+type PeopleSortKey = 'name' | 'tier' | 'lastContact' | 'cadence' | 'status' | 'sentiment'
+const TIER_ORDER: Record<Tier, number> = { inner: 0, active: 1, network: 2, dormant: 3 }
+// Warmest → coolest, so a "sentiment" sort groups the good and the strained ends together.
+const SENTIMENT_ORDER: Record<string, number> = { positive: 0, 'follow-up': 1, neutral: 2, concerned: 3, negative: 4 }
+
 export default function PeoplePage() {
   const { state, addPerson } = useStore()
   const [tierFilter, setTierFilter] = useState('all')
   const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState<'overdue' | 'name' | 'recent'>('overdue')
+  const [sortKey, setSortKey] = useState<PeopleSortKey>('status')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [viewPerson, setViewPerson] = useState<Person | null>(null)
   const [logPerson, setLogPerson] = useState<Person | null>(null)
   const [adding, setAdding] = useState(false)
@@ -25,16 +31,43 @@ export default function PeoplePage() {
 
   const calls = buildCallList(state).slice(0, state.settings.callGoal)
 
+  // Clicking a column header sorts by it; clicking the same header again flips the direction.
+  // Each column starts in its most useful direction (most-overdue first, recently-touched first, …).
+  const DEFAULT_DIR: Record<PeopleSortKey, 'asc' | 'desc'> = {
+    name: 'asc', tier: 'asc', lastContact: 'asc', cadence: 'asc', status: 'desc', sentiment: 'asc',
+  }
+  function headerClick(key: PeopleSortKey) {
+    if (key === sortKey) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir(DEFAULT_DIR[key]) }
+  }
+
   const people = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const lastSentiment = (id: string) => state.interactions.find(i => i.personId === id)?.sentiment ?? ''
+    // Search now matches across every contact column, not just name/topics — name, phone, email,
+    // tier, how-you-know-them, topics, and notes.
     let ps = state.people.filter(p =>
       (tierFilter === 'all' || p.tier === tierFilter) &&
-      (!search || p.name.toLowerCase().includes(search.toLowerCase()) || p.topics.toLowerCase().includes(search.toLowerCase())),
+      (!q || [p.name, p.phone, p.email, TIER_LABELS[p.tier], p.how, p.topics, p.notes]
+        .some(v => (v ?? '').toLowerCase().includes(q))),
     )
-    if (sortBy === 'overdue') ps = [...ps].sort((a, b) => personOverdueBy(b, state.settings) - personOverdueBy(a, state.settings))
-    if (sortBy === 'name') ps = [...ps].sort((a, b) => a.name.localeCompare(b.name))
-    if (sortBy === 'recent') ps = [...ps].sort((a, b) => daysSince(a.lastContact) - daysSince(b.lastContact))
+    const val = (p: Person): string | number => {
+      switch (sortKey) {
+        case 'name': return p.name.toLowerCase()
+        case 'tier': return TIER_ORDER[p.tier]
+        case 'lastContact': return p.lastContact ? daysSince(p.lastContact) : 1e9 // never-contacted sorts last for "recent"
+        case 'cadence': return personCadence(p, state.settings)
+        case 'status': return personOverdueBy(p, state.settings)
+        case 'sentiment': return SENTIMENT_ORDER[lastSentiment(p.id)] ?? 99
+      }
+    }
+    ps = [...ps].sort((a, b) => {
+      const va = val(a), vb = val(b)
+      const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb))
+      return sortDir === 'asc' ? cmp : -cmp
+    })
     return ps
-  }, [state.people, state.settings, tierFilter, search, sortBy])
+  }, [state.people, state.interactions, state.settings, tierFilter, search, sortKey, sortDir])
 
   return (
     <div className="grid grid-cols-1 gap-4">
@@ -57,7 +90,7 @@ export default function PeoplePage() {
 
       {/* Controls */}
       <div className="flex flex-wrap gap-2 items-center">
-        <Input placeholder="Search people or topics…" value={search} onChange={e => setSearch(e.target.value)} className="h-8 w-56 bg-card" />
+        <Input placeholder="Search name, phone, email, topics…" value={search} onChange={e => setSearch(e.target.value)} className="h-8 w-64 bg-card" />
         <Select value={tierFilter} onValueChange={setTierFilter}>
           <SelectTrigger className="h-8 w-36 bg-card text-[12.5px]"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -65,15 +98,8 @@ export default function PeoplePage() {
             {(Object.keys(TIER_LABELS) as Tier[]).map(t => <SelectItem key={t} value={t}>{TIER_LABELS[t]} — every {state.settings.tierCadence[t]}d</SelectItem>)}
           </SelectContent>
         </Select>
-        <Select value={sortBy} onValueChange={v => setSortBy(v as never)}>
-          <SelectTrigger className="h-8 w-44 bg-card text-[12.5px]"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="overdue">Rank: most overdue</SelectItem>
-            <SelectItem value="recent">Rank: recently touched</SelectItem>
-            <SelectItem value="name">Rank: name</SelectItem>
-          </SelectContent>
-        </Select>
-        <ClearFiltersButton active={!!search || tierFilter !== 'all' || sortBy !== 'overdue'} onClear={() => { setSearch(''); setTierFilter('all'); setSortBy('overdue') }} />
+        <span className="text-[11px] text-muted-foreground hidden sm:inline">Click a column header to sort</span>
+        <ClearFiltersButton active={!!search || tierFilter !== 'all'} onClear={() => { setSearch(''); setTierFilter('all') }} />
         <div className="ml-auto flex flex-wrap gap-2">
           <Button variant="outline" size="sm" className="h-8" onClick={downloadContactsTemplate}><Download className="h-3.5 w-3.5 mr-1.5" />Excel template</Button>
           <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}><Upload className="h-3.5 w-3.5 mr-1.5" />Import contacts</Button>
@@ -86,12 +112,14 @@ export default function PeoplePage() {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-border text-left text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">
-              <th className="px-4 py-2 font-semibold">Name</th>
-              <th className="px-2 py-2 font-semibold">Tier</th>
-              <th className="px-2 py-2 font-semibold">Last contact</th>
-              <th className="px-2 py-2 font-semibold">Cadence</th>
-              <th className="px-2 py-2 font-semibold">Status</th>
-              <th className="px-2 py-2 font-semibold">Last sentiment</th>
+              {([['name', 'Name', 'px-4'], ['tier', 'Tier', 'px-2'], ['lastContact', 'Last contact', 'px-2'], ['cadence', 'Cadence', 'px-2'], ['status', 'Status', 'px-2'], ['sentiment', 'Last sentiment', 'px-2']] as [PeopleSortKey, string, string][]).map(([key, label, pad]) => (
+                <th key={key} className={cn(pad, 'py-2 font-semibold')}>
+                  <button onClick={() => headerClick(key)} className="inline-flex items-center gap-1 uppercase tracking-[0.1em] hover:text-foreground transition-colors">
+                    {label}
+                    <span className="text-[9px] w-2">{sortKey === key ? (sortDir === 'asc' ? '▲' : '▼') : ''}</span>
+                  </button>
+                </th>
+              ))}
               <th className="px-2 py-2" />
             </tr>
           </thead>
@@ -171,18 +199,20 @@ function AddPersonDialog({ open, onClose, onAdd }: { open: boolean; onClose: () 
 // ---------- Contacts bulk import: template + preview + merge ----------
 
 async function downloadContactsTemplate() {
+  // First name + Last name are separate columns for easy filling; on import they're joined into the
+  // single contact Name. (A legacy single "Name" column is still accepted by the importer.)
   const rows = [
-    ['Name', 'Phone / WhatsApp', 'Email', 'Tier', 'Cadence days', 'How you know them', 'Topics', 'VIP', 'Birthday', 'Notes'],
-    ['David Feldman', '+44 7700 900010', 'david@feldman.co', 'active', '', 'Old colleague', 'Consulting, governors', 'yes', '1975-04-12', 'Owes me an intro'],
-    ['Mum', '+44 7700 900001', '', 'inner', '3', 'Family', 'Family, weekend plans', '', '1958-08-02', 'Call every few days'],
-    ['Ella Rosen', '', 'ella.rosen@gmail.com', 'dormant', '', 'Former client', 'Marketing', '', '', ''],
-    ['- DELETE THIS ROW - allowed values: Tier = inner | active | network | dormant. Cadence days = number (blank = tier default). VIP = yes/no. Birthday = date YYYY-MM-DD (also lands in Upcoming dates). Only Name is required.', '', '', '', '', '', '', '', '', ''],
+    ['First name', 'Last name', 'Phone / WhatsApp', 'Email', 'Tier', 'Cadence days', 'How you know them', 'Topics', 'VIP', 'Birthday', 'Notes'],
+    ['David', 'Feldman', '+44 7700 900010', 'david@feldman.co', 'active', '', 'Old colleague', 'Consulting, governors', 'yes', '1975-04-12', 'Owes me an intro'],
+    ['Mum', '', '+44 7700 900001', '', 'inner', '3', 'Family', 'Family, weekend plans', '', '1958-08-02', 'Call every few days'],
+    ['Ella', 'Rosen', '', 'ella.rosen@gmail.com', 'dormant', '', 'Former client', 'Marketing', '', '', ''],
+    ['- DELETE THIS ROW - First + Last name are joined into the contact name (at least one required). Tier = inner | active | network | dormant. Cadence days = number (blank = tier default). VIP = yes/no. Birthday = date YYYY-MM-DD (also lands in Upcoming dates).', '', '', '', '', '', '', '', '', '', ''],
   ]
   await downloadXlsxTemplateWithDropdowns('daybook-contacts-template.xlsx', 'Contacts', rows, [
-    { col: 3, values: ['inner', 'active', 'network', 'dormant'] }, // Tier
-    { col: 7, values: ['yes', 'no'] }, // VIP
+    { col: 4, values: ['inner', 'active', 'network', 'dormant'] }, // Tier
+    { col: 8, values: ['yes', 'no'] }, // VIP
   ])
-  toast.success('Excel template downloaded — includes Birthday, with Tier and VIP as dropdowns')
+  toast.success('Excel template downloaded — First/Last name join into the contact name; Tier and VIP are dropdowns')
 }
 
 // Accepts YYYY-MM-DD (also tolerates common date-cell formats Excel might hand back). Returns a
@@ -214,14 +244,20 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
       if (rows.length < 2) { toast.error('No data rows found - start from the template'); return }
       const header = rows[0].map(h => h.trim().toLowerCase())
       const col = (n: string) => header.findIndex(h => h.startsWith(n))
-      const iName = col('name')
-      if (iName === -1) { toast.error('Missing "Name" column - use the downloaded template'); return }
+      const iFirst = col('first'), iLast = col('last name'), iName = col('name')
+      if (iFirst === -1 && iName === -1) { toast.error('Need a "First name" (and Last name) column, or a "Name" column - use the downloaded template'); return }
       const get = (r: string[], n: string) => { const i = col(n); return i === -1 ? '' : (r[i] ?? '').trim() }
+      // Build the contact name: prefer First + Last, fall back to a single Name column.
+      const nameOf = (r: string[]) => {
+        const joined = [iFirst !== -1 ? (r[iFirst] ?? '').trim() : '', iLast !== -1 ? (r[iLast] ?? '').trim() : ''].filter(Boolean).join(' ').trim()
+        return joined || (iName !== -1 ? (r[iName] ?? '').trim() : '')
+      }
 
       const out: ParsedPerson[] = []
       for (const r of rows.slice(1)) {
-        const name = (r[iName] ?? '').trim()
-        if (!name || name.startsWith('- DELETE THIS ROW')) continue
+        const name = nameOf(r)
+        const firstCell = ((iFirst !== -1 ? r[iFirst] : r[iName]) ?? '').trim()
+        if (!name || firstCell.startsWith('- DELETE THIS ROW')) continue
         const warnings: string[] = []
         const tierRaw = get(r, 'tier').toLowerCase()
         const tier = (['inner', 'active', 'network', 'dormant'].includes(tierRaw) ? tierRaw : 'network') as Tier

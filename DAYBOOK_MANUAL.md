@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v60 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v62 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -438,3 +438,11 @@ None of these are things the rest of the app depends on to function — they're 
 48. **v60** — Fixed "WAITING 9999D".
 
     A task put into "Waiting on" status without a recorded start date (which happened to imported waiting tasks) was showing a nonsense **9999** for days‑waiting — that's the app's internal "no date" placeholder leaking onto the screen. Two fixes: (1) any task created already in waiting status now stamps the wait‑start date automatically, and (2) everywhere that shows "days waiting" (Attention needed, the task row, the Reports exceptions) now falls back to the task's created date when no wait‑start was recorded, so you always see a real number instead of 9999. Existing waiting tasks are covered by the fallback, no re‑entry needed.
+
+49. **v61** — Sort tasks, a "By Day" view with capacity, and the due date shown on every task.
+
+    Three additions to the Tasks page. **Sorting:** every view (except List, which already has clickable column headers) now has a **Sort by** dropdown — Due date, Priority, Title A–Z, Recently added, or Area — and the default order across the app is now **due date, soonest first** (undated last). **By Day view:** a new tab that buckets your tasks under **Overdue**, **Today**, **Tomorrow**, then each upcoming date, then **No date** — and each dated day shows its load against your daily capacity (e.g. "Today — 5 of 6", flagged in red when a day is over). It's the quick way to see how your week is allocated and spot overloaded days. **Due date on the panel:** opening a task now shows its due date right at the top of the quick‑controls (a date field you can change or clear on the spot), alongside Type/Priority/Status — so the date it's set for is visible the moment you open it, not buried in the Edit form.
+
+50. **v62** — Contacts: sortable columns, a smarter search, and a First/Last‑name import template.
+
+    Three things on the People page. **Sort by any column:** the table headers — Name, Tier, Last contact, Cadence, Status, Last sentiment — are now clickable to sort, and clicking the same header again flips ascending/descending (a small ▲/▼ shows which column you're sorted by). This replaces the old fixed sort dropdown. **Search across all columns:** the search box now matches on name, phone, email, tier, how‑you‑know‑them, topics, and notes — not just name and topics — so you can find a contact by any detail you remember. **First / Last name in the import template:** the contacts Excel template now has separate **First name** and **Last name** columns; on import they're joined into the single contact name (either one alone is fine). A legacy single‑"Name" sheet still imports correctly.

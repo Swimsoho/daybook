@@ -17,7 +17,11 @@ import { ClearFiltersButton, DueChip, EmptyNote, PriorityChip } from '@/componen
 import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
-type View = 'today' | 'week' | 'area' | 'waiting' | 'someday' | 'done' | 'all' | 'list'
+type View = 'today' | 'week' | 'day' | 'area' | 'waiting' | 'someday' | 'done' | 'all' | 'list'
+type SortBy = 'due' | 'priority' | 'title' | 'created' | 'area'
+const SORT_BY_LABELS: Record<SortBy, string> = {
+  due: 'Due date', priority: 'Priority', title: 'Title (A–Z)', created: 'Recently added', area: 'Area',
+}
 
 // "End of this week" for the bulk due-date picker — the upcoming Friday (today if it's already
 // Friday). Any due date inside the next 7 days lands a task in the This Week view, so this is a
@@ -30,6 +34,7 @@ function endOfWeek(): string {
 const VIEWS: { id: View; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: 'week', label: 'This Week' },
+  { id: 'day', label: 'By Day' },
   { id: 'area', label: 'By Area' },
   { id: 'waiting', label: 'Waiting On' },
   { id: 'someday', label: 'Someday' },
@@ -54,6 +59,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   const [expandAll, setExpandAll] = useState(false)
   const [dragCat, setDragCat] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [sortBy, setSortBy] = useState<SortBy>('due')
   const scheme = state.settings.priorityScheme
   const filtersActive = !!search || areaFilter !== 'all' || prioFilter !== 'all' || catFilter !== 'all' || actFilter !== 'all' || !!projectFilter
   const clearAll = () => { setSearch(''); setAreaFilter('all'); setPrioFilter('all'); setCatFilter('all'); setActFilter('all'); onClearProject?.() }
@@ -99,6 +105,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
         return ts.filter(t => t.priority === 'P3' && t.status !== 'done' && t.status !== 'dropped')
       case 'done':
         return state.tasks.filter(t => (t.status === 'done' || t.status === 'dropped') && matches(t)).sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''))
+      case 'day':
       case 'area':
       case 'all':
       case 'list':
@@ -106,7 +113,43 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
     }
   }, [state.tasks, view, search, areaFilter, prioFilter, catFilter, actFilter, projectFilter])
 
-  const sorted = [...filtered].sort((a, b) => a.priority.localeCompare(b.priority) || (a.due ?? '9999').localeCompare(b.due ?? '9999'))
+  // Sort honours the chosen key; undated tasks always sort last for date-based orders. Default is
+  // due date (soonest first). 'done' keeps its own recency order set above.
+  const areaName = (id?: string) => state.areas.find(a => a.id === id)?.name ?? '~'
+  const sorted = view === 'done' ? filtered : [...filtered].sort((a, b) => {
+    switch (sortBy) {
+      case 'due': return (a.due ?? '9999-99-99').localeCompare(b.due ?? '9999-99-99') || a.priority.localeCompare(b.priority)
+      case 'priority': return a.priority.localeCompare(b.priority) || (a.due ?? '9999-99-99').localeCompare(b.due ?? '9999-99-99')
+      case 'title': return a.title.localeCompare(b.title)
+      case 'created': return (b.created ?? '').localeCompare(a.created ?? '')
+      case 'area': return areaName(a.areaId).localeCompare(areaName(b.areaId)) || a.priority.localeCompare(b.priority)
+    }
+  })
+
+  // "By Day" grouping — bucket the (sorted) tasks under Overdue / each due day / No date, so you
+  // can see the day-by-day allocation. Dated days are measured against your daily capacity.
+  const capacity = state.settings.dailyCapacity
+  const dayGroups = useMemo(() => {
+    if (view !== 'day') return null
+    const groups = new Map<string, Task[]>()
+    for (const t of sorted) {
+      const key = !t.due ? 'nodate' : (daysSince(t.due) > 0 ? 'overdue' : t.due)
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(t)
+    }
+    const dateKeys = [...groups.keys()].filter(k => k !== 'overdue' && k !== 'nodate').sort()
+    const label = (d: string) => {
+      if (d === today()) return 'Today'
+      if (d === addDays(today(), 1)) return 'Tomorrow'
+      const dt = new Date(d + 'T00:00:00')
+      return dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+    }
+    const out: { key: string; label: string; tasks: Task[]; capacity: boolean }[] = []
+    if (groups.has('overdue')) out.push({ key: 'overdue', label: 'Overdue', tasks: groups.get('overdue')!, capacity: false })
+    for (const k of dateKeys) out.push({ key: k, label: label(k), tasks: groups.get(k)!, capacity: true })
+    if (groups.has('nodate')) out.push({ key: 'nodate', label: 'No date', tasks: groups.get('nodate')!, capacity: false })
+    return out
+  }, [view, sorted, capacity])
 
   function exportCsv() {
     // Selecting tasks first scopes the export to just those — otherwise it's the whole current view.
@@ -236,6 +279,16 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
             {state.actions.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
           </SelectContent>
         </Select>
+        {view !== 'list' && (
+          <Select value={sortBy} onValueChange={v => setSortBy(v as SortBy)}>
+            <SelectTrigger className="h-8 w-44 bg-card text-[12.5px]">
+              <span className="inline-flex items-center gap-1.5 text-muted-foreground"><ArrowUpDown className="h-3.5 w-3.5" />Sort: <span className="text-foreground">{SORT_BY_LABELS[sortBy]}</span></span>
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(SORT_BY_LABELS) as SortBy[]).map(k => <SelectItem key={k} value={k}>{SORT_BY_LABELS[k]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
         <ClearFiltersButton active={filtersActive} onClear={clearAll} />
       </div>
 
@@ -399,7 +452,31 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       )}
 
       {/* List */}
-      {view === 'list' ? (
+      {view === 'day' && dayGroups ? (
+        <div className="grid grid-cols-1 gap-4">
+          {dayGroups.length === 0 && <EmptyNote>No tasks to lay out by day.</EmptyNote>}
+          {dayGroups.map(g => {
+            const over = g.capacity && g.tasks.length > capacity
+            return (
+              <section key={g.key} className="border border-border bg-card shadow-sm rounded-lg">
+                <div className="px-4 py-2.5 flex items-center gap-2.5 border-b border-border">
+                  <span className={cn('font-display text-[14.5px] font-semibold', g.key === 'overdue' && 'text-[hsl(8_60%_41%)]')}>{g.label}</span>
+                  {g.capacity ? (
+                    <span className={cn('text-[11px] tabular ml-auto px-1.5 py-0.5 rounded-sm', over ? 'bg-[hsl(8_62%_46%_/_0.12)] text-[hsl(8_60%_38%)] font-semibold' : 'text-muted-foreground')}>
+                      {g.tasks.length} of {capacity}{over && ' · over'}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] tabular text-muted-foreground ml-auto">{g.tasks.length}</span>
+                  )}
+                </div>
+                {g.tasks.map(t => (
+                  <TaskRow key={t.id} task={t} onOpen={setOpenTask} expandAll={expandAll} selected={selected.has(t.id)} onToggleSelect={toggleSelect} />
+                ))}
+              </section>
+            )
+          })}
+        </div>
+      ) : view === 'list' ? (
         <TaskListTable tasks={sorted} selected={selected} onToggleSelect={toggleSelect} onOpen={setOpenTask} />
       ) : groupedByArea ? (
         <div className="grid grid-cols-1 gap-4">
