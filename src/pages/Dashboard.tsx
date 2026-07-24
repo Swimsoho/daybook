@@ -218,6 +218,9 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   const [briefOpen, setBriefOpen] = useState(true)
   const [customize, setCustomize] = useState(false)
   const [dragId, setDragId] = useState<WidgetId | null>(null)
+  // A KPI tile opens a focused list of exactly the items it counts, rather than dumping you on a
+  // whole page. Keeps the number and the drill-through in perfect agreement.
+  const [drill, setDrill] = useState<{ title: string; sub?: string; tasks?: Task[]; calls?: boolean } | null>(null)
 
   const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
   // A task counts as a "call" if its Type is Call OR it carries a Call action. Calls have their own
@@ -551,16 +554,19 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
           <KpiTile
             label="Today" value={todays.length} sub={`of ${capacity} capacity`}
             icon={<ListChecks className="h-4 w-4" />} accent="hsl(215 55% 50%)"
-            tone={overCapacity ? 'bad' : undefined} onClick={() => goTo('tasks')}
+            tone={overCapacity ? 'bad' : undefined}
+            onClick={() => setDrill({ title: `Today — ${todays.length} task${todays.length === 1 ? '' : 's'}`, sub: 'Due today/overdue, plus undated Urgent & High (calls are under Calls)', tasks: todays })}
           />
           <KpiTile
             label="Overdue" value={overdue.length} sub={overdue.length ? 'needs attention' : 'all clear'}
             icon={<AlertTriangle className="h-4 w-4" />} accent="hsl(8 62% 48%)"
-            tone={overdue.length ? 'bad' : 'good'} onClick={() => goTo('tasks')}
+            tone={overdue.length ? 'bad' : 'good'}
+            onClick={() => setDrill({ title: `Overdue — ${overdue.length} task${overdue.length === 1 ? '' : 's'}`, sub: 'Past their due date (calls are shown under Calls)', tasks: overdue })}
           />
           <KpiTile
             label="Calls" value={`${made}/${state.settings.callGoal}`} sub="made today"
-            icon={<Phone className="h-4 w-4" />} accent="hsl(28 70% 48%)" onClick={() => goTo('people')}
+            icon={<Phone className="h-4 w-4" />} accent="hsl(28 70% 48%)"
+            onClick={() => setDrill({ title: `Today's calls — ${callTasks.length + personCalls.length}`, sub: `${made} of ${state.settings.callGoal} logged today`, calls: true })}
           />
           <KpiTile
             label="Inbox" value={pendingCaptures.length} sub="to confirm"
@@ -592,6 +598,48 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
       <TaskDialog open={!!editTask} onClose={() => setEditTask(null)} task={editTask} />
       <LogCallDialog person={logPerson} open={!!logPerson} onClose={() => setLogPerson(null)} />
       <PersonDetail person={viewPerson} onClose={() => setViewPerson(null)} onLog={p => setLogPerson(p)} />
+
+      {/* KPI drill-through — the exact items behind the number you clicked. */}
+      <Dialog open={!!drill} onOpenChange={o => !o && setDrill(null)}>
+        <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg">{drill?.title}</DialogTitle>
+            {drill?.sub && <p className="text-[12px] text-muted-foreground">{drill.sub}</p>}
+          </DialogHeader>
+          {drill?.tasks && (
+            <div className="border border-border rounded-sm">
+              {drill.tasks.length === 0 && <EmptyNote>Nothing here — all clear.</EmptyNote>}
+              {drill.tasks.map(t => <TaskRow key={t.id} task={t} onOpen={x => { setDrill(null); setOpenTask(x) }} />)}
+            </div>
+          )}
+          {drill?.calls && (
+            <div className="border border-border rounded-sm">
+              {callTasks.length === 0 && personCalls.length === 0 && <EmptyNote>No calls today.</EmptyNote>}
+              {callTasks.map(t => {
+                const person = t.personId ? state.people.find(p => p.id === t.personId) : undefined
+                return (
+                  <button key={t.id} onClick={() => { setDrill(null); setOpenTask(t) }} className="w-full flex items-center gap-2.5 px-3 py-2 border-b border-border/60 last:border-0 hover:bg-accent/50 text-left">
+                    <Phone className="h-3.5 w-3.5 shrink-0 text-[hsl(215_45%_42%)]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="text-[13.5px] font-medium truncate block">{t.title}</span>
+                      <span className="text-[11.5px] text-muted-foreground truncate block">{person ? person.name : (t.callAbout || 'No contact attached')}</span>
+                    </span>
+                  </button>
+                )
+              })}
+              {personCalls.map(c => (
+                <button key={c.person.id} onClick={() => { setDrill(null); setViewPerson(c.person) }} className="w-full flex items-center gap-2.5 px-3 py-2 border-b border-border/60 last:border-0 hover:bg-accent/50 text-left">
+                  <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1">
+                    <span className="text-[13.5px] font-medium truncate block">{c.person.name}</span>
+                    <span className="text-[11.5px] text-muted-foreground truncate block">{c.reason}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

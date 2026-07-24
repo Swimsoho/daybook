@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v62 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v63 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -446,3 +446,7 @@ None of these are things the rest of the app depends on to function — they're 
 50. **v62** — Contacts: sortable columns, a smarter search, and a First/Last‑name import template.
 
     Three things on the People page. **Sort by any column:** the table headers — Name, Tier, Last contact, Cadence, Status, Last sentiment — are now clickable to sort, and clicking the same header again flips ascending/descending (a small ▲/▼ shows which column you're sorted by). This replaces the old fixed sort dropdown. **Search across all columns:** the search box now matches on name, phone, email, tier, how‑you‑know‑them, topics, and notes — not just name and topics — so you can find a contact by any detail you remember. **First / Last name in the import template:** the contacts Excel template now has separate **First name** and **Last name** columns; on import they're joined into the single contact name (either one alone is fine). A legacy single‑"Name" sheet still imports correctly.
+
+51. **v63** — The Today summary tiles now drill into the exact items behind the number.
+
+    Clicking a tile on the Today page used to dump you on a whole page (all tasks, everyone), which didn't tell you *which* items the number referred to — and the counts didn't even line up, because the tiles deliberately exclude calls while the Tasks page lists everything. Now each tile opens a focused pop‑up listing **exactly** the items it counts: **Today** shows the day's tasks, **Overdue** shows the specific overdue tasks (calls excluded — they're under Calls), and **Calls** shows the specific calls to make (call‑tasks plus the cadence people). Click any item in the pop‑up to open it. So the number and the list always agree, and it's clear what each figure is alerting you to. (Inbox still opens the Inbox page, which already *is* the exact list of items to confirm.) This also explains the earlier "1 vs 2 overdue" confusion: the Overdue tile counts non‑call overdue items, and any overdue **call** shows under Calls instead.
