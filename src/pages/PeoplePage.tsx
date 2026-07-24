@@ -267,75 +267,162 @@ interface ParsedPerson {
   warnings: string[]
 }
 
+// ---- Format-agnostic column detection ----------------------------------------------------------
+// Real address-book exports never match a fixed template — Gmail calls email "E-mail 1 - Value",
+// Outlook calls it "E-mail Address", phones are "Phone 1 - Value" / "Mobile Phone" / "Business
+// Phone", and so on. Rather than make the user reshape their spreadsheet, we detect each Daybook
+// field from the file's own headers by pattern, tolerating every common provider's naming. Email
+// and phone are multi-column (providers spread them across Phone 1/2, Mobile, Home…) — at row time
+// we take the first non-empty. Anything we can't auto-detect, the user maps by hand in a few
+// clicks (see the mapper UI). `exclude` skips Google's paired "… - Type"/"… - Label" columns so we
+// grab the value, not the word "Mobile".
+type MapField = 'first' | 'last' | 'full' | 'email' | 'phone' | 'company' | 'notes' | 'birthday' | 'tier' | 'cadence' | 'vip' | 'how' | 'topics'
+type ColumnMapping = Record<MapField, number[]>
+
+const FIELD_DEFS: { key: MapField; label: string; patterns: string[]; exclude?: string[]; multi?: boolean }[] = [
+  { key: 'first', label: 'First name', patterns: ['first name', 'given name', 'first', 'given'] },
+  { key: 'last', label: 'Last name', patterns: ['last name', 'family name', 'surname', 'last', 'family'] },
+  { key: 'full', label: 'Full name (if not split)', patterns: ['display name', 'full name', 'name'] },
+  { key: 'email', label: 'Email', patterns: ['e-mail', 'email', 'mail'], exclude: ['type', 'label', 'protocol', 'display'], multi: true },
+  { key: 'phone', label: 'Phone / WhatsApp', patterns: ['phone', 'mobile', 'cell', 'tel', 'whatsapp'], exclude: ['type', 'label'], multi: true },
+  { key: 'company', label: 'Company / Org', patterns: ['organization', 'organisation', 'company'], exclude: ['title', 'type', 'department'] },
+  { key: 'notes', label: 'Notes', patterns: ['notes', 'note'] },
+  { key: 'birthday', label: 'Birthday', patterns: ['birthday', 'birth', 'bday'] },
+  { key: 'tier', label: 'Tier', patterns: ['tier'] },
+  { key: 'cadence', label: 'Cadence days', patterns: ['cadence'] },
+  { key: 'vip', label: 'VIP', patterns: ['vip'] },
+  { key: 'how', label: 'How you know them', patterns: ['how you', 'how'] },
+  { key: 'topics', label: 'Topics', patterns: ['topics', 'topic'] },
+]
+
+const EMPTY_MAPPING = (): ColumnMapping =>
+  ({ first: [], last: [], full: [], email: [], phone: [], company: [], notes: [], birthday: [], tier: [], cadence: [], vip: [], how: [], topics: [] })
+
+function autoDetectMapping(header: string[]): ColumnMapping {
+  const hs = header.map(h => h.trim().toLowerCase())
+  const mapping = EMPTY_MAPPING()
+  const used = new Set<number>()
+  const matches = (h: string, def: typeof FIELD_DEFS[number]) =>
+    def.patterns.some(p => h.includes(p)) && !(def.exclude ?? []).some(x => h.includes(x))
+  for (const def of FIELD_DEFS) {
+    if (def.multi) {
+      const idxs = hs.map((h, i) => (matches(h, def) && !used.has(i) ? i : -1)).filter(i => i !== -1)
+      idxs.forEach(i => used.add(i))
+      mapping[def.key] = idxs
+    } else {
+      const i = hs.findIndex((h, i) => matches(h, def) && !used.has(i))
+      if (i !== -1) { used.add(i); mapping[def.key] = [i] }
+    }
+  }
+  return mapping
+}
+
+// Turn raw rows + a column mapping into preview-ready people, with the same merge/dedupe and
+// warnings the importer has always used. Reused by both the auto path and the manual mapper.
+function buildParsed(rows: string[][], mapping: ColumnMapping, state: ReturnType<typeof useStore>['state']): ParsedPerson[] {
+  const tiers = resolveTiers(state.settings)
+  const tierMap = new Map(tiers.flatMap(t => [[t.id.toLowerCase(), t.id], [t.name.toLowerCase(), t.id]] as [string, string][]))
+  const defaultTier = tiers.find(t => t.id === 'network')?.id ?? tiers[0]?.id ?? 'network'
+  const one = (r: string[], idxs: number[]) => (idxs.length ? (r[idxs[0]] ?? '').trim() : '')
+  const firstNonEmpty = (r: string[], idxs: number[]) => { for (const i of idxs) { const v = (r[i] ?? '').trim(); if (v) return v } return '' }
+
+  const out: ParsedPerson[] = []
+  for (const r of rows.slice(1)) {
+    const first = one(r, mapping.first)
+    const last = one(r, mapping.last)
+    const full = one(r, mapping.full)
+    const name = ([first, last].filter(Boolean).join(' ').trim()) || full
+    if (!name) continue
+    if (first.startsWith('- DELETE THIS ROW') || full.startsWith('- DELETE THIS ROW')) continue
+    const warnings: string[] = []
+    const email = firstNonEmpty(r, mapping.email)
+    const phone = firstNonEmpty(r, mapping.phone)
+    const company = one(r, mapping.company)
+    let notes = one(r, mapping.notes)
+    if (company) notes = notes ? (notes.toLowerCase().includes(company.toLowerCase()) ? notes : `${notes} · ${company}`) : company
+    const tierRaw = one(r, mapping.tier).toLowerCase()
+    const tier = tierMap.get(tierRaw) ?? defaultTier
+    if (tierRaw && !tierMap.has(tierRaw)) warnings.push(`tier "${tierRaw}" -> ${tiers.find(t => t.id === defaultTier)?.name}`)
+    const cadRaw = one(r, mapping.cadence)
+    const cadence = cadRaw ? parseInt(cadRaw, 10) : undefined
+    if (cadRaw && (!cadence || cadence < 1)) warnings.push(`cadence "${cadRaw}" ignored`)
+    const birthdayRaw = one(r, mapping.birthday)
+    const birthday = normalizeBirthday(birthdayRaw)
+    if (birthdayRaw && !birthday) warnings.push(`birthday "${birthdayRaw}" ignored (use YYYY-MM-DD)`)
+    const existing = state.people.find(p =>
+      (email && p.email && p.email.toLowerCase() === email.toLowerCase()) ||
+      p.name.trim().toLowerCase() === name.toLowerCase(),
+    )
+    out.push({
+      warnings,
+      mergeWith: existing,
+      person: {
+        name, phone: phone || undefined, email: email || undefined, tier,
+        cadenceDays: cadence && cadence > 0 ? cadence : undefined,
+        how: one(r, mapping.how), topics: one(r, mapping.topics),
+        vip: ['yes', 'y', 'true', '1'].includes(one(r, mapping.vip).toLowerCase()),
+        birthday,
+        notes: notes || undefined,
+      },
+    })
+  }
+  return out
+}
+
 function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { state, addPerson, updatePerson, setBirthday } = useStore()
   const [parsed, setParsed] = useState<ParsedPerson[] | null>(null)
   const [fileName, setFileName] = useState('')
+  // Raw rows + detected/edited column mapping kept around so the user can open the column-mapper
+  // to correct a mis-detected column without re-picking the file.
+  const [rawRows, setRawRows] = useState<string[][] | null>(null)
+  const [mapping, setMapping] = useState<ColumnMapping | null>(null)
+  const [mapMode, setMapMode] = useState(false)
+
+  function resetImport() {
+    setParsed(null); setFileName(''); setRawRows(null); setMapping(null); setMapMode(false)
+  }
 
   function handleFile(f: File) {
     setFileName(f.name)
     // .vcf (vCard) exports are read as text and converted to rows; everything else goes through the
-    // spreadsheet parser. Both then run the identical merge/preview pipeline below.
+    // spreadsheet parser. Both then run the identical detect → build → preview pipeline below.
     const loader = /\.vcf$/i.test(f.name) || f.type.includes('vcard') ? f.text().then(parseVCards) : parseSpreadsheetFile(f)
     loader.then(rows => {
-      if (rows.length < 2) { toast.error('No data rows found - start from the template'); return }
-      const header = rows[0].map(h => h.trim().toLowerCase())
-      const col = (n: string) => header.findIndex(h => h.startsWith(n))
-      const iFirst = col('first'), iLast = col('last name'), iName = col('name')
-      if (iFirst === -1 && iName === -1) { toast.error('Need a "First name" (and Last name) column, or a "Name" column - use the downloaded template'); return }
-      const get = (r: string[], n: string) => { const i = col(n); return i === -1 ? '' : (r[i] ?? '').trim() }
-      // Build the contact name: prefer First + Last, fall back to a single Name column.
-      const nameOf = (r: string[]) => {
-        const joined = [iFirst !== -1 ? (r[iFirst] ?? '').trim() : '', iLast !== -1 ? (r[iLast] ?? '').trim() : ''].filter(Boolean).join(' ').trim()
-        return joined || (iName !== -1 ? (r[iName] ?? '').trim() : '')
+      if (rows.length < 2) { toast.error('No data rows found — start from the template'); return }
+      const header = rows[0].map(h => (h ?? '').trim())
+      const m = autoDetectMapping(header)
+      setRawRows(rows)
+      setMapping(m)
+      const nameDetected = m.first.length > 0 || m.full.length > 0
+      if (nameDetected) {
+        const out = buildParsed(rows, m, state)
+        if (out.length) { setParsed(out); setMapMode(false); return }
       }
+      // Couldn't confidently find a name column (or matched columns produced no rows) — drop the
+      // user into the mapper so any format at all can be imported with a few clicks.
+      setParsed(null)
+      setMapMode(true)
+      toast('Couldn’t fully auto-detect the columns — match them below (takes a few clicks).')
+    }).catch(() => toast.error('Couldn’t read that file — try a .vcf, .csv or .xlsx export'))
+  }
 
-      // Match an imported tier against the account's own tiers, by id or by name (case-insensitive),
-      // so custom tier names work. Anything unrecognised falls back to the first tier.
-      const tiers = resolveTiers(state.settings)
-      const tierMap = new Map(tiers.flatMap(t => [[t.id.toLowerCase(), t.id], [t.name.toLowerCase(), t.id]] as [string, string][]))
-      const defaultTier = tiers.find(t => t.id === 'network')?.id ?? tiers[0]?.id ?? 'network'
+  // Apply the current (possibly hand-edited) mapping to the loaded rows and show the preview.
+  function applyMapping() {
+    if (!rawRows || !mapping) return
+    if (mapping.first.length === 0 && mapping.full.length === 0) {
+      toast.error('Pick which column holds the name (First name, or Full name) to continue.')
+      return
+    }
+    const out = buildParsed(rawRows, mapping, state)
+    if (!out.length) { toast.error('That mapping produced no contacts — check the name column.'); return }
+    setParsed(out); setMapMode(false)
+    toast.success(`Matched ${out.length} contacts`)
+  }
 
-      const out: ParsedPerson[] = []
-      for (const r of rows.slice(1)) {
-        const name = nameOf(r)
-        const firstCell = ((iFirst !== -1 ? r[iFirst] : r[iName]) ?? '').trim()
-        if (!name || firstCell.startsWith('- DELETE THIS ROW')) continue
-        const warnings: string[] = []
-        const tierRaw = get(r, 'tier').toLowerCase()
-        const tier = tierMap.get(tierRaw) ?? defaultTier
-        if (tierRaw && !tierMap.has(tierRaw)) warnings.push(`tier "${tierRaw}" -> ${tiers.find(t => t.id === defaultTier)?.name}`)
-        const cadRaw = get(r, 'cadence')
-        const cadence = cadRaw ? parseInt(cadRaw, 10) : undefined
-        if (cadRaw && (!cadence || cadence < 1)) warnings.push(`cadence "${cadRaw}" ignored`)
-        // Tolerate Google Contacts / phone exports: email is "E-mail 1 - Value", phone is
-        // "Phone 1 - Value" (which already startsWith "phone"). So users can export their Gmail or
-        // phone contacts to CSV and import them here directly, no reformatting.
-        const email = get(r, 'email') || get(r, 'e-mail')
-        const phone = get(r, 'phone')
-        const existing = state.people.find(p =>
-          (email && p.email && p.email.toLowerCase() === email.toLowerCase()) ||
-          p.name.trim().toLowerCase() === name.toLowerCase(),
-        )
-        const birthdayRaw = get(r, 'birthday')
-        const birthday = normalizeBirthday(birthdayRaw)
-        if (birthdayRaw && !birthday) warnings.push(`birthday "${birthdayRaw}" ignored (use YYYY-MM-DD)`)
-        out.push({
-          warnings,
-          mergeWith: existing,
-          person: {
-            name, phone: phone || undefined, email: email || undefined, tier,
-            cadenceDays: cadence && cadence > 0 ? cadence : undefined,
-            how: get(r, 'how'), topics: get(r, 'topics'),
-            vip: ['yes', 'y', 'true', '1'].includes(get(r, 'vip').toLowerCase()),
-            birthday,
-            notes: get(r, 'notes') || undefined,
-          },
-        })
-      }
-      if (!out.length) { toast.error('No importable rows found'); return }
-      setParsed(out)
-    }).catch(() => toast.error('Couldn’t read that file - make sure it’s the .xlsx or .csv you exported/filled in'))
+  // Set a single field's column from the mapper dropdown (-1 clears it).
+  function setMapCol(field: MapField, idx: number) {
+    setMapping(m => (m ? { ...m, [field]: idx === -1 ? [] : [idx] } : m))
   }
 
   function commit() {
@@ -351,23 +438,63 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
       if (p.mergeWith) merged++; else added++
     }
     toast.success(`Imported: ${added} new, ${merged} merged into existing contacts`)
-    setParsed(null); setFileName(''); onClose()
+    resetImport(); onClose()
+  }
+
+  const header = rawRows?.[0]?.map(h => (h ?? '').trim()) ?? []
+  // Preview a few sample values for a column so the user can tell which is which when mapping.
+  const sampleFor = (idx: number) => {
+    if (!rawRows) return ''
+    for (const r of rawRows.slice(1, 6)) { const v = (r[idx] ?? '').trim(); if (v) return v }
+    return ''
   }
 
   return (
-    <Dialog open={open} onOpenChange={o => { if (!o) { setParsed(null); setFileName(''); onClose() } }}>
+    <Dialog open={open} onOpenChange={o => { if (!o) { resetImport(); onClose() } }}>
       <DialogContent className="sm:max-w-[620px] max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle className="font-display text-lg">Import contacts</DialogTitle></DialogHeader>
-        {!parsed ? (
+        {mapMode && rawRows ? (
+          /* ---- Column mapper: match the file's columns to Daybook fields ---- */
+          <div className="grid grid-cols-1 gap-2.5">
+            <p className="text-[13px]">
+              Match your file's columns to Daybook. We've guessed from <span className="text-muted-foreground">{fileName}</span> — just fix any that are off. <b>Name is the only must-have</b> (First name, or a single Full name column).
+            </p>
+            <div className="border border-border rounded-sm divide-y divide-border/60 max-h-[360px] overflow-y-auto">
+              {FIELD_DEFS.map(def => {
+                const cur = mapping?.[def.key]?.[0] ?? -1
+                const autoMulti = (mapping?.[def.key]?.length ?? 0) > 1
+                return (
+                  <div key={def.key} className="flex items-center gap-2 px-2.5 py-1.5 text-[12.5px]">
+                    <span className="w-32 shrink-0 text-muted-foreground">{def.label}</span>
+                    <select
+                      value={cur}
+                      onChange={e => setMapCol(def.key, Number(e.target.value))}
+                      className="h-7 flex-1 min-w-0 border border-border rounded-sm bg-background px-1.5 text-[12px] cursor-pointer outline-none"
+                    >
+                      <option value={-1}>— none —</option>
+                      {header.map((h, i) => (
+                        <option key={i} value={i}>{h || `Column ${i + 1}`}</option>
+                      ))}
+                    </select>
+                    <span className="w-28 shrink-0 truncate text-[11px] text-muted-foreground" title={cur !== -1 ? sampleFor(cur) : ''}>
+                      {autoMulti ? `+${(mapping?.[def.key]?.length ?? 1) - 1} more auto` : cur !== -1 ? sampleFor(cur) : ''}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="text-[11px] text-muted-foreground">Email and phone can span several columns (Gmail's "Phone 1 / 2", Outlook's "Mobile / Business") — we keep the first non-empty automatically; pick one here only to override.</p>
+          </div>
+        ) : !parsed ? (
           <div className="grid grid-cols-1 gap-3">
             <div className="flex items-start gap-3 text-[13px]">
               <span className="font-display font-semibold text-muted-foreground">1</span>
               <div>
-                <b>Bring in contacts you already have.</b> Export them from Gmail, iCloud/iPhone, or Outlook and drop the file in below — or fill the Excel template if you're starting fresh.
+                <b>Bring in contacts you already have.</b> Export them from Gmail, iCloud/iPhone, Outlook — or anywhere — and drop the file in below. <b>Any column layout works</b>: Daybook reads the file's own headers and matches them for you (and asks you to confirm anything it's unsure about). No reformatting.
                 <ul className="mt-1 text-[12px] text-muted-foreground list-disc pl-4 space-y-0.5">
-                  <li><b>Gmail:</b> Google Contacts → Export → <i>Google CSV</i> (or vCard).</li>
+                  <li><b>Gmail:</b> Google Contacts → Export → <i>Google CSV</i> or vCard.</li>
                   <li><b>iPhone / iCloud:</b> iCloud.com → Contacts → select all → Export vCard (<code>.vcf</code>).</li>
-                  <li><b>Outlook:</b> People → Manage → Export contacts → CSV.</li>
+                  <li><b>Outlook:</b> People → Manage → Export contacts → CSV (or vCard from the desktop app).</li>
                 </ul>
                 <div><Button size="sm" variant="outline" className="h-7 mt-1.5" onClick={() => downloadContactsTemplate(resolveTiers(state.settings).map(t => t.name))}>Or download the Excel template (.xlsx)</Button></div>
               </div>
@@ -402,12 +529,17 @@ function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void })
                 </div>
               ))}
             </div>
+            <button onClick={() => setMapMode(true)} className="text-[12px] text-[hsl(17_63%_47%)] hover:underline text-left w-fit">
+              Columns look wrong? Adjust the mapping →
+            </button>
           </div>
         )}
         <DialogFooter>
-          <Button variant="ghost" onClick={() => { setParsed(null); setFileName(''); onClose() }}>Cancel</Button>
-          {parsed && <Button variant="outline" onClick={() => { setParsed(null); setFileName('') }}>Different file</Button>}
-          {parsed && <Button onClick={commit}>Import {parsed.length} contacts</Button>}
+          <Button variant="ghost" onClick={() => { resetImport(); onClose() }}>Cancel</Button>
+          {mapMode && rawRows && <Button variant="outline" onClick={() => { resetImport() }}>Different file</Button>}
+          {mapMode && rawRows && <Button onClick={applyMapping}>Match columns</Button>}
+          {!mapMode && parsed && <Button variant="outline" onClick={() => resetImport()}>Different file</Button>}
+          {!mapMode && parsed && <Button onClick={commit}>Import {parsed.length} contacts</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

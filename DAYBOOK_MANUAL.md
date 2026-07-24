@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v70 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v71 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -483,6 +483,12 @@ None of these are things the rest of the app depends on to function — they're 
 
 58. **v70** — Tasks: a concise **Table** layout with sortable, filterable column headers (now the default), and area + category shown on every row.
 
-    The task list can now render two ways, switched with the **Table / Cards** toggle at the top‑right of the Tasks page. **Table** (the new default) is the compact, spreadsheet‑style view you asked for: each task is a single tight row with proper columns — **Title · Type · Area · Project · Category · Action · Priority · Status · Due**. So the **area now sits right next to the task** instead of stacked underneath, and the **category has its own column** rather than being hidden. **Cards** is the original roomier layout, kept for anyone who prefers it (and it now also shows the category as a small chip next to the area).
+    The task list can now render two ways, switched with the **Table / Cards** toggle at the top‑right of the Tasks page. *(continued below)*
+
+58b. **v71** — Contacts import now reads **any file's columns automatically** — no reformatting to match a template.
+
+    The friction before: exports from Gmail, iCloud, Outlook and Yahoo each name their columns differently ("E‑mail 1 - Value" vs "E‑mail Address", "Phone 1 - Value" vs "Mobile Phone"/"Business Phone"), so matching them to Daybook's template meant a lot of manual spreadsheet surgery. Now the importer is **format‑agnostic**: it reads whatever headers are in your file and **auto‑detects** which column is the name, email, phone, company, notes, birthday, etc. — tolerating every common provider layout, skipping Google's paired "… - Type/Label" helper columns, and pulling the first real value when a provider spreads phones/emails across several columns (Phone 1 / Phone 2 / Mobile / Business). So you export from **any** system and drop the raw file straight in — CSV, vCard or xlsx — with zero cleanup.
+
+    For anything it can't confidently read, it doesn't error and make you fix the spreadsheet — it opens a quick **column‑mapper**: one dropdown per Daybook field, pre‑filled with its best guess and showing a sample value from your file, so you confirm or correct the match in a few clicks. There's also an **"Adjust the mapping →"** link on the preview if the auto‑match got a column wrong. The old safety net is unchanged: it still previews first and **merges duplicates (same email or name) into the existing contact, never doubles them**. Verified against real Gmail, Outlook, iCloud (vCard), Yahoo and Daybook‑template layouts. **Table** (the new default) is the compact, spreadsheet‑style view you asked for: each task is a single tight row with proper columns — **Title · Type · Area · Project · Category · Action · Priority · Status · Due**. So the **area now sits right next to the task** instead of stacked underneath, and the **category has its own column** rather than being hidden. **Cards** is the original roomier layout, kept for anyone who prefers it (and it now also shows the category as a small chip next to the area).
 
     **Sort and filter live on the headers.** Click any column header to sort by it (click again to flip the direction — the ⇅ marks the active column). And four columns — **Area, Category, Priority, Status** — carry a little **filter dropdown right in the header**: pick a value to narrow the list to just those rows, stack several together, and a "Clear column filters" strip appears so you always know when a filter is on and how many rows it's hiding. These header filters work on top of the existing search/area/priority filter bar, so you can be as coarse or precise as you like. The choice of Table vs Cards is remembered per user and applies across every list view (Today, This Week, By Day, By Area, Waiting, Someday, Everything, Accomplished). Accomplished stays as cards so it can keep showing the completed/dropped date under each item.
