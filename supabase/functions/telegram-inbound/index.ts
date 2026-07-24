@@ -108,11 +108,39 @@ function backfillNotesAndIdeas(collections: Record<string, unknown>[], trackers:
   return { collections: nextCollections, trackers: nextTrackers }
 }
 
+// Mirror of parseContactCapture in src/lib/store.tsx — keep in sync. "contact:" / "add contact …"
+// → create a new Person instead of a task.
+function parseContactCapture(raw: string): { name: string; phone?: string; email?: string } | null {
+  const m = raw.trim().match(/^\s*(?:contact\s*[:\-]|add\s+(?:a\s+)?(?:new\s+)?contact\b[:\-]?)\s*(.*)$/i)
+  if (!m) return null
+  let s = m[1].trim()
+  if (!s) return null
+  const email = s.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)?.[0]
+  if (email) s = s.replace(email, ' ')
+  const phone = s.match(/\+?\d[\d\s().-]{6,}\d/)?.[0]?.trim()
+  if (phone) s = s.replace(phone, ' ')
+  const name = s.replace(/[,;|]+/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!name) return null
+  return { name, phone: phone || undefined, email: email || undefined }
+}
+
 function routeCaptureServer(text: string, state: RouterState) {
   const lower = text.toLowerCase().trim()
   const reasons: string[] = []
-  let kind: 'task' | 'call' | 'idea' | 'note' | 'entry' | 'question' = 'task'
+  let kind: 'task' | 'call' | 'idea' | 'note' | 'entry' | 'question' | 'contact' = 'task'
   let body = text.trim()
+
+  // "contact:" / "add contact …" → new Person. Checked first so it wins over the existing-person
+  // matcher below (which is for attaching a call to a contact you already have).
+  const contact = parseContactCapture(text)
+  if (contact) {
+    return {
+      kind: 'contact' as const, taskType: 'todo', priority: 'P3' as const,
+      title: contact.name, contactPhone: contact.phone, contactEmail: contact.email,
+      explanation: `new contact → People${contact.phone ? ` · ${contact.phone}` : ''}${contact.email ? ` · ${contact.email}` : ''}`,
+    }
+  }
+
   if (lower.startsWith('t:')) { kind = 'task'; body = body.slice(2).trim(); reasons.push('prefix t: → task') }
   else if (lower.startsWith('c:')) { kind = 'call'; body = body.slice(2).trim(); reasons.push('prefix c: → call log') }
   else if (lower.startsWith('i:') || lower.startsWith('idea:')) { kind = 'idea'; body = body.replace(/^i(dea)?:/i, '').trim(); reasons.push('prefix → idea') }

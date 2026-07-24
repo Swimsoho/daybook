@@ -68,6 +68,9 @@ export default function InboxPage() {
             const person = state.people.find(x => x.id === p.personId)
             const effectiveTrackerId = fileAs[c.id] !== undefined ? fileAs[c.id] : (p.kind === 'entry' ? p.trackerId ?? '' : '')
             const isEntry = !!effectiveTrackerId
+            // A contact capture (unless the user redirected it via File-as) creates a Person, so it
+            // hides the task-only area/category/action controls and shows the parsed phone/email.
+            const isContact = p.kind === 'contact' && fileAs[c.id] === undefined
             const tracker = state.trackers.find(t => t.id === effectiveTrackerId)
             const categoryId = reassignCategory[c.id] ?? p.categoryIds?.[0]
             const category = state.categories.find(cat => cat.id === categoryId)
@@ -91,20 +94,23 @@ export default function InboxPage() {
                     <p className="text-[13.5px]">“{c.text}”</p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11.5px]">
                       <span className="text-muted-foreground">AI filed as</span>
-                      <span className="border border-border rounded-sm bg-background px-1.5 py-px capitalize">{isEntry ? `${tracker?.name} entry` : p.taskType === 'call' ? 'to-call' : p.kind === 'entry' ? 'task' : p.kind}</span>
-                      {!isEntry && area && (
+                      <span className="border border-border rounded-sm bg-background px-1.5 py-px capitalize">{isContact ? 'New contact' : isEntry ? `${tracker?.name} entry` : p.taskType === 'call' ? 'to-call' : p.kind === 'entry' ? 'task' : p.kind}</span>
+                      {isContact && (p.contactPhone || p.contactEmail) && (
+                        <span className="border border-border rounded-sm bg-background px-1.5 py-px text-muted-foreground">{[p.contactPhone, p.contactEmail].filter(Boolean).join(' · ')}</span>
+                      )}
+                      {!isEntry && !isContact && area && (
                         <span className="border border-border rounded-sm bg-background px-1.5 py-px inline-flex items-center gap-1">
                           <span className="h-1.5 w-1.5 rounded-full" style={{ background: area.color }} />
                           {area.name}{project && ` › ${project.name}`}
                         </span>
                       )}
                       {person && <span className="border border-border rounded-sm bg-background px-1.5 py-px">→ {person.name}</span>}
-                      {!isEntry && category && (
+                      {!isEntry && !isContact && category && (
                         <span className="border border-border rounded-sm bg-background px-1.5 py-px">
                           {category.level > 0 ? `${state.categories.find(x => x.id === category.parentId)?.name ?? '—'} › ` : ''}{category.name}
                         </span>
                       )}
-                      {!isEntry && action && (
+                      {!isEntry && !isContact && action && (
                         <span className="border border-border rounded-sm bg-background px-1.5 py-px">{action.name}</span>
                       )}
                       <PriorityChip p={p.priority} />
@@ -117,18 +123,22 @@ export default function InboxPage() {
                       value={titleEdit[c.id] ?? p.title}
                       onChange={e => setTitleEdit(t => ({ ...t, [c.id]: e.target.value }))}
                       className="h-7 w-[130px] sm:w-[150px] text-[11.5px] bg-background"
-                      placeholder="Title"
+                      placeholder={isContact ? 'Contact name' : 'Title'}
                     />
-                    <SearchableSelect
-                      value={effectiveTrackerId}
-                      onValueChange={v => setFileAs(f => ({ ...f, [c.id]: v }))}
-                      options={trackerOptions}
-                      popularCount={trackerPopularCount}
-                      placeholder="File as"
-                      searchPlaceholder="Search task / trackers…"
-                      className="h-7 w-[112px] sm:w-[126px] text-[11px] bg-background"
-                    />
-                    {!isEntry && (
+                    {isContact ? (
+                      <span className="h-7 inline-flex items-center px-2 text-[11px] text-muted-foreground border border-dashed border-border rounded-sm bg-background">Creates a contact in People</span>
+                    ) : (
+                      <SearchableSelect
+                        value={effectiveTrackerId}
+                        onValueChange={v => setFileAs(f => ({ ...f, [c.id]: v }))}
+                        options={trackerOptions}
+                        popularCount={trackerPopularCount}
+                        placeholder="File as"
+                        searchPlaceholder="Search task / trackers…"
+                        className="h-7 w-[112px] sm:w-[126px] text-[11px] bg-background"
+                      />
+                    )}
+                    {!isEntry && !isContact && (
                       <>
                         <SearchableSelect
                           value={reassign[c.id] ?? p.areaId ?? ''}

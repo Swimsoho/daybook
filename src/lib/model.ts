@@ -193,7 +193,7 @@ export interface Capture {
 }
 
 export interface RoutingProposal {
-  kind: 'task' | 'call' | 'idea' | 'note' | 'entry' | 'question'
+  kind: 'task' | 'call' | 'idea' | 'note' | 'entry' | 'question' | 'contact'
   taskType: TaskType
   areaId?: string
   projectId?: string
@@ -205,6 +205,10 @@ export interface RoutingProposal {
   due?: string
   title: string
   explanation: string
+  // For kind 'contact' only — the parsed phone/email so accepting the capture creates a real
+  // Person with those details filled in (see acceptCapture). Title holds the contact's name.
+  contactPhone?: string
+  contactEmail?: string
 }
 
 // ---------- Audit trail ----------

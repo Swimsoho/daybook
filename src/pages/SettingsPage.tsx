@@ -901,6 +901,53 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
           )}
         </Section>
 
+        <Section cat="channels" title="Capture commands — what you can text in" sub="Anything you send a capture channel (Telegram, Slack, SMS/WhatsApp) — or type into the in-app quick-capture box — is auto-sorted before it lands in your Inbox, where you confirm or redirect it. These are the shortcuts the router understands. Everything still previews in the Inbox first; nothing files itself blindly.">
+          <div className="grid grid-cols-1 gap-3 text-[12.5px]">
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Start a message with…</div>
+              <div className="border border-border rounded-md divide-y divide-border/60 overflow-hidden">
+                {[
+                  { cmd: 't:', does: 'Force it to a to-do task', eg: 't: renew the car insurance' },
+                  { cmd: 'c:', does: 'Log / start a call', eg: 'c: called David re governors' },
+                  { cmd: 'i:  /  idea:', does: 'File into your Ideas list', eg: 'idea: build a sukkah shed' },
+                  { cmd: 'n:  /  note:', does: 'File into your Notes list', eg: 'note: boiler warranty expires Aug' },
+                  { cmd: 'contact:', does: 'Create a new contact (name + phone + email)', eg: 'contact: David Feldman, 07700 900010, david@x.com' },
+                  { cmd: '?', does: 'Ask the assistant a question', eg: '? what’s overdue this week' },
+                ].map(r => (
+                  <div key={r.cmd} className="grid grid-cols-[104px_1fr] gap-2 px-3 py-2 items-start">
+                    <code className="text-[11.5px] font-semibold text-[hsl(17_63%_42%)] whitespace-nowrap">{r.cmd}</code>
+                    <div>
+                      <div>{r.does}</div>
+                      <div className="text-[11px] text-muted-foreground mt-0.5">e.g. “{r.eg}”</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">Or just write naturally — it recognises…</div>
+              <div className="border border-border rounded-md divide-y divide-border/60 overflow-hidden">
+                {[
+                  { does: 'Add to any of your lists / trackers (by the list’s name)', eg: 'add Dune Part Two to my movies list' },
+                  { does: 'A call to someone you already have (matches the contact)', eg: 'call Sarah about the article' },
+                  { does: 'Add a new contact', eg: 'add contact Rivka Stern 07700 900022' },
+                  { does: 'Urgency & timing → priority + due date', eg: '…today / urgent → P0 · tomorrow · this week' },
+                ].map((r, i) => (
+                  <div key={i} className="px-3 py-2">
+                    <div>{r.does}</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">e.g. “{r.eg}”</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-[11px] text-muted-foreground leading-relaxed border-t border-dashed border-border pt-2">
+              Anything it can’t place confidently still lands in your <b>Inbox</b> as a to-do — and the Inbox’s <b>“File as”</b> picker lets you send it to any list, task or contact by hand. The router is a keyword matcher, so plain, direct wording works best; lists and contacts match by their own names. <b>New commands (like <code>contact:</code>) reach the Telegram/Slack bots only after those functions are redeployed</b> — the in-app quick-capture box picks them up as soon as this version is live.
+            </p>
+          </div>
+        </Section>
+
         <Section cat="tasks" title="Daily capacity & rebalancing" sub="When a day overflows, the lowest-priority non-time-critical items move to the next open day — and you’re told exactly what shifted.">
           <div className="grid grid-cols-2 gap-3">
             <div className="grid grid-cols-1 gap-1">

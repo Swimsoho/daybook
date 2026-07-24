@@ -167,9 +167,41 @@ function swapAdjacent<T>(arr: T[], idx: number, dir: 'up' | 'down'): T[] {
 }
 
 // ---------- The simulated AI router ----------
+// Parse a "contact:" / "add contact …" capture into name + phone + email. Returns null if the
+// message isn't a contact command at all, so it never hijacks a normal task. Keep this in sync
+// with the identical copy in supabase/functions/telegram-inbound & slack-events (server can't
+// import the client). Examples it handles:
+//   "contact: David Feldman, 07700 900010, david@x.com"
+//   "add contact David Feldman +44 7700 900010 david@x.com"
+//   "add a new contact Rivka Stern"   (name only)
+export function parseContactCapture(raw: string): { name: string; phone?: string; email?: string } | null {
+  const m = raw.trim().match(/^\s*(?:contact\s*[:\-]|add\s+(?:a\s+)?(?:new\s+)?contact\b[:\-]?)\s*(.*)$/i)
+  if (!m) return null
+  let s = m[1].trim()
+  if (!s) return null
+  const email = s.match(/[\w.+-]+@[\w-]+\.[\w.-]+/)?.[0]
+  if (email) s = s.replace(email, ' ')
+  const phone = s.match(/\+?\d[\d\s().-]{6,}\d/)?.[0]?.trim()
+  if (phone) s = s.replace(phone, ' ')
+  const name = s.replace(/[,;|]+/g, ' ').replace(/\s+/g, ' ').trim()
+  if (!name) return null
+  return { name, phone: phone || undefined, email: email || undefined }
+}
+
 export function routeCapture(text: string, state: AppState): RoutingProposal {
   const lower = text.toLowerCase().trim()
   const reasons: string[] = []
+
+  // "contact:" / "add contact …" — create a new Person rather than a task. Checked up front so it
+  // wins over the person-name matcher below (which is for attaching a call to an existing contact).
+  const contact = parseContactCapture(text)
+  if (contact) {
+    return {
+      kind: 'contact', taskType: 'todo', priority: 'P3',
+      title: contact.name, contactPhone: contact.phone, contactEmail: contact.email,
+      explanation: `new contact → People${contact.phone ? ` · ${contact.phone}` : ''}${contact.email ? ` · ${contact.email}` : ''}`,
+    }
+  }
 
   // explicit prefixes
   let kind: RoutingProposal['kind'] = 'task'
@@ -522,6 +554,20 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
         const trackerId = overrides?.trackerId !== undefined
           ? (overrides.trackerId || undefined)
           : (p.kind === 'entry' ? p.trackerId : undefined)
+        // A "contact" capture creates a real Person (unless the user redirected it via File-as,
+        // in which case the tracker/task path below takes over). Title = the name; phone/email
+        // ride along on the proposal. Defaults to the 'network' tier — editable on the card after.
+        if (p.kind === 'contact' && overrides?.trackerId === undefined) {
+          const person: Person = {
+            id: uid('p'), name: title, phone: p.contactPhone, email: p.contactEmail,
+            tier: 'network', how: '', topics: '', vip: false, flaggedForCall: false,
+          }
+          withAudit(
+            s => ({ ...s, people: [...s.people, person], captures: s.captures.map(c => c.id === id ? { ...c, status: 'accepted' as const } : c) }),
+            auditEvent('created', 'person', person.id, `${person.name} (from ${cap.source} capture)`),
+          )
+          return
+        }
         if (trackerId) {
           const trk = state.trackers.find(t => t.id === trackerId)
           const titleCol = trk?.columns.find(c => c.isTitle)?.key ?? 'name'
