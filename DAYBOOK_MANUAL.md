@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v72 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v73 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -494,6 +494,16 @@ None of these are things the rest of the app depends on to function — they're 
 59. **v72** — Capture more than tasks by message: a **"contact:" command** that creates a new contact, plus a **capture‑commands cheat‑sheet in Settings**.
 
     You could already text your lists (e.g. "add Dune Part Two to my movies list" files onto your Movies tracker), log calls, and jot ideas/notes via the bot — but there was no way to **create a new contact** from a message. Now there is: send **`contact: David Feldman, 07700 900010, david@x.com`** (or write it naturally, "add contact David Feldman 07700 900010 …") and it parses the name, phone and email and lands in your Inbox as a **New Contact** proposal. Confirm it and the person is created in People (on the default tier, editable after). It doesn't hijack normal messages — only an explicit "contact:"/"add contact" trigger is treated this way, so "call David" and "add … to my movies list" still route as before. Works from the in‑app quick‑capture box immediately; the Telegram/Slack bots pick it up once their Edge Functions are redeployed.
+
+    *(v73 below)*
+
+60. **v73** — Tasks made faster to work: one‑tap quick actions on every row, a Today page that shows **everything** grouped and draggable, and drag‑to‑move throughout the task table. **(Phase 1 of "make it all drag‑and‑drop.")**
+
+    **One‑tap quick actions.** Every task row — in the table and the cards — now carries inline buttons so you don't have to open a menu: a **round complete/reopen toggle** on the left (click to tick it off, click again to reopen), and on hover at the right, **Today**, **Tmrw** (tomorrow) and a **delete** (trash) button. Complete and delete both come with an Undo. So flagging something done, or bumping it to today/tomorrow, is a single click.
+
+    **Today now shows all your items, grouped.** The old Today page only showed things due today plus a few high‑priority items, which is why tasks seemed to go missing regardless of the capacity setting (that setting only ever governed the "By Day" view). Today is now a full triage board: **every open task**, bucketed into groups you can switch between with the **Group: Priority / Category** toggle at the top. Priority mode gives High→Low buckets; Category mode gives Bills / Legal / Tuition / etc.
+
+    **Drag to move.** Each group is a drop zone — **drag a task from one bucket onto another to change its priority (or category) instantly**. And every row in the task table is now draggable (grab and drop onto a group, an area section, or a category chip). This is the first phase of making the whole app drag‑and‑drop; Projects, Collections/Notes and Calls come next.
 
     **Settings → Notifications now shows a "Capture commands" cheat‑sheet** listing every shortcut the router understands — the prefixes (`t:` task, `c:` call, `i:`/`idea:`, `n:`/`note:`, `contact:`, `?` ask the assistant) and the natural‑language patterns (add‑to‑a‑list, call‑a‑person, add‑a‑contact, and how "today/urgent/tomorrow/this week" set priority and due date) — each with a worked example, so you (and any teammate) can see at a glance what you can text in. Reminder in the panel: the router is a keyword matcher, so plain wording works best, and everything still previews in the Inbox before it's filed. **Table** (the new default) is the compact, spreadsheet‑style view you asked for: each task is a single tight row with proper columns — **Title · Type · Area · Project · Category · Action · Priority · Status · Due**. So the **area now sits right next to the task** instead of stacked underneath, and the **category has its own column** rather than being hidden. **Cards** is the original roomier layout, kept for anyone who prefers it (and it now also shows the category as a small chip next to the area).
 

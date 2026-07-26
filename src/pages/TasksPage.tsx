@@ -77,6 +77,8 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   const [dragCat, setDragCat] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sortBy, setSortBy] = useState<SortBy>('due')
+  // Today page: group everything by priority (default) or category, drag between groups to move.
+  const [todayGroup, setTodayGroup] = useState<'priority' | 'category'>('priority')
   const scheme = state.settings.priorityScheme
   const filtersActive = !!search || areaFilter !== 'all' || prioFilter !== 'all' || catFilter !== 'all' || actFilter !== 'all' || !!projectFilter
   const clearAll = () => { setSearch(''); setAreaFilter('all'); setPrioFilter('all'); setCatFilter('all'); setActFilter('all'); onClearProject?.() }
@@ -109,11 +111,10 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
 
     switch (view) {
       case 'today':
-        // to-call tasks surface today by default (a call with no due date shouldn't go quiet),
-        // but a call you've deliberately scheduled for later still respects that due date
-        // On Today: due-today/overdue anything, plus UNDATED high-priority (Urgent/High) or undated
-        // calls. A future due date wins — a High task set for tomorrow waits until tomorrow.
-        return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && ((t.due && daysSince(t.due) >= 0) || (!t.due && (t.priority === 'P0' || t.priority === 'P1' || t.type === 'call'))))
+        // Today is now a full triage board: every open loose task, grouped by priority (or
+        // category) below so you can see and move all of them — not a due-date-filtered subset.
+        // The grouping + drag-between-groups happens in `todayGroups` / the render.
+        return ts.filter(t => t.status !== 'done' && t.status !== 'dropped')
       case 'week':
         return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && (['P0', 'P1'].includes(t.priority) || (t.due && daysSince(t.due) >= -7)))
       case 'waiting':
@@ -190,6 +191,25 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
     toast.success(selected.size > 0 ? `Exported ${source.length} selected task${source.length === 1 ? '' : 's'}` : 'Exported to CSV (Excel-ready)')
   }
 
+  // Today triage board — all open tasks bucketed by priority or category. Each bucket is a drop
+  // target: dragging a task onto it sets that priority / category (the "move them" the user asked
+  // for). `dropPatch` is what a drop into this group applies.
+  const todayGroups = useMemo(() => {
+    if (view !== 'today') return null
+    if (todayGroup === 'priority') {
+      return (['P0', 'P1', 'P2', 'P3'] as Priority[])
+        .map(p => ({ key: p, label: PRIORITY_LABELS[scheme][p], color: undefined as string | undefined, tasks: sorted.filter(t => t.priority === p), dropPatch: { priority: p } as Partial<Task>, moveLabel: PRIORITY_LABELS[scheme][p] }))
+        .filter(g => g.tasks.length > 0)
+    }
+    const cats = state.categories.filter(c => c.active && c.level === 0)
+    const groups = cats
+      .map(c => ({ key: c.id, label: c.name, color: categoryDot(c), tasks: sorted.filter(t => t.categoryIds.includes(c.id)), dropPatch: { categoryIds: [c.id] } as Partial<Task>, moveLabel: c.name }))
+      .filter(g => g.tasks.length > 0)
+    const uncategorized = sorted.filter(t => !t.categoryIds.some(id => cats.some(c => c.id === id)))
+    if (uncategorized.length) groups.push({ key: '__none__', label: 'No category', color: 'hsl(215 15% 65%)', tasks: uncategorized, dropPatch: { categoryIds: [] } as Partial<Task>, moveLabel: 'No category' })
+    return groups
+  }, [view, todayGroup, sorted, state.categories, scheme])
+
   const groupedByArea = view === 'area'
     ? state.areas.filter(a => a.active).map(a => ({ area: a, tasks: sorted.filter(t => t.areaId === a.id) }))
     : null
@@ -202,6 +222,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   // The full set of task ids on screen right now, regardless of which layout renders them —
   // used by the "select all visible" checkbox so it works the same in every view.
   const allVisibleIds = groupedByArea ? groupedByArea.flatMap(g => g.tasks.map(t => t.id)) : sorted.map(t => t.id)
+  // Note: todayGroups is derived from `sorted`, so sorted.map covers it for select-all too.
   const allVisibleSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selected.has(id))
 
   function toggleSelectAllVisible() {
@@ -313,6 +334,20 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
             {state.actions.filter(a => a.active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
           </SelectContent>
         </Select>
+        {view === 'today' && (
+          <div className="inline-flex items-center rounded-md border border-border bg-card h-8 px-1 gap-0.5" role="group" aria-label="Group Today by">
+            <span className="text-[11px] text-muted-foreground pl-1 pr-0.5">Group:</span>
+            {(['priority', 'category'] as const).map(g => (
+              <button
+                key={g}
+                onClick={() => setTodayGroup(g)}
+                className={cn('h-6 px-2 text-[11.5px] rounded-[5px] capitalize transition-colors', todayGroup === g ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+        )}
         {view !== 'list' && (
           <Select value={sortBy} onValueChange={v => setSortBy(v as SortBy)}>
             <SelectTrigger className="h-8 w-44 bg-card text-[12.5px]">
@@ -486,7 +521,42 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       )}
 
       {/* List */}
-      {view === 'day' && dayGroups ? (
+      {view === 'today' && todayGroups ? (
+        <div className="grid grid-cols-1 gap-4">
+          {todayGroups.length === 0 && <EmptyNote>Nothing open — every task is done or dropped.</EmptyNote>}
+          {todayGroups.map(g => (
+            <section
+              key={g.key}
+              className="border border-border bg-card shadow-sm rounded-lg transition-shadow [&.dragover]:ring-2 [&.dragover]:ring-[hsl(17_63%_47%)]"
+              onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('dragover') }}
+              onDragLeave={e => e.currentTarget.classList.remove('dragover')}
+              onDrop={e => {
+                e.preventDefault(); e.currentTarget.classList.remove('dragover')
+                const id = e.dataTransfer.getData('text/task-id')
+                if (!id) return
+                const t = state.tasks.find(x => x.id === id)
+                if (!t) return
+                // Already in this bucket? nothing to do.
+                if (todayGroup === 'priority' ? t.priority === g.key : t.categoryIds.includes(g.key)) return
+                updateTask(id, g.dropPatch, `moved to ${g.moveLabel}`)
+                toast.success(`Moved to ${g.moveLabel}`)
+              }}
+            >
+              <div className="px-4 py-2.5 flex items-center gap-2.5 border-b border-border">
+                {todayGroup === 'priority' ? <PriorityChip p={g.key as Priority} /> : <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: g.color }} />}
+                <span className="font-display text-[14.5px] font-semibold">{g.label}</span>
+                <span className="text-[10.5px] text-muted-foreground italic">drop a task here to move it{todayGroup === 'priority' ? ' to this priority' : ' to this category'}</span>
+                <span className="text-[11px] text-muted-foreground tabular ml-auto">{g.tasks.length}</span>
+              </div>
+              {viewMode === 'table' ? (
+                <TaskListTable tasks={g.tasks} selected={selected} onToggleSelect={toggleSelect} onOpen={setOpenTask} bare />
+              ) : g.tasks.map(t => (
+                <TaskRow key={t.id} task={t} onOpen={setOpenTask} expandAll={expandAll} selected={selected.has(t.id)} onToggleSelect={toggleSelect} />
+              ))}
+            </section>
+          ))}
+        </div>
+      ) : view === 'day' && dayGroups ? (
         <div className="grid grid-cols-1 gap-4">
           {dayGroups.length === 0 && <EmptyNote>No tasks to lay out by day.</EmptyNote>}
           {dayGroups.map(g => {
@@ -605,7 +675,7 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAre
   // doesn't render a border-inside-a-border.
   bare?: boolean
 }) {
-  const { state, updateTask } = useStore()
+  const { state, updateTask, completeTask, deleteTask, reinsertTasks } = useStore()
   const scheme = state.settings.priorityScheme
   const [sortKey, setSortKey] = useState<SortKey>('priority')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -668,6 +738,22 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAre
   const columns = (['title', 'type', 'area', 'project', 'category', 'action', 'priority', 'status', 'due'] as SortKey[])
     .filter(k => !(hideAreaCol && k === 'area'))
 
+  // Shared one-tap quick actions — complete, move to Today / Tomorrow, delete — all with Undo.
+  const qaComplete = (t: Task) => {
+    const prev = t.status
+    completeTask(t.id)
+    toast.success('Done — archived, never deleted', {
+      action: { label: 'Undo', onClick: () => updateTask(t.id, { status: prev, completedAt: undefined }, 'undo complete') },
+      duration: 6000,
+    })
+  }
+  const qaReopen = (t: Task) => { updateTask(t.id, { status: 'next', completedAt: undefined, droppedReason: undefined }, 'reopened'); toast.success('Reopened') }
+  const qaDue = (t: Task, d: string, label: string) => { updateTask(t.id, { due: d }, `due → ${label}`); toast.success(`Moved to ${label}`) }
+  const qaDelete = (t: Task) => {
+    const removed = deleteTask(t.id)
+    toast('Deleted permanently', { description: t.title, action: { label: 'Undo', onClick: () => reinsertTasks(removed) }, duration: 6000 })
+  }
+
   // The tiny filter control that sits under a sortable header label. Stops click-to-sort from
   // firing when you interact with the dropdown.
   function HeaderFilter({ ckey, options }: { ckey: ColFilterKey; options: { value: string; label: string }[] }) {
@@ -705,6 +791,7 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAre
       <table className="w-full text-[12.5px] border-collapse min-w-[820px]">
         <thead className="border-b border-border bg-accent/30">
           <tr>
+            <th className="px-1.5 py-2 w-7 align-top" />
             {onToggleSelect && <th className="px-2.5 py-2 w-8 align-top" />}
             {columns.map(k => (
               <th
@@ -722,6 +809,7 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAre
                 {k === 'status' && <HeaderFilter ckey="status" options={filterOpts.stats.map(s => ({ value: s, label: STATUS_LABELS[s] }))} />}
               </th>
             ))}
+            <th className="px-2.5 py-2 text-right text-[10.5px] uppercase tracking-wide text-muted-foreground font-medium align-top">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -730,8 +818,27 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAre
             const project = state.projects.find(p => p.id === t.projectId)
             const category = state.categories.find(c => t.categoryIds.includes(c.id))
             const action = state.actions.find(a => (t.actionIds ?? []).includes(a.id))
+            const done = t.status === 'done' || t.status === 'dropped'
             return (
-              <tr key={t.id} className={cn('border-b border-border/60 last:border-0 hover:bg-accent/40 transition-colors', selected?.has(t.id) && 'bg-[hsl(17_63%_47%_/_0.06)]')}>
+              <tr
+                key={t.id}
+                draggable={!done}
+                onDragStart={e => { e.dataTransfer.setData('text/task-id', t.id); e.dataTransfer.effectAllowed = 'move' }}
+                className={cn('group border-b border-border/60 last:border-0 hover:bg-accent/40 transition-colors', !done && 'cursor-grab active:cursor-grabbing', selected?.has(t.id) && 'bg-[hsl(17_63%_47%_/_0.06)]')}
+              >
+                <td className="px-1.5 py-1.5 w-7">
+                  <button
+                    aria-label={done ? 'reopen' : 'complete'}
+                    title={done ? 'Reopen' : 'Complete'}
+                    onClick={() => (done ? qaReopen(t) : qaComplete(t))}
+                    className={cn(
+                      'h-[16px] w-[16px] rounded-full border flex items-center justify-center transition-all mx-auto',
+                      done ? 'bg-primary border-primary text-primary-foreground hover:opacity-70' : 'border-[hsl(96_10%_13%_/_0.4)] hover:border-primary hover:scale-110',
+                    )}
+                  >
+                    {done && <Check className="h-3 w-3" />}
+                  </button>
+                </td>
                 {onToggleSelect && (
                   <td className="px-2.5 py-1.5">
                     <input
@@ -743,7 +850,7 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAre
                   </td>
                 )}
                 <td className="px-2.5 py-1.5 max-w-[260px]">
-                  <button onClick={() => onOpen(t)} className="truncate text-left hover:underline block w-full">{t.title}</button>
+                  <button onClick={() => onOpen(t)} className={cn('truncate text-left hover:underline block w-full', done && 'line-through text-muted-foreground')}>{t.title}</button>
                 </td>
                 <td className="px-2.5 py-1.5 text-muted-foreground whitespace-nowrap">{TYPE_LABELS[t.type]}</td>
                 {!hideAreaCol && (
@@ -774,12 +881,19 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAre
                   </select>
                 </td>
                 <td className="px-2.5 py-1.5 whitespace-nowrap"><DueChip due={t.due} /></td>
+                <td className="px-2 py-1.5 whitespace-nowrap text-right">
+                  <div className="inline-flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <button title="Move to Today" onClick={() => qaDue(t, today(), 'Today')} className="h-6 px-1.5 text-[10.5px] rounded-sm border border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground">Today</button>
+                    <button title="Move to Tomorrow" onClick={() => qaDue(t, addDays(today(), 1), 'Tomorrow')} className="h-6 px-1.5 text-[10.5px] rounded-sm border border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground">Tmrw</button>
+                    <button title="Delete permanently (undo available)" onClick={() => qaDelete(t)} className="h-6 w-6 grid place-items-center rounded-sm border border-border bg-background hover:bg-[hsl(8_60%_41%_/_0.1)] text-muted-foreground hover:text-[hsl(8_60%_41%)]"><Trash2 className="h-3 w-3" /></button>
+                  </div>
+                </td>
               </tr>
             )
           })}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length + (onToggleSelect ? 1 : 0)} className="px-2.5 py-4 text-center text-[12px] text-muted-foreground italic">
+              <td colSpan={columns.length + (onToggleSelect ? 2 : 1)} className="px-2.5 py-4 text-center text-[12px] text-muted-foreground italic">
                 No tasks match the column filters.
               </td>
             </tr>

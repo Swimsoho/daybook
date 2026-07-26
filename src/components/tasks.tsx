@@ -257,6 +257,15 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
         <DueChip due={task.due} />
         <PriorityChip p={task.priority} />
 
+        {/* one-tap quick actions — reschedule / delete without opening the menu */}
+        {!done && (
+          <div className="hidden sm:inline-flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+            <button title="Move to Today" onClick={e => { e.stopPropagation(); updateTask(task.id, { due: today() }, 'due → Today'); toast.success('Moved to Today') }} className="h-6 px-1.5 text-[10.5px] rounded-sm border border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground">Today</button>
+            <button title="Move to Tomorrow" onClick={e => { e.stopPropagation(); updateTask(task.id, { due: addDays(today(), 1) }, 'due → Tomorrow'); toast.success('Moved to Tomorrow') }} className="h-6 px-1.5 text-[10.5px] rounded-sm border border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground">Tmrw</button>
+            <button title="Delete permanently (undo available)" onClick={e => { e.stopPropagation(); doDelete() }} className="h-6 w-6 grid place-items-center rounded-sm border border-border bg-background hover:bg-[hsl(8_60%_41%_/_0.1)] text-muted-foreground hover:text-[hsl(8_60%_41%)]"><Trash2 className="h-3 w-3" /></button>
+          </div>
+        )}
+
         {/* one-click inline status */}
         {!done && (
           <select
