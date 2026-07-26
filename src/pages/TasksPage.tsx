@@ -663,7 +663,7 @@ const SORT_LABELS: Record<SortKey, string> = {
 // filters already produced `tasks`.
 type ColFilterKey = 'area' | 'category' | 'priority' | 'status'
 
-export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAreaCol = false, bare = false }: {
+export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAreaCol = false, bare = false, compact = false }: {
   tasks: Task[]
   selected?: Set<string>
   onToggleSelect?: (id: string) => void
@@ -674,6 +674,9 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAre
   // When embedded inside a group card (By Day / By Area) drop the table's own card chrome so it
   // doesn't render a border-inside-a-border.
   bare?: boolean
+  // Narrow-column variant for dashboard widgets: only Title · Area · Category · Priority · Due,
+  // no header filters or Actions column, no min-width — one tight line per task, still sortable.
+  compact?: boolean
 }) {
   const { state, updateTask, completeTask, deleteTask, reinsertTasks } = useStore()
   const scheme = state.settings.priorityScheme
@@ -735,7 +738,9 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAre
     else { setSortKey(key); setSortDir('asc') }
   }
 
-  const columns = (['title', 'type', 'area', 'project', 'category', 'action', 'priority', 'status', 'due'] as SortKey[])
+  const columns = (compact
+    ? (['title', 'area', 'category', 'priority', 'due'] as SortKey[])
+    : (['title', 'type', 'area', 'project', 'category', 'action', 'priority', 'status', 'due'] as SortKey[]))
     .filter(k => !(hideAreaCol && k === 'area'))
 
   // Shared one-tap quick actions — complete, move to Today / Tomorrow, delete — all with Undo.
@@ -788,7 +793,7 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAre
           </button>
         </div>
       )}
-      <table className="w-full text-[12.5px] border-collapse min-w-[820px]">
+      <table className={cn('w-full border-collapse', compact ? 'text-[12px]' : 'text-[12.5px] min-w-[820px]')}>
         <thead className="border-b border-border bg-accent/30">
           <tr>
             <th className="px-1.5 py-2 w-7 align-top" />
@@ -797,19 +802,19 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAre
               <th
                 key={k}
                 onClick={() => headerClick(k)}
-                className="px-2.5 py-2 text-left text-[10.5px] uppercase tracking-wide text-muted-foreground font-medium cursor-pointer select-none hover:text-foreground whitespace-nowrap align-top"
+                className={cn('px-2.5 py-2 text-left text-[10.5px] uppercase tracking-wide text-muted-foreground font-medium cursor-pointer select-none hover:text-foreground whitespace-nowrap align-top', compact && 'px-2 py-1.5')}
               >
                 <span className="inline-flex items-center gap-1">
                   {SORT_LABELS[k]}
                   {sortKey === k && <ArrowUpDown className="h-2.5 w-2.5" />}
                 </span>
-                {k === 'area' && <HeaderFilter ckey="area" options={filterOpts.areas.map(a => ({ value: a.id, label: a.name }))} />}
-                {k === 'category' && <HeaderFilter ckey="category" options={filterOpts.cats.map(c => ({ value: c.id, label: c.name }))} />}
-                {k === 'priority' && <HeaderFilter ckey="priority" options={filterOpts.prios.map(p => ({ value: p, label: PRIORITY_LABELS[scheme][p] }))} />}
-                {k === 'status' && <HeaderFilter ckey="status" options={filterOpts.stats.map(s => ({ value: s, label: STATUS_LABELS[s] }))} />}
+                {!compact && k === 'area' && <HeaderFilter ckey="area" options={filterOpts.areas.map(a => ({ value: a.id, label: a.name }))} />}
+                {!compact && k === 'category' && <HeaderFilter ckey="category" options={filterOpts.cats.map(c => ({ value: c.id, label: c.name }))} />}
+                {!compact && k === 'priority' && <HeaderFilter ckey="priority" options={filterOpts.prios.map(p => ({ value: p, label: PRIORITY_LABELS[scheme][p] }))} />}
+                {!compact && k === 'status' && <HeaderFilter ckey="status" options={filterOpts.stats.map(s => ({ value: s, label: STATUS_LABELS[s] }))} />}
               </th>
             ))}
-            <th className="px-2.5 py-2 text-right text-[10.5px] uppercase tracking-wide text-muted-foreground font-medium align-top">Actions</th>
+            {!compact && <th className="px-2.5 py-2 text-right text-[10.5px] uppercase tracking-wide text-muted-foreground font-medium align-top">Actions</th>}
           </tr>
         </thead>
         <tbody>
@@ -852,48 +857,52 @@ export function TaskListTable({ tasks, selected, onToggleSelect, onOpen, hideAre
                 <td className="px-2.5 py-1.5 max-w-[260px]">
                   <button onClick={() => onOpen(t)} className={cn('truncate text-left hover:underline block w-full', done && 'line-through text-muted-foreground')}>{t.title}</button>
                 </td>
-                <td className="px-2.5 py-1.5 text-muted-foreground whitespace-nowrap">{TYPE_LABELS[t.type]}</td>
+                {!compact && <td className="px-2.5 py-1.5 text-muted-foreground whitespace-nowrap">{TYPE_LABELS[t.type]}</td>}
                 {!hideAreaCol && (
-                  <td className="px-2.5 py-1.5 whitespace-nowrap">
+                  <td className={cn('py-1.5 whitespace-nowrap', compact ? 'px-2' : 'px-2.5')}>
                     {area ? (
-                      <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full shrink-0" style={{ background: area.color }} />{area.name}</span>
+                      <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full shrink-0" style={{ background: area.color }} /><span className="truncate">{area.name}</span></span>
                     ) : <span className="text-muted-foreground">—</span>}
                   </td>
                 )}
-                <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[160px]">{project?.name ?? '—'}</td>
-                <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[130px]">{category?.name ?? '—'}</td>
-                <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[110px]">{action?.name ?? '—'}</td>
-                <td className="px-2.5 py-1.5"><PriorityChip p={t.priority} /></td>
-                <td className="px-2.5 py-1.5">
-                  <select
-                    value={t.status}
-                    onChange={e => {
-                      const v = e.target.value as TaskStatus
-                      updateTask(t.id, { status: v, waitingSince: v === 'waiting' ? today() : t.waitingSince }, `status → ${STATUS_LABELS[v]}`)
-                    }}
-                    className="h-6 text-[11px] border border-border rounded-sm bg-background px-1 text-muted-foreground hover:border-input hover:text-foreground cursor-pointer outline-none"
-                  >
-                    {(['inbox', 'next', 'in-progress', 'waiting', 'done', 'dropped'] as TaskStatus[])
-                      .filter(s => (['next', 'in-progress', 'waiting'] as TaskStatus[]).includes(s) || s === t.status)
-                      .map(s => (
-                        <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-                      ))}
-                  </select>
-                </td>
-                <td className="px-2.5 py-1.5 whitespace-nowrap"><DueChip due={t.due} /></td>
-                <td className="px-2 py-1.5 whitespace-nowrap text-right">
-                  <div className="inline-flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                    <button title="Move to Today" onClick={() => qaDue(t, today(), 'Today')} className="h-6 px-1.5 text-[10.5px] rounded-sm border border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground">Today</button>
-                    <button title="Move to Tomorrow" onClick={() => qaDue(t, addDays(today(), 1), 'Tomorrow')} className="h-6 px-1.5 text-[10.5px] rounded-sm border border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground">Tmrw</button>
-                    <button title="Delete permanently (undo available)" onClick={() => qaDelete(t)} className="h-6 w-6 grid place-items-center rounded-sm border border-border bg-background hover:bg-[hsl(8_60%_41%_/_0.1)] text-muted-foreground hover:text-[hsl(8_60%_41%)]"><Trash2 className="h-3 w-3" /></button>
-                  </div>
-                </td>
+                {!compact && <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[160px]">{project?.name ?? '—'}</td>}
+                <td className={cn('py-1.5 text-muted-foreground truncate', compact ? 'px-2 max-w-[100px]' : 'px-2.5 max-w-[130px]')}>{category?.name ?? '—'}</td>
+                {!compact && <td className="px-2.5 py-1.5 text-muted-foreground truncate max-w-[110px]">{action?.name ?? '—'}</td>}
+                <td className={cn('py-1.5', compact ? 'px-2' : 'px-2.5')}><PriorityChip p={t.priority} /></td>
+                {!compact && (
+                  <td className="px-2.5 py-1.5">
+                    <select
+                      value={t.status}
+                      onChange={e => {
+                        const v = e.target.value as TaskStatus
+                        updateTask(t.id, { status: v, waitingSince: v === 'waiting' ? today() : t.waitingSince }, `status → ${STATUS_LABELS[v]}`)
+                      }}
+                      className="h-6 text-[11px] border border-border rounded-sm bg-background px-1 text-muted-foreground hover:border-input hover:text-foreground cursor-pointer outline-none"
+                    >
+                      {(['inbox', 'next', 'in-progress', 'waiting', 'done', 'dropped'] as TaskStatus[])
+                        .filter(s => (['next', 'in-progress', 'waiting'] as TaskStatus[]).includes(s) || s === t.status)
+                        .map(s => (
+                          <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                        ))}
+                    </select>
+                  </td>
+                )}
+                <td className={cn('py-1.5 whitespace-nowrap', compact ? 'px-2' : 'px-2.5')}><DueChip due={t.due} /></td>
+                {!compact && (
+                  <td className="px-2 py-1.5 whitespace-nowrap text-right">
+                    <div className="inline-flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                      <button title="Move to Today" onClick={() => qaDue(t, today(), 'Today')} className="h-6 px-1.5 text-[10.5px] rounded-sm border border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground">Today</button>
+                      <button title="Move to Tomorrow" onClick={() => qaDue(t, addDays(today(), 1), 'Tomorrow')} className="h-6 px-1.5 text-[10.5px] rounded-sm border border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground">Tmrw</button>
+                      <button title="Delete permanently (undo available)" onClick={() => qaDelete(t)} className="h-6 w-6 grid place-items-center rounded-sm border border-border bg-background hover:bg-[hsl(8_60%_41%_/_0.1)] text-muted-foreground hover:text-[hsl(8_60%_41%)]"><Trash2 className="h-3 w-3" /></button>
+                    </div>
+                  </td>
+                )}
               </tr>
             )
           })}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length + (onToggleSelect ? 2 : 1)} className="px-2.5 py-4 text-center text-[12px] text-muted-foreground italic">
+              <td colSpan={columns.length + 1 + (onToggleSelect ? 1 : 0) + (compact ? 0 : 1)} className="px-2.5 py-4 text-center text-[12px] text-muted-foreground italic">
                 No tasks match the column filters.
               </td>
             </tr>

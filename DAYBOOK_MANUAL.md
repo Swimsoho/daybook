@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v73 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v74 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -502,6 +502,14 @@ None of these are things the rest of the app depends on to function — they're 
     **One‑tap quick actions.** Every task row — in the table and the cards — now carries inline buttons so you don't have to open a menu: a **round complete/reopen toggle** on the left (click to tick it off, click again to reopen), and on hover at the right, **Today**, **Tmrw** (tomorrow) and a **delete** (trash) button. Complete and delete both come with an Undo. So flagging something done, or bumping it to today/tomorrow, is a single click.
 
     **Today now shows all your items, grouped.** The old Today page only showed things due today plus a few high‑priority items, which is why tasks seemed to go missing regardless of the capacity setting (that setting only ever governed the "By Day" view). Today is now a full triage board: **every open task**, bucketed into groups you can switch between with the **Group: Priority / Category** toggle at the top. Priority mode gives High→Low buckets; Category mode gives Bills / Legal / Tuition / etc.
+
+    *(v74 below)*
+
+61. **v74** — Dashboard lists are now compact sortable tables, and the KPI pop‑ups are bigger with no scrollbar.
+
+    **Dashboard task lists gained columns.** The "Today", overdue and KPI drill‑through lists used to stack the area and category on a second line under each task, which made rows tall and pushed a scrollbar into the pop‑ups. They're now **compact tables**: each task is a single tight line with **Area** and **Category** in their own columns alongside **Priority** and **Due**, and the **column headers are sortable** (click to sort, click again to reverse). Smaller rows means more tasks visible at a glance.
+
+    **KPI pop‑ups fill the window.** Clicking a KPI box (Today / Overdue / Calls / Inbox) now opens a **much larger dialog** that fits its content — **no more horizontal scrollbar**, everything on screen at once.
 
     **Drag to move.** Each group is a drop zone — **drag a task from one bucket onto another to change its priority (or category) instantly**. And every row in the task table is now draggable (grab and drop onto a group, an area section, or a category chip). This is the first phase of making the whole app drag‑and‑drop; Projects, Collections/Notes and Calls come next.
 

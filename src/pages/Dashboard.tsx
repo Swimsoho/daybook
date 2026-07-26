@@ -400,10 +400,9 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
             </div>
           )}
           <QuickAdd due={today()} placeholder="Quick add for today — type and press Enter" />
-          <div>
-            {todays.length === 0 && <EmptyNote>Nothing due today. The backlog stays out of your face.</EmptyNote>}
-            {todays.map(t => <TaskRow key={t.id} task={t} onOpen={setOpenTask} />)}
-          </div>
+          {todays.length === 0
+            ? <EmptyNote>Nothing due today. The backlog stays out of your face.</EmptyNote>
+            : <TaskListTable compact bare tasks={todays} onOpen={setOpenTask} />}
         </section>
     ),
     attention: (
@@ -601,16 +600,15 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
 
       {/* KPI drill-through — the exact items behind the number you clicked. */}
       <Dialog open={!!drill} onOpenChange={o => !o && setDrill(null)}>
-        <DialogContent className="sm:max-w-[560px] max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-[900px] max-h-[88vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="font-display text-lg">{drill?.title}</DialogTitle>
             {drill?.sub && <p className="text-[12px] text-muted-foreground">{drill.sub}</p>}
           </DialogHeader>
           {drill?.tasks && (
-            <div className="border border-border rounded-sm">
-              {drill.tasks.length === 0 && <EmptyNote>Nothing here — all clear.</EmptyNote>}
-              {drill.tasks.map(t => <TaskRow key={t.id} task={t} onOpen={x => { setDrill(null); setOpenTask(x) }} />)}
-            </div>
+            drill.tasks.length === 0
+              ? <EmptyNote>Nothing here — all clear.</EmptyNote>
+              : <TaskListTable compact tasks={drill.tasks} onOpen={x => { setDrill(null); setOpenTask(x) }} />
           )}
           {drill?.calls && (
             <div className="border border-border rounded-sm">
@@ -837,8 +835,9 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
           <div className="px-4 pt-3.5 pb-1">
             <SectionTitle className="mb-0">Overdue — worst first</SectionTitle>
           </div>
-          {overdue.length === 0 && <EmptyNote>Nothing overdue. Rare and delightful.</EmptyNote>}
-          {overdue.slice(0, 7).map(t => <TaskRow key={t.id} task={t} onOpen={setOpenTask} />)}
+          {overdue.length === 0
+            ? <EmptyNote>Nothing overdue. Rare and delightful.</EmptyNote>
+            : <TaskListTable compact bare tasks={overdue.slice(0, 7)} onOpen={setOpenTask} />}
         </section>
     ),
     relationship: (
@@ -939,15 +938,14 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
 
       {/* KPI drill-down — the underlying data, one click away */}
       <Dialog open={!!drill} onOpenChange={o => !o && setDrill(null)}>
-        <DialogContent className="sm:max-w-[560px] max-h-[80vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-[900px] max-h-[88vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="font-display text-lg">{drill?.title}</DialogTitle>
           </DialogHeader>
           {drill?.kind === 'tasks' && (
-            <div className="-mx-2">
-              {drill.tasks.length === 0 && <EmptyNote>Nothing here.</EmptyNote>}
-              {drill.tasks.map(t => <TaskRow key={t.id} task={t} onOpen={x => { setDrill(null); setOpenTask(x) }} />)}
-            </div>
+            drill.tasks.length === 0
+              ? <EmptyNote>Nothing here.</EmptyNote>
+              : <TaskListTable compact tasks={drill.tasks} onOpen={x => { setDrill(null); setOpenTask(x) }} />
           )}
           {drill?.kind === 'people' && (
             <div>
