@@ -23,6 +23,17 @@ export interface PortalHandle {
   save: (s: AppState) => void
 }
 
+export interface MovieLookupResult {
+  ok?: boolean
+  notFound?: boolean
+  error?: string
+  kind?: 'movie' | 'tv'
+  matched?: { title: string; year: string; tmdbId: number }
+  providers?: { stream: string[]; ads: string[]; rent: string[]; buy: string[] }
+  summary?: string
+  link?: string
+}
+
 export interface Cloud {
   profile: CloudProfile
   mode: 'real' | 'sample'
@@ -37,6 +48,10 @@ export interface Cloud {
   setSlackUserId: (id: string) => Promise<string | null>
   sendTestMessage: (channel: 'telegram' | 'slack', text?: string) => Promise<string | null>
   shareTask: (task: { id: string; title: string; notes?: string; due?: string }) => Promise<{ token?: string; error?: string }>
+  // Live "where to watch" lookup (movie/TV trackers) — calls the movie-lookup Edge Function,
+  // which returns current US streaming/rent/buy providers from TMDB. Returns a result object,
+  // or { error } if the function isn't deployed / the TMDB key isn't set.
+  lookupMovie: (title: string, year?: string) => Promise<MovieLookupResult>
   admin: {
     listUsers: () => Promise<AdminUser[]>
     invite: (u: { name: string; email: string; role: Role }) => Promise<string | null>
@@ -361,6 +376,11 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
       if (error) return { error: error.message }
       if (data?.error) return { error: data.error as string }
       return { token: data.token as string }
+    },
+    lookupMovie: async (title, year) => {
+      const { data, error } = await supabase!.functions.invoke('movie-lookup', { body: { title, year } })
+      if (error) return { error: error.message }
+      return (data ?? { error: 'No response' }) as MovieLookupResult
     },
     admin: {
       async listUsers() {

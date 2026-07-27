@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarPlus, Download, Plus, Upload } from 'lucide-react'
+import { CalendarPlus, Download, Loader2, Plus, Tv, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -10,8 +10,24 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { Entry, Tracker, TrackerColumn, fmtDate, today } from '@/lib/model'
 import { useStore } from '@/lib/store'
+import { useCloud } from '@/lib/cloud'
 import { EmptyNote, Stars } from '@/components/bits'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
+
+// A "watch list" tracker (Movies, TV Shows, Watchlist…) — the ones the live "where to watch"
+// lookup applies to. Detected by the tracker's own name so it works for any list the user made.
+function isWatchTracker(t: Tracker): boolean {
+  return /movie|film|tv|show|series|watch|cinema/i.test(t.name)
+}
+// The column a looked-up US streaming string should be written into: a text column named like
+// Platform / Streaming / Where to watch / Provider. Falls back to none (result just displays).
+function streamingColumn(t: Tracker): TrackerColumn | undefined {
+  return t.columns.find(c => (c.type === 'text' || c.type === 'longtext') && /platform|stream|where|watch|provider/i.test(c.name))
+}
+// Optional year column, to sharpen the TMDB match.
+function yearColumn(t: Tracker): TrackerColumn | undefined {
+  return t.columns.find(c => /\byear\b|released?/i.test(c.name))
+}
 
 // A dependency can be a Status/single-choice column (compared as plain strings) or, as of the
 // checkbox-gating support, a Checkbox column — those store real booleans in `values`, not the
@@ -51,6 +67,8 @@ function collectionGroup(state: { collections: { id: string; name: string }[] },
 
 export default function CollectionsPage() {
   const { state, updateEntry } = useStore()
+  const cloud = useCloud()
+  const [bulkLookup, setBulkLookup] = useState(false)
   const trackers = state.trackers.filter(t => t.active)
   const grp = (t: Tracker) => collectionGroup(state, t.collectionId)
   const trackersByTab: Record<TopTab, Tracker[]> = {
@@ -88,6 +106,35 @@ export default function CollectionsPage() {
   const activeView = view ?? tracker?.defaultView ?? 'table'
   const entries = useMemo(() => state.entries.filter(e => e.trackerId === tracker?.id), [state.entries, tracker])
   const statusCol = tracker?.columns.find(c => c.type === 'status')
+
+  // Bulk "where to watch" — fill the streaming column for every entry that's missing it, on a
+  // watch-list tracker. Sequential + gentle so it doesn't hammer TMDB; a running toast shows
+  // progress. Only entries without an existing value are looked up, so re-running tops up new ones.
+  async function bulkStreamingLookup() {
+    if (!tracker) return
+    const col = streamingColumn(tracker)
+    const titleCol = tracker.columns.find(c => c.isTitle) ?? tracker.columns[0]
+    const yrCol = yearColumn(tracker)
+    if (!col) { toast.error('Add a “Platform” / “Where to watch” text column to this list first (Settings → Notes & Collections).'); return }
+    if (!cloud) { toast('Live lookup needs a signed-in account (it calls the TMDB backend).'); return }
+    const todo = entries.filter(e => !String(e.values[col.key] ?? '').trim() && String(e.values[titleCol.key] ?? '').trim())
+    if (!todo.length) { toast('Every entry already has a “' + col.name + '”.'); return }
+    setBulkLookup(true)
+    let done = 0, filled = 0
+    const tId = toast.loading(`Looking up 0/${todo.length}…`)
+    try {
+      for (const e of todo) {
+        const title = String(e.values[titleCol.key] ?? '').trim()
+        const yr = yrCol ? String(e.values[yrCol.key] ?? '') : ''
+        const r = await cloud.lookupMovie(title, yr)
+        done++
+        if (r.error) { toast.error(r.error, { id: tId }); break }
+        if (r.ok && r.summary) { updateEntry(e.id, { [col.key]: r.summary }); filled++ }
+        toast.loading(`Looking up ${done}/${todo.length}… (${filled} filled)`, { id: tId })
+      }
+      toast.success(`Done — filled “${col.name}” on ${filled} of ${todo.length}.`, { id: tId })
+    } finally { setBulkLookup(false) }
+  }
 
   if (!tracker) return <EmptyNote>Collections are switched off in Settings.</EmptyNote>
 
@@ -171,6 +218,11 @@ export default function CollectionsPage() {
           {tracker.columns.some(c => c.type === 'date') && (
             <Button size="sm" variant="outline" className="h-7" onClick={() => downloadTrackerIcs(tracker, entries)}>
               <CalendarPlus className="h-3.5 w-3.5 mr-1" />Add to Calendar
+            </Button>
+          )}
+          {isWatchTracker(tracker) && (
+            <Button size="sm" variant="outline" className="h-7" onClick={bulkStreamingLookup} disabled={bulkLookup} title="Fill 'where to watch' (US) for entries that don't have it yet">
+              {bulkLookup ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Tv className="h-3.5 w-3.5 mr-1" />}Where to watch (US)
             </Button>
           )}
           <Button size="sm" variant="outline" className="h-7" onClick={() => setImporting(true)}><Upload className="h-3.5 w-3.5 mr-1" />Import</Button>
@@ -306,6 +358,68 @@ function CellValue({ col, value, small }: { col: TrackerColumn; value: Entry['va
   }
 }
 
+// Live "where to watch (US)" lookup — hits the movie-lookup Edge Function (TMDB) and shows the
+// film's current US streaming/rent/buy, with one click to save it into the tracker's streaming
+// column. Shown only on watch-list trackers (Movies, TV Shows…).
+function StreamingLookup({ tracker, title, year, onFill }: {
+  tracker: Tracker
+  title: string
+  year: string
+  onFill: (col: TrackerColumn, value: string) => void
+}) {
+  const cloud = useCloud()
+  const [loading, setLoading] = useState(false)
+  const [res, setRes] = useState<import('@/lib/cloud').MovieLookupResult | null>(null)
+  const col = streamingColumn(tracker)
+
+  async function run() {
+    if (!title.trim()) { toast.error('Enter the title first'); return }
+    if (!cloud) { toast('Live streaming lookup needs a signed-in account (it calls the TMDB backend).'); return }
+    setLoading(true); setRes(null)
+    try {
+      const r = await cloud.lookupMovie(title.trim(), year)
+      setRes(r)
+      if (r.error) toast.error(r.error)
+      else if (r.notFound) toast(`No TMDB match for “${title}”.`)
+      else if (r.ok && col && r.summary) { onFill(col, r.summary); toast.success(`Saved to “${col.name}”`) }
+    } finally { setLoading(false) }
+  }
+
+  const Chip = ({ items, label }: { items?: string[]; label: string }) =>
+    items && items.length ? (
+      <div className="flex flex-wrap items-center gap-1 text-[11.5px]">
+        <span className="text-muted-foreground">{label}</span>
+        {items.map(p => <span key={p} className="border border-border rounded-sm bg-background px-1.5 py-px">{p}</span>)}
+      </div>
+    ) : null
+
+  return (
+    <div className="rounded-md border border-dashed border-border p-2.5 grid gap-2">
+      <div className="flex items-center gap-2">
+        <Button type="button" size="sm" variant="outline" className="h-7" onClick={run} disabled={loading}>
+          {loading ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Tv className="h-3.5 w-3.5 mr-1" />}
+          Where to watch (US)
+        </Button>
+        <span className="text-[11px] text-muted-foreground">Live from TMDB{col ? ` → saves to “${col.name}”` : ''}</span>
+      </div>
+      {res?.ok && res.matched && (
+        <div className="grid gap-1.5 text-[12px]">
+          <div className="font-medium">{res.matched.title}{res.matched.year && <span className="text-muted-foreground font-normal"> ({res.matched.year})</span>}</div>
+          <Chip items={res.providers?.stream} label="Stream:" />
+          <Chip items={res.providers?.ads} label="Free (ads):" />
+          <Chip items={res.providers?.rent} label="Rent:" />
+          <Chip items={res.providers?.buy} label="Buy:" />
+          {!res.providers?.stream?.length && !res.providers?.ads?.length && !res.providers?.rent?.length && !res.providers?.buy?.length && (
+            <span className="text-muted-foreground italic">Not available in the US right now.</span>
+          )}
+          {res.link && <a href={res.link} target="_blank" rel="noreferrer" className="text-[hsl(17_63%_47%)] hover:underline w-fit">Open on TMDB / JustWatch →</a>}
+          {res.summary && !col && <p className="text-[11px] text-muted-foreground">Tip: add a “Platform” or “Where to watch” text column to this list (Settings → Notes &amp; Collections) and this will save into it automatically.</p>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open: boolean; entry: Entry | null; onClose: () => void }) {
   const { addEntry, updateEntry } = useStore()
   const [form, setForm] = useState<Entry['values']>({})
@@ -315,6 +429,8 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
   if (!entry && statusCol && base[statusCol.key] === undefined) base[statusCol.key] = statusCol.options?.[0] ?? ''
   const vis = visibleColumns(tracker, base)
   const set = (k: string, v: Entry['values'][string]) => setForm(f => ({ ...f, [k]: v }))
+  const titleCol = tracker.columns.find(c => c.isTitle) ?? tracker.columns[0]
+  const yrCol = yearColumn(tracker)
 
   function save() {
     const titleCol = tracker.columns.find(c => c.isTitle) ?? tracker.columns[0]
@@ -343,6 +459,14 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
           {tracker.columns.filter(c => !vis.includes(c)).map(c => (
             <p key={c.key} className="text-[11px] text-muted-foreground italic">“{c.name}” will appear when {tracker.columns.find(x => x.key === c.showWhen!.columnKey)?.name} reaches {c.showWhen!.equals}.</p>
           ))}
+          {isWatchTracker(tracker) && (
+            <StreamingLookup
+              tracker={tracker}
+              title={String(base[titleCol.key] ?? '')}
+              year={yrCol ? String(base[yrCol.key] ?? '') : ''}
+              onFill={(col, value) => set(col.key, value)}
+            />
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
