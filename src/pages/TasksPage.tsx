@@ -14,6 +14,8 @@ import {
 } from '@/lib/model'
 import { useStore } from '@/lib/store'
 import { ClearFiltersButton, DueChip, EmptyNote, PriorityChip } from '@/components/bits'
+import { ExportMenu } from '@/components/ExportMenu'
+import { ViewExport } from '@/lib/exportView'
 import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
@@ -169,26 +171,24 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
     return out
   }, [view, sorted, capacity])
 
-  function exportCsv() {
-    // Selecting tasks first scopes the export to just those — otherwise it's the whole current view.
+  // Export the current view (or just the selected tasks) — the same rows drive both Excel and PDF.
+  function taskExportData(): ViewExport {
     const source = selected.size > 0 ? sorted.filter(t => selected.has(t.id)) : sorted
-    const rows = [['Title', 'Type', 'Area', 'Project', 'Category', 'Action', 'Priority', 'Status', 'Due', 'Created']]
-    for (const t of source) {
-      rows.push([
-        t.title, t.type,
-        state.areas.find(a => a.id === t.areaId)?.name ?? '',
-        state.projects.find(p => p.id === t.projectId)?.name ?? '',
-        state.categories.find(c => t.categoryIds.includes(c.id))?.name ?? '',
-        state.actions.find(a => (t.actionIds ?? []).includes(a.id))?.name ?? '',
-        PRIORITY_LABELS[scheme][t.priority], STATUS_LABELS[t.status], t.due ?? '', t.created,
-      ])
+    const headers = ['Title', 'Type', 'Area', 'Project', 'Category', 'Action', 'Priority', 'Status', 'Due', 'Created']
+    const rows: (string | number)[][] = source.map(t => [
+      t.title, TYPE_LABELS[t.type],
+      state.areas.find(a => a.id === t.areaId)?.name ?? '',
+      state.projects.find(p => p.id === t.projectId)?.name ?? '',
+      state.categories.find(c => t.categoryIds.includes(c.id))?.name ?? '',
+      state.actions.find(a => (t.actionIds ?? []).includes(a.id))?.name ?? '',
+      PRIORITY_LABELS[scheme][t.priority], STATUS_LABELS[t.status], t.due ?? '', t.created,
+    ])
+    const viewLabel = VIEWS.find(v => v.id === view)?.label ?? ''
+    return {
+      title: `Tasks — ${viewLabel}`,
+      subtitle: [selected.size > 0 ? `${selected.size} selected` : '', filtersActive ? 'filtered view' : ''].filter(Boolean).join(' · ') || undefined,
+      headers, rows, filenameBase: `daybook-tasks-${view}`,
     }
-    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
-    const a = document.createElement('a')
-    a.href = url; a.download = `tasks-${view}-${today()}.csv`; a.click()
-    URL.revokeObjectURL(url)
-    toast.success(selected.size > 0 ? `Exported ${source.length} selected task${source.length === 1 ? '' : 's'}` : 'Exported to CSV (Excel-ready)')
   }
 
   // Today triage board — all open tasks bucketed by priority or category. Each bucket is a drop
@@ -297,7 +297,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
             </div>
           )}
           {viewMode === 'card' && <Button variant="outline" size="sm" className="h-8" onClick={() => setExpandAll(v => !v)}>{expandAll ? 'Collapse all' : 'Expand all'}</Button>}
-          <Button variant="outline" size="sm" className="h-8" onClick={exportCsv}><Download className="h-3.5 w-3.5 mr-1.5" />Export</Button>
+          <ExportMenu getData={taskExportData} />
           <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}><FileUp className="h-3.5 w-3.5 mr-1.5" />Import</Button>
           <Button size="sm" className="h-8" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Add task</Button>
         </div>

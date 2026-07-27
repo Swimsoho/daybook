@@ -6,14 +6,32 @@ import { cn } from '@/lib/utils'
 import { daysSince, fmtDate, personOverdueBy, resolveTiers, today } from '@/lib/model'
 import { isOverdue, openTasks, stalledProjects, useStore } from '@/lib/store'
 import { SectionTitle } from '@/components/bits'
+import { ExportMenu } from '@/components/ExportMenu'
+import { ViewExport } from '@/lib/exportView'
 
 export default function ReportsPage() {
   const { state } = useStore()
   const [tab, setTab] = useState<'standard' | 'exception'>('exception')
   const open = openTasks(state)
 
-  function exportToast() {
-    toast.success('Export ready — every report goes to PDF or Excel in one click')
+  function reportExport(): ViewExport {
+    if (tab === 'exception') {
+      const rows: (string | number)[][] = []
+      const add = (section: string, items: [string, string | number][]) => items.forEach(([item, detail]) => rows.push([section, item, detail]))
+      add('Tasks overdue', overdueTasks.map(t => [t.title, `${daysSince(t.due!)}d late`]))
+      add('Contacts past cadence', overdueContacts.map(p => [p.name, `${personOverdueBy(p, state.settings)}d past target`]))
+      add('Waiting-on gone quiet', waitingQuiet.map(t => [t.title, `${t.waitingOn ?? 'someone'} · ${daysSince(t.waitingSince ?? t.created)}d silent`]))
+      add('Stalled projects', stalled.map(p => [p.name, `no activity ${daysSince(p.lastActivity)}d`]))
+      add('No due date', noDue.map(t => [t.title, t.priority]))
+      add('Stuck in progress > 7d', stuck.map(t => [t.title, `${daysSince(t.created)}d old`]))
+      return { title: 'Exception report — what needs attention', headers: ['Report', 'Item', 'Detail'], rows, filenameBase: 'daybook-exceptions' }
+    }
+    const rows: (string | number)[][] = [
+      ...byArea.map(x => [`Open tasks · ${x.a.name}`, x.n] as (string | number)[]),
+      ...byPriority.map(x => [`Priority · ${x.p}`, x.n] as (string | number)[]),
+      ...byTier.map(x => [`Contacts · ${x.name}`, x.n] as (string | number)[]),
+    ]
+    return { title: 'Standard report', headers: ['Metric', 'Count'], rows, filenameBase: 'daybook-report' }
   }
 
   // ---- standard data
@@ -56,7 +74,7 @@ export default function ReportsPage() {
             {t === 'exception' ? 'Exception — what needs attention' : 'Standard reports'}
           </button>
         ))}
-        <Button variant="outline" size="sm" className="h-8 ml-auto" onClick={exportToast}><Download className="h-3.5 w-3.5 mr-1.5" />PDF / Excel</Button>
+        <ExportMenu getData={reportExport} className="h-8 ml-auto" />
       </div>
 
       {tab === 'exception' ? (

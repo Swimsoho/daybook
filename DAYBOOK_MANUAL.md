@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v78 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v79 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+65. **v79** — Excel download + a designed PDF on every list page.
+
+    Tasks, People, Projects, Collections/Notes/Ideas and Reports each gained an **Export** button (Excel **.xlsx** or **PDF**). Both reflect **what's on screen** — your current search, filter and sort — so the export is the view you're looking at, not a raw dump. The PDF is a clean, branded one‑page‑style report (Daybook header, the list as a tidy striped table, date and item count); "Save as PDF" from the print dialog. On Tasks it also honours a selection (export just the ticked rows). (v78, in between, made the movie lookup fill the release date in the same click.)
 
 64. **v77** — Every Collection, Note, Ideas and Dates list is now **searchable, filterable and sortable**.
 

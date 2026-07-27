@@ -7,9 +7,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { Task, daysSince, fmtDate } from '@/lib/model'
+import { PRIORITY_LABELS, Task, daysSince, fmtDate } from '@/lib/model'
 import { openTasks, stalledProjects, useStore } from '@/lib/store'
 import { EmptyNote, PriorityChip } from '@/components/bits'
+import { ExportMenu } from '@/components/ExportMenu'
+import { ViewExport } from '@/lib/exportView'
 import { TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 
 export default function ProjectsPage() {
@@ -64,9 +66,27 @@ export default function ProjectsPage() {
 
   return (
     <div className="grid grid-cols-1 gap-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <p className="text-[13px] text-muted-foreground">Areas hold projects; projects hold tasks. WIP guardrail: keep ~{state.settings.projectWipLimit} active projects per area (edit in Settings).</p>
-        <Button size="sm" className="h-8" onClick={() => setAddingProject(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />New project</Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <ExportMenu getData={(): ViewExport => {
+            const scheme = state.settings.priorityScheme
+            const rows: (string | number)[][] = []
+            for (const a of state.areas.filter(ar => ar.active)) {
+              for (const p of state.projects.filter(pr => pr.areaId === a.id && pr.status !== 'archived')) {
+                const total = state.tasks.filter(t => t.projectId === p.id).length
+                const doneN = state.tasks.filter(t => t.projectId === p.id && (t.status === 'done' || t.status === 'dropped')).length
+                rows.push([p.name, a.name, p.status, PRIORITY_LABELS[scheme][p.priority], p.due ? fmtDate(p.due) : '', total - doneN, doneN, total, p.lastActivity ? fmtDate(p.lastActivity) : ''])
+              }
+            }
+            return {
+              title: 'Projects',
+              headers: ['Project', 'Area', 'Status', 'Priority', 'Due', 'Open', 'Done', 'Total', 'Last activity'],
+              rows, filenameBase: 'daybook-projects',
+            }
+          }} />
+          <Button size="sm" className="h-8" onClick={() => setAddingProject(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />New project</Button>
+        </div>
       </div>
       {state.areas.filter(a => a.active).map((a, i) => {
         const projs = state.projects.filter(p => p.areaId === a.id && p.status !== 'archived')

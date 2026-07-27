@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils'
 import { Person, daysSince, fmtDate, personCadence, personOverdueBy, resolveTiers, tierColorOf, tierLabel } from '@/lib/model'
 import { buildCallList, useStore } from '@/lib/store'
 import { ClearFiltersButton, EmptyNote, SectionTitle, TierBadge } from '@/components/bits'
+import { ExportMenu } from '@/components/ExportMenu'
+import { ViewExport } from '@/lib/exportView'
 import { LogCallDialog, PersonDetail, SentimentDot } from '@/components/people'
 import { SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
@@ -101,6 +103,20 @@ export default function PeoplePage() {
         <span className="text-[11px] text-muted-foreground hidden sm:inline">Click a column header to sort</span>
         <ClearFiltersButton active={!!search || tierFilter !== 'all'} onClear={() => { setSearch(''); setTierFilter('all') }} />
         <div className="ml-auto flex flex-wrap gap-2">
+          <ExportMenu getData={(): ViewExport => ({
+            title: 'People',
+            subtitle: [tierFilter !== 'all' ? tierLabel(state.settings, tierFilter) : '', search ? 'filtered view' : ''].filter(Boolean).join(' · ') || undefined,
+            headers: ['Name', 'Phone', 'Email', 'Tier', 'Cadence (days)', 'Last contact', 'Status', 'Last sentiment', 'How you know them', 'Topics', 'Notes'],
+            rows: people.map(p => [
+              p.name, p.phone ?? '', p.email ?? '', tierLabel(state.settings, p.tier),
+              personCadence(p, state.settings),
+              p.lastContact ? fmtDate(p.lastContact) : '',
+              personOverdueBy(p, state.settings) > 0 ? `${personOverdueBy(p, state.settings)}d overdue` : 'current',
+              state.interactions.find(i => i.personId === p.id)?.sentiment ?? '',
+              p.how ?? '', p.topics ?? '', p.notes ?? '',
+            ]),
+            filenameBase: 'daybook-contacts',
+          })} />
           <Button variant="outline" size="sm" className="h-8" onClick={() => downloadContactsTemplate(resolveTiers(state.settings).map(t => t.name))}><Download className="h-3.5 w-3.5 mr-1.5" />Excel template</Button>
           <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}><Upload className="h-3.5 w-3.5 mr-1.5" />Import contacts</Button>
           <Button size="sm" className="h-8" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Add person</Button>

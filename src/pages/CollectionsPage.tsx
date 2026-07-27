@@ -11,6 +11,8 @@ import { cn } from '@/lib/utils'
 import { Entry, Tracker, TrackerColumn, fmtDate, today } from '@/lib/model'
 import { useStore } from '@/lib/store'
 import { useCloud } from '@/lib/cloud'
+import { ExportMenu } from '@/components/ExportMenu'
+import { ViewExport } from '@/lib/exportView'
 import { EmptyNote, Stars } from '@/components/bits'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
@@ -286,6 +288,13 @@ export default function CollectionsPage() {
           ))}
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
+          <ExportMenu className="h-7" getData={(): ViewExport => ({
+            title: tracker.name,
+            subtitle: [topTab !== 'collections' ? TAB_LABEL[topTab] : '', filtersActive ? 'filtered view' : ''].filter(Boolean).join(' · ') || undefined,
+            headers: tracker.columns.map(c => c.name),
+            rows: displayEntries.map(e => tracker.columns.map(c => cellText(c, e.values[c.key]))),
+            filenameBase: `daybook-${tracker.name.toLowerCase().replace(/\s+/g, '-')}`,
+          })} />
           <Button size="sm" variant="outline" className="h-7" onClick={() => downloadTrackerTemplate(tracker)}><Download className="h-3.5 w-3.5 mr-1" />Excel template</Button>
           {tracker.columns.some(c => c.type === 'date') && (
             <Button size="sm" variant="outline" className="h-7" onClick={() => downloadTrackerIcs(tracker, entries)}>
