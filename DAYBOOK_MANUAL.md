@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v81 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v82 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+67. **v82** — Add timestamped **notes / updates** to a task, right in its timeline.
+
+    A task's detail panel now has an **"Add a note / update"** box sitting above the history. Type what happened — "He emailed asking for a call about tuition; phoning Mitch tomorrow" — hit **Add** (or ⌘/Ctrl+Enter) and it's saved straight into the task's timeline as a dated, attributed entry, highlighted and labelled **"noted:"** so it stands out from the automatic field‑change lines (type → To‑call, status → Waiting on, etc.). The result is a single running story of the task: when it was created, every change since, and your own notes on what transpired — all in one place, in order. This is distinct from the task's standing **Notes** description (still edited in the Edit form); notes added here are a log you append to over time, not a single blob you overwrite. (Reminder on the related question: **changing a to‑do into a call** is already one tap — the **Type** row in the same panel switches To‑do / To‑call / Follow‑up and records the change to history; moving it to "To‑call" is what puts it on your call list.)
 
 66. **v81** — Sortable headers now *say* they're sortable, and every column has a filter box under it.
 

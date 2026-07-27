@@ -781,13 +781,21 @@ function TaskShare({ task }: { task: Task }) {
 // ---------- Task detail sheet (with per-item history) ----------
 
 export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | null; onClose: () => void; onEdit: (t: Task) => void }) {
-  const { state, completeTask, calledFollowUp, snoozeTask, updateTask, dropTask } = useStore()
+  const { state, completeTask, calledFollowUp, snoozeTask, updateTask, dropTask, noteTask } = useStore()
   // Always read the LIVE task from the store — the `task` passed in is a snapshot from when the
   // panel opened, so without this, changes made here (Type, Priority, Status, Move-to) wouldn't
   // visibly update the buttons/labels until the panel was closed and reopened.
   const task = taskProp ? (state.tasks.find(t => t.id === taskProp.id) ?? taskProp) : null
   const history = useMemo(() => state.audit.filter(a => a.entityId === task?.id), [state.audit, task])
+  const [note, setNote] = useState('')
   if (!task) return null
+  const addNote = () => {
+    const t = note.trim()
+    if (!t) return
+    noteTask(task.id, t)
+    setNote('')
+    toast.success('Note added to history')
+  }
   const area = state.areas.find(a => a.id === task.areaId)
   const project = state.projects.find(p => p.id === task.projectId)
   const person = state.people.find(p => p.id === task.personId)
@@ -1000,18 +1008,42 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
             </div>
           )}
           <div className="mt-1">
-            <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground mb-1.5">History (audit trail)</div>
+            <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground mb-1.5">Notes &amp; history</div>
+            {/* Add a note — a running log of what transpired (e.g. "He emailed asking for a call").
+                Saved straight into the timeline below so the story of the task stays in one place. */}
+            {!done && (
+              <div className="flex items-start gap-1.5 mb-2">
+                <Textarea
+                  rows={2}
+                  value={note}
+                  onChange={e => setNote(e.target.value)}
+                  onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); addNote() } }}
+                  placeholder="Add a note / update — what happened, what was said…"
+                  className="text-[12.5px] min-h-0 resize-y"
+                />
+                <Button size="sm" className="h-8 px-2.5 text-[12px] shrink-0" onClick={addNote} disabled={!note.trim()}>
+                  <Send className="h-3.5 w-3.5 mr-1" />Add
+                </Button>
+              </div>
+            )}
             <div className="border-t border-border">
-              <div className="flex gap-2 py-1.5 border-b border-border/60 text-[12px]">
+              {history.map(h => (
+                h.action === 'noted' ? (
+                  <div key={h.id} className="flex gap-2 py-1.5 border-b border-border/60 text-[12.5px] bg-accent/40 -mx-1 px-1 rounded-sm">
+                    <span className="text-muted-foreground tabular shrink-0 w-[74px]">{h.ts.slice(5, 10)}</span>
+                    <span className="whitespace-pre-wrap"><b>{h.user}</b> <span className="text-[hsl(17_63%_47%)] font-medium">noted:</span> {h.detail}</span>
+                  </div>
+                ) : (
+                  <div key={h.id} className="flex gap-2 py-1.5 border-b border-border/60 text-[12px]">
+                    <span className="text-muted-foreground tabular shrink-0 w-[74px]">{h.ts.slice(5, 10)}</span>
+                    <span><b>{h.user}</b> {h.action} — {h.detail}</span>
+                  </div>
+                )
+              ))}
+              <div className="flex gap-2 py-1.5 text-[12px]">
                 <span className="text-muted-foreground tabular shrink-0 w-[74px]">{fmtDate(task.created)}</span>
                 <span><b>Craig</b> created · source: {task.source}</span>
               </div>
-              {history.map(h => (
-                <div key={h.id} className="flex gap-2 py-1.5 border-b border-border/60 text-[12px]">
-                  <span className="text-muted-foreground tabular shrink-0 w-[74px]">{h.ts.slice(5, 10)}</span>
-                  <span><b>{h.user}</b> {h.action} — {h.detail}</span>
-                </div>
-              ))}
             </div>
           </div>
         </div>

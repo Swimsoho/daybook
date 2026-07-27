@@ -82,6 +82,10 @@ export interface Store {
   // audit-aware mutators
   addTask: (t: Partial<Task> & { title: string }) => Task
   updateTask: (id: string, patch: Partial<Task>, auditLabel?: string) => void
+  // Append a free-text note/update to a task's timeline. Recorded as a 'noted' audit event so the
+  // full text shows in the task's History — a running log of what transpired, distinct from the
+  // standing `notes` description edited in the form.
+  noteTask: (id: string, text: string) => void
   completeTask: (id: string) => void
   dropTask: (id: string, reason: string) => void
   // Permanent removal (not archiving). Returns the removed task plus any of its subtasks, so the
@@ -389,6 +393,13 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
           s => ({ ...s, tasks: s.tasks.map(t => t.id === id ? { ...t, ...patch } : t) }),
           auditEvent('updated', 'task', id, auditLabel ?? Object.keys(patch).join(', ') + ' changed'),
         )
+      },
+      noteTask(id, text) {
+        const t = text.trim()
+        if (!t) return
+        // No field change — the value of a note is the timeline entry itself. withAudit still
+        // returns a fresh top-level state object, so the panel re-renders and the note appears.
+        withAudit(s => s, auditEvent('noted', 'task', id, t))
       },
       completeTask(id) {
         withAudit(
