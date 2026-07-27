@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarPlus, Download, Loader2, Plus, Tv, Upload } from 'lucide-react'
+import { CalendarPlus, ChevronDown, ChevronUp, Download, Loader2, Plus, Search, Tv, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -94,6 +94,13 @@ export default function CollectionsPage() {
   const [adding, setAdding] = useState(false)
   const [editEntry, setEditEntry] = useState<Entry | null>(null)
   const [importing, setImporting] = useState(false)
+  // Search / sort / per-column filters — apply to every tracker's table, board and gallery.
+  const [search, setSearch] = useState('')
+  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null)
+  const [colFilters, setColFilters] = useState<Record<string, string>>({})
+  // Reset them when you switch to a different tracker, so a filter from one list never silently
+  // hides rows in the next.
+  useEffect(() => { setSearch(''); setSort(null); setColFilters({}) }, [trackerId])
 
   function switchTopTab(next: TopTab) {
     setTopTab(next)
@@ -106,6 +113,49 @@ export default function CollectionsPage() {
   const activeView = view ?? tracker?.defaultView ?? 'table'
   const entries = useMemo(() => state.entries.filter(e => e.trackerId === tracker?.id), [state.entries, tracker])
   const statusCol = tracker?.columns.find(c => c.type === 'status')
+
+  // Columns that can drive a header filter dropdown (single-choice ones).
+  const filterCols = useMemo(() => (tracker?.columns ?? []).filter(c => c.type === 'select' || c.type === 'status'), [tracker])
+  // Text of a cell for searching; a comparable value for sorting (numbers stay numeric).
+  const cellText = (col: TrackerColumn, v: unknown): string => {
+    if (v === undefined || v === null || v === '') return ''
+    if (col.type === 'date') return fmtDate(String(v))
+    if (col.type === 'checkbox') return v ? 'yes' : 'no'
+    return String(v)
+  }
+  const NUMERIC = ['number', 'currency', 'rating']
+  const sortVal = (col: TrackerColumn | undefined, v: unknown): number | string => {
+    if (v === undefined || v === null || v === '') return col && NUMERIC.includes(col.type) ? -Infinity : ''
+    if (col && NUMERIC.includes(col.type)) return Number(v)
+    if (col?.type === 'checkbox') return v ? 1 : 0
+    if (col?.type === 'date') return String(v) // ISO sorts lexically
+    return String(v).toLowerCase()
+  }
+
+  const displayEntries = useMemo(() => {
+    if (!tracker) return [] as Entry[]
+    let list = entries
+    const q = search.trim().toLowerCase()
+    if (q) list = list.filter(e => tracker.columns.some(c => cellText(c, e.values[c.key]).toLowerCase().includes(q)))
+    for (const [k, val] of Object.entries(colFilters)) {
+      if (!val) continue
+      list = list.filter(e => String(e.values[k] ?? '') === val)
+    }
+    if (sort) {
+      const col = tracker.columns.find(c => c.key === sort.key)
+      list = [...list].sort((a, b) => {
+        const av = sortVal(col, a.values[sort.key]), bv = sortVal(col, b.values[sort.key])
+        const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
+        return sort.dir === 'asc' ? cmp : -cmp
+      })
+    }
+    return list
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracker, entries, search, sort, colFilters])
+
+  const filtersActive = !!search || !!sort || Object.values(colFilters).some(Boolean)
+  const clearControls = () => { setSearch(''); setSort(null); setColFilters({}) }
+  const toggleSort = (key: string) => setSort(s => (s?.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
 
   // Bulk "where to watch" — fill the streaming column for every entry that's missing it, on a
   // watch-list tracker. Sequential + gentle so it doesn't hammer TMDB; a running toast shows
@@ -235,17 +285,80 @@ export default function CollectionsPage() {
         {tracker.columns.some(c => c.showWhen) && <> · <span className="italic">{tracker.columns.filter(c => c.showWhen).map(c => `“${c.name}” appears when ${tracker.columns.find(x => x.key === c.showWhen!.columnKey)?.name} = ${c.showWhen!.equals}`).join('; ')}</span></>}
       </p>
 
+      {/* Search · filters · sort — works across table, board and gallery */}
+      {entries.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 -mt-1">
+          <div className="relative">
+            <Search className="h-3.5 w-3.5 absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <Input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={`Search ${tracker.name.toLowerCase()}…`}
+              className="h-8 w-52 bg-card pl-7 text-[12.5px]"
+            />
+          </div>
+          {filterCols.map(c => (
+            <select
+              key={c.key}
+              value={colFilters[c.key] ?? ''}
+              onChange={e => setColFilters(f => ({ ...f, [c.key]: e.target.value }))}
+              className={cn(
+                'h-8 rounded-md border bg-card px-2 text-[12px] cursor-pointer outline-none max-w-[160px]',
+                colFilters[c.key] ? 'border-[hsl(17_63%_47%)] text-foreground' : 'border-border text-muted-foreground',
+              )}
+            >
+              <option value="">All {c.name}</option>
+              {c.options?.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          ))}
+          {activeView !== 'table' && (
+            <select
+              value={sort ? `${sort.key}:${sort.dir}` : ''}
+              onChange={e => {
+                if (!e.target.value) { setSort(null); return }
+                const [key, dir] = e.target.value.split(':')
+                setSort({ key, dir: dir as 'asc' | 'desc' })
+              }}
+              className="h-8 rounded-md border border-border bg-card px-2 text-[12px] text-muted-foreground cursor-pointer outline-none"
+            >
+              <option value="">Sort…</option>
+              {tracker.columns.map(c => (
+                <React.Fragment key={c.key}>
+                  <option value={`${c.key}:asc`}>{c.name} ↑</option>
+                  <option value={`${c.key}:desc`}>{c.name} ↓</option>
+                </React.Fragment>
+              ))}
+            </select>
+          )}
+          <span className="text-[11.5px] text-muted-foreground tabular">{displayEntries.length}{displayEntries.length !== entries.length && ` of ${entries.length}`}</span>
+          {filtersActive && (
+            <button onClick={clearControls} className="text-[12px] text-[hsl(17_63%_47%)] hover:underline">Clear</button>
+          )}
+        </div>
+      )}
+
       {/* TABLE */}
       {activeView === 'table' && (
         <section className="border border-border bg-card shadow-sm rounded-lg overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-border text-left text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">
-                {tracker.columns.map(c => <th key={c.key} className="px-3 py-2 font-semibold whitespace-nowrap">{c.name}{c.showWhen && ' *'}</th>)}
+                {tracker.columns.map(c => (
+                  <th
+                    key={c.key}
+                    onClick={() => toggleSort(c.key)}
+                    className="px-3 py-2 font-semibold whitespace-nowrap cursor-pointer select-none hover:text-foreground"
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {c.name}{c.showWhen && ' *'}
+                      {sort?.key === c.key && (sort.dir === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+                    </span>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {entries.map(e => {
+              {displayEntries.map(e => {
                 const vis = visibleColumns(tracker, e.values)
                 return (
                   <tr key={e.id} className="border-b border-border/60 last:border-0 hover:bg-accent/50 cursor-pointer" onClick={() => setEditEntry(e)}>
@@ -264,6 +377,7 @@ export default function CollectionsPage() {
             </tbody>
           </table>
           {entries.length === 0 && <EmptyNote>Nothing here yet.</EmptyNote>}
+          {entries.length > 0 && displayEntries.length === 0 && <EmptyNote>No entries match your search or filters.</EmptyNote>}
           {tracker.columns.some(c => c.showWhen) && <p className="px-3 py-1.5 text-[10.5px] text-muted-foreground">* conditional column — appears once its status rule is met</p>}
         </section>
       )}
@@ -289,10 +403,10 @@ export default function CollectionsPage() {
             >
               <div className="px-3 py-2 border-b border-border text-[11px] uppercase tracking-[0.1em] text-muted-foreground font-semibold flex justify-between">
                 {stage}
-                <span className="tabular">{entries.filter(e => e.values[statusCol.key] === stage).length}</span>
+                <span className="tabular">{displayEntries.filter(e => e.values[statusCol.key] === stage).length}</span>
               </div>
               <div className="p-2 grid grid-cols-1 gap-2 min-h-[80px] content-start">
-                {entries.filter(e => e.values[statusCol.key] === stage).map(e => (
+                {displayEntries.filter(e => e.values[statusCol.key] === stage).map(e => (
                   <button
                     key={e.id}
                     draggable
@@ -317,7 +431,7 @@ export default function CollectionsPage() {
       {/* GALLERY */}
       {activeView === 'gallery' && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {entries.map(e => {
+          {displayEntries.map(e => {
             const rating = e.values['rating'] as number | undefined
             const stage = statusCol ? String(e.values[statusCol.key] ?? '') : ''
             return (

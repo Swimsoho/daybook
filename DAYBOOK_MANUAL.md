@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v76 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v77 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+64. **v77** — Every Collection, Note, Ideas and Dates list is now **searchable, filterable and sortable**.
+
+    All your trackers gained the same triage tools the Tasks page has. A **search box** filters entries as you type across every column; **filter dropdowns** appear for each single‑choice column (Status, Platform, Type, etc.) to narrow to one value; and **clicking any column header sorts** by it (click again to reverse — an arrow marks the active column). Numbers and ratings sort numerically, dates chronologically, everything else alphabetically. A live "showing X of Y" count and a **Clear** link show when anything's applied, and it all works across the **table, board and gallery** views (in board/gallery, where headers aren't clickable, a "Sort…" dropdown does the same). The controls reset when you switch to a different list so a filter never silently hides rows in the next one.
 
     **Drag to move.** Each group is a drop zone — **drag a task from one bucket onto another to change its priority (or category) instantly**. And every row in the task table is now draggable (grab and drop onto a group, an area section, or a category chip). This is the first phase of making the whole app drag‑and‑drop; Projects, Collections/Notes and Calls come next.
 
