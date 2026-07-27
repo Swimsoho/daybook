@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { Entry, Tracker, TrackerColumn, fmtDate, today } from '@/lib/model'
+import { Entry, Tracker, TrackerColumn, today } from '@/lib/model'
 import { useStore } from '@/lib/store'
 import { useCloud } from '@/lib/cloud'
 import { ExportMenu } from '@/components/ExportMenu'
@@ -31,6 +31,15 @@ function streamingColumn(t: Tracker): TrackerColumn | undefined {
 function yearColumn(t: Tracker): TrackerColumn | undefined {
   return t.columns.find(c => /\byear\b|releas/i.test(c.name))
 }
+// Tracker date cells show the YEAR (unlike task due-dates, which fmtDate keeps compact as "21 Jul")
+// — a movie release, a subscription renewal, a birthday spans many years and the year is the point.
+// A non-date value (e.g. a plain year typed into a text/number column) passes straight through.
+function fmtTrackerDate(v: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return v
+  const dt = new Date(v + 'T12:00:00')
+  return isNaN(dt.getTime()) ? v : dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 // Format TMDB's release info for whatever type the release column is: a full YYYY-MM-DD for a
 // date column, the numeric year for a number column, the year string otherwise.
 function releaseValueFor(col: TrackerColumn, matched: { year?: string; releaseDate?: string }): Entry['values'][string] | undefined {
@@ -133,7 +142,7 @@ export default function CollectionsPage() {
   // Text of a cell for searching; a comparable value for sorting (numbers stay numeric).
   const cellText = (col: TrackerColumn, v: unknown): string => {
     if (v === undefined || v === null || v === '') return ''
-    if (col.type === 'date') return fmtDate(String(v))
+    if (col.type === 'date') return fmtTrackerDate(String(v))
     if (col.type === 'checkbox') return v ? 'yes' : 'no'
     return String(v)
   }
@@ -494,7 +503,7 @@ function CellValue({ col, value, small }: { col: TrackerColumn; value: Entry['va
   switch (col.type) {
     case 'rating': return <Stars n={Number(value)} />
     case 'currency': return <span className="tabular">£{Number(value).toFixed(2)}</span>
-    case 'date': return <span className="tabular">{fmtDate(String(value))}</span>
+    case 'date': return <span className="tabular">{fmtTrackerDate(String(value))}</span>
     case 'checkbox': return <span>{value ? '✓' : '—'}</span>
     case 'status':
     case 'select':
