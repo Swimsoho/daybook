@@ -44,7 +44,7 @@ function tmdbFetch(path: string, params: Record<string, string> = {}) {
   return fetch(url.toString(), { headers }).then(r => r.json()).catch(() => null)
 }
 
-async function lookupSummary(title: string, year: string): Promise<string | null> {
+async function lookupInfo(title: string, year: string): Promise<{ summary: string; releaseDate: string; year: string } | null> {
   const params: Record<string, string> = { query: title, include_adult: 'false' }
   if (/^\d{4}$/.test(year)) params.year = year
   let kind: 'movie' | 'tv' = 'movie'
@@ -52,15 +52,24 @@ async function lookupSummary(title: string, year: string): Promise<string | null
   if (!results.length) { results = (await tmdbFetch('/search/tv', { query: title }))?.results ?? []; kind = 'tv' }
   if (!results.length) return null
   const hit = results.find(r => norm(r.title ?? r.name ?? '') === norm(title)) ?? results[0]
+  const rel = String(hit.release_date ?? hit.first_air_date ?? '')
   const wp = await tmdbFetch(`/${kind}/${hit.id}/watch/providers`)
   const us = wp?.results?.US ?? {}
   const names = (a: any[] | undefined) => (a ?? []).map(p => p.provider_name).filter(Boolean)
   const stream = names(us.flatrate), ads = names(us.ads), rent = names(us.rent), buy = names(us.buy)
-  if (stream.length) return stream.join(', ')
-  if (ads.length) return `${ads.join(', ')} (free w/ ads)`
-  if (rent.length) return `Rent: ${rent.slice(0, 3).join(', ')}`
-  if (buy.length) return `Buy: ${buy.slice(0, 3).join(', ')}`
-  return 'Not streaming in the US right now'
+  let summary = 'Not streaming in the US right now'
+  if (stream.length) summary = stream.join(', ')
+  else if (ads.length) summary = `${ads.join(', ')} (free w/ ads)`
+  else if (rent.length) summary = `Rent: ${rent.slice(0, 3).join(', ')}`
+  else if (buy.length) summary = `Buy: ${buy.slice(0, 3).join(', ')}`
+  return { summary, releaseDate: rel, year: rel ? rel.slice(0, 4) : '' }
+}
+
+// Format the release info for the release/year column's type (date → YYYY-MM-DD, number → year).
+function releaseValueFor(col: Col, info: { releaseDate: string; year: string }): unknown {
+  if (col.type === 'date') return /^\d{4}-\d{2}-\d{2}$/.test(info.releaseDate) ? info.releaseDate : undefined
+  if (!info.year) return undefined
+  return col.type === 'number' ? Number(info.year) : info.year
 }
 
 Deno.serve(async (req) => {
@@ -100,10 +109,17 @@ Deno.serve(async (req) => {
           const title = String(e.values[tCol.key] ?? '').trim()
           const yr = yCol ? String(e.values[yCol.key] ?? '') : ''
           looked++
-          const summary = await lookupSummary(title, yr)
-          if (summary && summary !== String(e.values[sCol.key] ?? '')) { e.values[sCol.key] = summary; updated++; dirty = true }
+          const info = await lookupInfo(title, yr)
+          if (info) {
+            if (info.summary && info.summary !== String(e.values[sCol.key] ?? '')) { e.values[sCol.key] = info.summary; updated++; dirty = true }
+            // Release date only fills a blank cell (it doesn't change, so never overwrite).
+            if (yCol && !String(e.values[yCol.key] ?? '').trim()) {
+              const rv = releaseValueFor(yCol, info)
+              if (rv !== undefined && rv !== '') { e.values[yCol.key] = rv; dirty = true }
+            }
+          }
           e.values[UPDATED_KEY] = today
-          if (summary) dirty = true
+          dirty = true
           await new Promise(r => setTimeout(r, 60)) // gentle on TMDB
         }
       }

@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
 
     return json({
       ok: true, kind,
-      matched: { title: matchedTitle, year: matchedYear, tmdbId: id },
+      matched: { title: matchedTitle, year: matchedYear, releaseDate: rel, tmdbId: id },
       providers: { stream, ads, rent, buy },
       summary, link,
     })

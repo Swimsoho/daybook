@@ -24,9 +24,21 @@ function isWatchTracker(t: Tracker): boolean {
 function streamingColumn(t: Tracker): TrackerColumn | undefined {
   return t.columns.find(c => (c.type === 'text' || c.type === 'longtext') && /platform|stream|where|watch|provider/i.test(c.name))
 }
-// Optional year column, to sharpen the TMDB match.
+// The Year / Release-date column — used both to sharpen the TMDB match and as the target the
+// lookup writes the release date into.
 function yearColumn(t: Tracker): TrackerColumn | undefined {
-  return t.columns.find(c => /\byear\b|released?/i.test(c.name))
+  return t.columns.find(c => /\byear\b|releas/i.test(c.name))
+}
+// Format TMDB's release info for whatever type the release column is: a full YYYY-MM-DD for a
+// date column, the numeric year for a number column, the year string otherwise.
+function releaseValueFor(col: TrackerColumn, matched: { year?: string; releaseDate?: string }): Entry['values'][string] | undefined {
+  if (col.type === 'date') {
+    const d = matched.releaseDate ?? ''
+    return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined
+  }
+  const y = matched.year ?? ''
+  if (!y) return undefined
+  return col.type === 'number' ? Number(y) : y
 }
 
 // A dependency can be a Status/single-choice column (compared as plain strings) or, as of the
@@ -157,32 +169,42 @@ export default function CollectionsPage() {
   const clearControls = () => { setSearch(''); setSort(null); setColFilters({}) }
   const toggleSort = (key: string) => setSort(s => (s?.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
 
-  // Bulk "where to watch" — fill the streaming column for every entry that's missing it, on a
-  // watch-list tracker. Sequential + gentle so it doesn't hammer TMDB; a running toast shows
-  // progress. Only entries without an existing value are looked up, so re-running tops up new ones.
+  // Bulk "where to watch" — fill the streaming column (and the release-date column, if the list
+  // has one) for every entry that's missing it, on a watch-list tracker. Sequential + gentle so it
+  // doesn't hammer TMDB; a running toast shows progress. Only blank cells are filled, so re-running
+  // just tops up new ones — it never overwrites anything you've entered.
   async function bulkStreamingLookup() {
     if (!tracker) return
     const col = streamingColumn(tracker)
     const titleCol = tracker.columns.find(c => c.isTitle) ?? tracker.columns[0]
-    const yrCol = yearColumn(tracker)
+    const relCol = yearColumn(tracker)
     if (!col) { toast.error('Add a “Platform” / “Where to watch” text column to this list first (Settings → Notes & Collections).'); return }
     if (!cloud) { toast('Live lookup needs a signed-in account (it calls the TMDB backend).'); return }
-    const todo = entries.filter(e => !String(e.values[col.key] ?? '').trim() && String(e.values[titleCol.key] ?? '').trim())
-    if (!todo.length) { toast('Every entry already has a “' + col.name + '”.'); return }
+    const needs = (e: Entry) => !String(e.values[col.key] ?? '').trim() || (relCol && !String(e.values[relCol.key] ?? '').trim())
+    const todo = entries.filter(e => String(e.values[titleCol.key] ?? '').trim() && needs(e))
+    if (!todo.length) { toast('Everything already has its platform' + (relCol ? ' and release date' : '') + '.'); return }
     setBulkLookup(true)
     let done = 0, filled = 0
     const tId = toast.loading(`Looking up 0/${todo.length}…`)
     try {
       for (const e of todo) {
         const title = String(e.values[titleCol.key] ?? '').trim()
-        const yr = yrCol ? String(e.values[yrCol.key] ?? '') : ''
+        const yr = relCol ? String(e.values[relCol.key] ?? '') : ''
         const r = await cloud.lookupMovie(title, yr)
         done++
         if (r.error) { toast.error(r.error, { id: tId }); break }
-        if (r.ok && r.summary) { updateEntry(e.id, { [col.key]: r.summary }); filled++ }
+        if (r.ok) {
+          const patch: Entry['values'] = {}
+          if (r.summary && !String(e.values[col.key] ?? '').trim()) patch[col.key] = r.summary
+          if (relCol && r.matched && !String(e.values[relCol.key] ?? '').trim()) {
+            const rv = releaseValueFor(relCol, r.matched)
+            if (rv !== undefined && rv !== '') patch[relCol.key] = rv
+          }
+          if (Object.keys(patch).length) { updateEntry(e.id, patch); filled++ }
+        }
         toast.loading(`Looking up ${done}/${todo.length}… (${filled} filled)`, { id: tId })
       }
-      toast.success(`Done — filled “${col.name}” on ${filled} of ${todo.length}.`, { id: tId })
+      toast.success(`Done — filled ${filled} of ${todo.length}${relCol ? ' (platform + release date)' : ''}.`, { id: tId })
     } finally { setBulkLookup(false) }
   }
 
@@ -479,12 +501,13 @@ function StreamingLookup({ tracker, title, year, onFill }: {
   tracker: Tracker
   title: string
   year: string
-  onFill: (col: TrackerColumn, value: string) => void
+  onFill: (col: TrackerColumn, value: Entry['values'][string]) => void
 }) {
   const cloud = useCloud()
   const [loading, setLoading] = useState(false)
   const [res, setRes] = useState<import('@/lib/cloud').MovieLookupResult | null>(null)
   const col = streamingColumn(tracker)
+  const relCol = yearColumn(tracker)
 
   async function run() {
     if (!title.trim()) { toast.error('Enter the title first'); return }
@@ -493,9 +516,17 @@ function StreamingLookup({ tracker, title, year, onFill }: {
     try {
       const r = await cloud.lookupMovie(title.trim(), year)
       setRes(r)
-      if (r.error) toast.error(r.error)
-      else if (r.notFound) toast(`No TMDB match for “${title}”.`)
-      else if (r.ok && col && r.summary) { onFill(col, r.summary); toast.success(`Saved to “${col.name}”`) }
+      if (r.error) { toast.error(r.error); return }
+      if (r.notFound) { toast(`No TMDB match for “${title}”.`); return }
+      if (r.ok) {
+        const saved: string[] = []
+        if (col && r.summary) { onFill(col, r.summary); saved.push(col.name) }
+        if (relCol && r.matched) {
+          const rv = releaseValueFor(relCol, r.matched)
+          if (rv !== undefined && rv !== '') { onFill(relCol, rv); saved.push(relCol.name) }
+        }
+        if (saved.length) toast.success(`Saved to “${saved.join('” & “')}”`)
+      }
     } finally { setLoading(false) }
   }
 

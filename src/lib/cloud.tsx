@@ -28,7 +28,7 @@ export interface MovieLookupResult {
   notFound?: boolean
   error?: string
   kind?: 'movie' | 'tv'
-  matched?: { title: string; year: string; tmdbId: number }
+  matched?: { title: string; year: string; releaseDate?: string; tmdbId: number }
   providers?: { stream: string[]; ads: string[]; rent: string[]; buy: string[] }
   summary?: string
   link?: string
