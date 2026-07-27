@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarPlus, ChevronDown, ChevronUp, Download, Loader2, Plus, Search, Tv, Upload } from 'lucide-react'
+import { ArrowUpDown, CalendarPlus, ChevronDown, ChevronUp, Download, Loader2, Plus, Search, Tv, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -121,9 +121,12 @@ export default function CollectionsPage() {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null)
   const [colFilters, setColFilters] = useState<Record<string, string>>({})
+  // Free-text per-column filters typed into the boxes under each table header — e.g. "2026" under
+  // Release date, "netflix" under Platform. Matched against the same rendered cell text as search.
+  const [colText, setColText] = useState<Record<string, string>>({})
   // Reset them when you switch to a different tracker, so a filter from one list never silently
   // hides rows in the next.
-  useEffect(() => { setSearch(''); setSort(null); setColFilters({}) }, [trackerId])
+  useEffect(() => { setSearch(''); setSort(null); setColFilters({}); setColText({}) }, [trackerId])
 
   function switchTopTab(next: TopTab) {
     setTopTab(next)
@@ -164,6 +167,13 @@ export default function CollectionsPage() {
       if (!val) continue
       list = list.filter(e => String(e.values[k] ?? '') === val)
     }
+    for (const [k, val] of Object.entries(colText)) {
+      const needle = val.trim().toLowerCase()
+      if (!needle) continue
+      const col = tracker.columns.find(c => c.key === k)
+      if (!col) continue
+      list = list.filter(e => cellText(col, e.values[k]).toLowerCase().includes(needle))
+    }
     if (sort) {
       const col = tracker.columns.find(c => c.key === sort.key)
       list = [...list].sort((a, b) => {
@@ -174,10 +184,10 @@ export default function CollectionsPage() {
     }
     return list
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tracker, entries, search, sort, colFilters])
+  }, [tracker, entries, search, sort, colFilters, colText])
 
-  const filtersActive = !!search || !!sort || Object.values(colFilters).some(Boolean)
-  const clearControls = () => { setSearch(''); setSort(null); setColFilters({}) }
+  const filtersActive = !!search || !!sort || Object.values(colFilters).some(Boolean) || Object.values(colText).some(v => v.trim())
+  const clearControls = () => { setSearch(''); setSort(null); setColFilters({}); setColText({}) }
   const toggleSort = (key: string) => setSort(s => (s?.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
 
   // Bulk "where to watch" — fill the streaming column (and the release-date column, if the list
@@ -387,12 +397,32 @@ export default function CollectionsPage() {
                   <th
                     key={c.key}
                     onClick={() => toggleSort(c.key)}
-                    className="px-3 py-2 font-semibold whitespace-nowrap cursor-pointer select-none hover:text-foreground"
+                    title="Click to sort"
+                    className="px-3 pt-2 pb-1.5 font-semibold whitespace-nowrap cursor-pointer select-none hover:text-foreground group"
                   >
                     <span className="inline-flex items-center gap-1">
                       {c.name}{c.showWhen && ' *'}
-                      {sort?.key === c.key && (sort.dir === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />)}
+                      {sort?.key === c.key
+                        ? (sort.dir === 'asc' ? <ChevronUp className="h-3 w-3 text-[hsl(17_63%_47%)]" /> : <ChevronDown className="h-3 w-3 text-[hsl(17_63%_47%)]" />)
+                        : <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-70" />}
                     </span>
+                  </th>
+                ))}
+              </tr>
+              {/* Per-column filter boxes — type to narrow by that column (e.g. 2026 under Release date) */}
+              <tr className="border-b border-border bg-muted/30">
+                {tracker.columns.map(c => (
+                  <th key={c.key} className="px-2 pb-1.5 pt-0.5 font-normal">
+                    <input
+                      value={colText[c.key] ?? ''}
+                      onChange={e => setColText(f => ({ ...f, [c.key]: e.target.value }))}
+                      onClick={e => e.stopPropagation()}
+                      placeholder="Filter…"
+                      className={cn(
+                        'h-6 w-full min-w-[70px] rounded-sm border bg-card px-1.5 text-[11px] font-normal normal-case tracking-normal outline-none placeholder:text-muted-foreground/60 focus:border-[hsl(17_63%_47%)]',
+                        colText[c.key]?.trim() ? 'border-[hsl(17_63%_47%)] text-foreground' : 'border-border',
+                      )}
+                    />
                   </th>
                 ))}
               </tr>

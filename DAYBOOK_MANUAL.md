@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v80 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v81 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+66. **v81** — Sortable headers now *say* they're sortable, and every column has a filter box under it.
+
+    Two small usability fixes on top of v77's search/sort. First, **every sortable header now shows an indicator all the time** — a faint up/down "⇅" icon sits next to each column name so you can tell at a glance that the column is clickable; click it and the icon turns into a solid coloured ▲/▼ showing the active sort and its direction (before, the arrow only appeared once you'd already clicked, so there was no hint the header did anything). Second, **each header now has its own filter box directly beneath it** — type into it to narrow the list to rows whose value in *that* column contains what you typed. So typing `2026` under **Release date** shows only 2026 titles, `netflix` under **Platform** shows only what's on Netflix, `overdue` under a contact's **Status**, and so on. Boxes stack — fill several to combine them — and a filled box is outlined in the accent colour so it's obvious which filters are on; the **Clear** link wipes them all. This applies to **every Collection / Notes / Ideas / Dates list *and* the People (Contacts) page**. Under Last contact you can even type a year (e.g. `2026`) even though the cell shows a compact "21 Jul", because the filter matches the full date underneath. It all layers on top of the existing global search box and the single‑choice filter dropdowns.
 
 65. **v79** — Excel download + a designed PDF on every list page.
 

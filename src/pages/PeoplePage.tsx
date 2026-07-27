@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Download, Phone, Plus, Upload } from 'lucide-react'
+import { ArrowUpDown, ChevronDown, ChevronUp, Download, Phone, Plus, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -25,6 +25,9 @@ export default function PeoplePage() {
   const [search, setSearch] = useState('')
   const [sortKey, setSortKey] = useState<PeopleSortKey>('status')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  // Free-text per-column filters typed into the boxes under each header (e.g. "inner" under Tier,
+  // "overdue" under Status). Matched against the same text each cell renders.
+  const [colText, setColText] = useState<Partial<Record<PeopleSortKey, string>>>({})
   const [viewPerson, setViewPerson] = useState<Person | null>(null)
   const [logPerson, setLogPerson] = useState<Person | null>(null)
   const [adding, setAdding] = useState(false)
@@ -42,16 +45,32 @@ export default function PeoplePage() {
     else { setSortKey(key); setSortDir(DEFAULT_DIR[key]) }
   }
 
+  // The text a given column renders for a contact — used by both the per-column filter boxes and
+  // (loosely) mirrors what the row shows. Includes the raw ISO date under Last contact so typing a
+  // year like "2026" narrows by it even though the cell displays a compact "21 Jul".
+  const rowText = (p: Person, key: PeopleSortKey): string => {
+    switch (key) {
+      case 'name': return `${p.name} ${p.how ?? ''}`
+      case 'tier': return tierLabel(state.settings, p.tier)
+      case 'lastContact': return p.lastContact ? `${p.lastContact} ${fmtDate(p.lastContact)} ${daysSince(p.lastContact)}d` : 'never'
+      case 'cadence': return `every ${personCadence(p, state.settings)}d`
+      case 'status': { const o = personOverdueBy(p, state.settings); return o > 0 ? `${o}d overdue` : 'current' }
+      case 'sentiment': return state.interactions.find(i => i.personId === p.id)?.sentiment ?? ''
+    }
+  }
+
   const people = useMemo(() => {
     const q = search.trim().toLowerCase()
     const lastSentiment = (id: string) => state.interactions.find(i => i.personId === id)?.sentiment ?? ''
     const tierOrder = new Map(resolveTiers(state.settings).map((t, i) => [t.id, i]))
     // Search now matches across every contact column, not just name/topics — name, phone, email,
     // tier, how-you-know-them, topics, and notes.
+    const colTextEntries = Object.entries(colText).filter(([, v]) => (v ?? '').trim()) as [PeopleSortKey, string][]
     let ps = state.people.filter(p =>
       (tierFilter === 'all' || p.tier === tierFilter) &&
       (!q || [p.name, p.phone, p.email, tierLabel(state.settings, p.tier), p.how, p.topics, p.notes]
-        .some(v => (v ?? '').toLowerCase().includes(q))),
+        .some(v => (v ?? '').toLowerCase().includes(q))) &&
+      colTextEntries.every(([key, v]) => rowText(p, key).toLowerCase().includes(v.trim().toLowerCase())),
     )
     const val = (p: Person): string | number => {
       switch (sortKey) {
@@ -69,7 +88,8 @@ export default function PeoplePage() {
       return sortDir === 'asc' ? cmp : -cmp
     })
     return ps
-  }, [state.people, state.interactions, state.settings, tierFilter, search, sortKey, sortDir])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.people, state.interactions, state.settings, tierFilter, search, sortKey, sortDir, colText])
 
   return (
     <div className="grid grid-cols-1 gap-4">
@@ -101,7 +121,7 @@ export default function PeoplePage() {
           </SelectContent>
         </Select>
         <span className="text-[11px] text-muted-foreground hidden sm:inline">Click a column header to sort</span>
-        <ClearFiltersButton active={!!search || tierFilter !== 'all'} onClear={() => { setSearch(''); setTierFilter('all') }} />
+        <ClearFiltersButton active={!!search || tierFilter !== 'all' || Object.values(colText).some(v => (v ?? '').trim())} onClear={() => { setSearch(''); setTierFilter('all'); setColText({}) }} />
         <div className="ml-auto flex flex-wrap gap-2">
           <ExportMenu getData={(): ViewExport => ({
             title: 'People',
@@ -129,14 +149,33 @@ export default function PeoplePage() {
           <thead>
             <tr className="border-b border-border text-left text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">
               {([['name', 'Name', 'px-4'], ['tier', 'Tier', 'px-2'], ['lastContact', 'Last contact', 'px-2'], ['cadence', 'Cadence', 'px-2'], ['status', 'Status', 'px-2'], ['sentiment', 'Last sentiment', 'px-2']] as [PeopleSortKey, string, string][]).map(([key, label, pad]) => (
-                <th key={key} className={cn(pad, 'py-2 font-semibold')}>
-                  <button onClick={() => headerClick(key)} className="inline-flex items-center gap-1 uppercase tracking-[0.1em] hover:text-foreground transition-colors">
+                <th key={key} className={cn(pad, 'pt-2 pb-1.5 font-semibold')}>
+                  <button onClick={() => headerClick(key)} title="Click to sort" className="group inline-flex items-center gap-1 uppercase tracking-[0.1em] hover:text-foreground transition-colors">
                     {label}
-                    <span className="text-[9px] w-2">{sortKey === key ? (sortDir === 'asc' ? '▲' : '▼') : ''}</span>
+                    {sortKey === key
+                      ? (sortDir === 'asc' ? <ChevronUp className="h-3 w-3 text-[hsl(17_63%_47%)]" /> : <ChevronDown className="h-3 w-3 text-[hsl(17_63%_47%)]" />)
+                      : <ArrowUpDown className="h-3 w-3 opacity-30 group-hover:opacity-70" />}
                   </button>
                 </th>
               ))}
-              <th className="px-2 py-2" />
+              <th className="px-2 pt-2 pb-1.5" />
+            </tr>
+            {/* Per-column filter boxes — type to narrow by that column */}
+            <tr className="border-b border-border bg-muted/30">
+              {([['name', 'px-4'], ['tier', 'px-2'], ['lastContact', 'px-2'], ['cadence', 'px-2'], ['status', 'px-2'], ['sentiment', 'px-2']] as [PeopleSortKey, string][]).map(([key, pad]) => (
+                <th key={key} className={cn(pad, 'pb-1.5 pt-0.5 font-normal')}>
+                  <input
+                    value={colText[key] ?? ''}
+                    onChange={e => setColText(f => ({ ...f, [key]: e.target.value }))}
+                    placeholder="Filter…"
+                    className={cn(
+                      'h-6 w-full min-w-[70px] rounded-sm border bg-card px-1.5 text-[11px] font-normal normal-case tracking-normal outline-none placeholder:text-muted-foreground/60 focus:border-[hsl(17_63%_47%)]',
+                      (colText[key] ?? '').trim() ? 'border-[hsl(17_63%_47%)] text-foreground' : 'border-border',
+                    )}
+                  />
+                </th>
+              ))}
+              <th className="px-2 pb-1.5 pt-0.5" />
             </tr>
           </thead>
           <tbody>
