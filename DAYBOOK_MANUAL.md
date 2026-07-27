@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v75 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v76 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -514,6 +514,10 @@ None of these are things the rest of the app depends on to function — they're 
 62. **v75** — Live "Where to watch" for your Movies / TV / watch‑list collections (TMDB).
 
     Any collection whose name mentions movie / film / tv / show / series / watch now gets a **live US streaming lookup**. Open a title's entry and hit **"Where to watch (US)"** and it fetches — in real time from TMDB (the data behind JustWatch) — exactly where that film is streaming, rentable, or free‑with‑ads in the US right now, and saves it into the list's Platform/"Where to watch" column. There's also a **whole‑list "Where to watch (US)"** button that fills that column for every entry missing one (skip‑and‑top‑up, so re‑running only does the new ones). Because it's live, it never goes stale — unlike a hand‑made snapshot. Setup is one‑time and free: a TMDB API key set as a Supabase secret, plus deploying the `movie-lookup` Edge Function — see `claude/daybook-movie-streaming-setup.md`. (The buttons ship with this version; they start returning data once the key + function are in place. For the result to *save*, the list needs a free‑text "Platform"/"Where to watch" column — a fixed dropdown can't hold arbitrary provider names.)
+
+63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
+
+    v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
 
     **Drag to move.** Each group is a drop zone — **drag a task from one bucket onto another to change its priority (or category) instantly**. And every row in the task table is now draggable (grab and drop onto a group, an area section, or a category chip). This is the first phase of making the whole app drag‑and‑drop; Projects, Collections/Notes and Calls come next.
 
