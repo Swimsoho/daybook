@@ -139,6 +139,10 @@ export default function CollectionsPage() {
   const activeView = view ?? tracker?.defaultView ?? 'table'
   const entries = useMemo(() => state.entries.filter(e => e.trackerId === tracker?.id), [state.entries, tracker])
   const statusCol = tracker?.columns.find(c => c.type === 'status')
+  // The board groups entries into one column per Status option, so it can only draw itself when the
+  // list has a Status-type column AND that column actually has options typed in. Without both, the
+  // board would render blank — so we show a plain-language explanation instead (see the Board block).
+  const boardReady = !!statusCol && (statusCol.options?.length ?? 0) > 0
 
   // Columns that can drive a header filter dropdown (single-choice ones).
   const filterCols = useMemo(() => (tracker?.columns ?? []).filter(c => c.type === 'select' || c.type === 'status'), [tracker])
@@ -452,8 +456,16 @@ export default function CollectionsPage() {
         </section>
       )}
 
-      {/* BOARD */}
-      {activeView === 'board' && statusCol && (
+      {/* BOARD — needs a Status column with options; otherwise explain rather than render blank */}
+      {activeView === 'board' && !boardReady && (
+        <section className="border border-border bg-card shadow-sm rounded-lg">
+          <EmptyNote>
+            The <b>Board</b> view groups entries into columns by a <b>Status</b> field — this list {statusCol ? <>has a “{statusCol.name}” status column but <b>no options</b> filled in yet</> : <>doesn’t have a <b>Status</b> column yet</>}.
+            {' '}Open <b>Settings → Notes &amp; Collections → {tracker.name}</b>, {statusCol ? <>add options to “{statusCol.name}”</> : <>add a <b>Status</b> column</>} — for a watch-list, use <i>Want to watch, Watching, Watched</i> (comma-separated). Then the Board shows a column for each, and you can drag titles between them. Until then, use the <b>Table</b> or <b>Gallery</b> view.
+          </EmptyNote>
+        </section>
+      )}
+      {activeView === 'board' && boardReady && statusCol && (
         <div className="grid grid-cols-1 gap-3" style={{ gridTemplateColumns: `repeat(${statusCol.options?.length ?? 3}, minmax(0,1fr))` }}>
           {statusCol.options?.map(stage => (
             <div

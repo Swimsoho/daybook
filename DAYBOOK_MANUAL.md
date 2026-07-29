@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v83 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v84 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+69. **v84** — The **Board** view now explains itself instead of going blank.
+
+    The board groups a list's entries into columns by a **Status** field, so it can only draw itself when the list has a Status‑type column *with options filled in*. Before, a list missing that (or with a Status field whose options were never typed in) showed a blank board with no hint why. Now it shows a plain‑language note: that the board needs a Status column, exactly where to add or edit it (Settings → Notes & Collections → the list), and a suggested set for a watch‑list — *Want to watch, Watching, Watched* — with a nudge to use Table or Gallery meanwhile. This is the same reason a filter dropdown for such a column shows only “All …” with nothing to pick: no options are defined yet. (The built‑in Movies list already has these, which is why its board and filters work out of the box.)
 
 68. **v83** — Import **Areas & Projects** from a spreadsheet, and a **Tomorrow** view.
 
