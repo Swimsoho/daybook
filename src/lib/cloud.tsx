@@ -129,6 +129,35 @@ function augmentStandardTrackers(trackers: Tracker[]): Tracker[] {
   })
 }
 
+// A watch-list (Movies / TV Series / …) needs a Status column *with options* for its board and its
+// status filter to work — and the conditional Rating needs a value to switch on. A list the person
+// built by hand often has a "Watched" status field with the options never typed in, leaving the
+// board blank, the filter empty, and the Edit dropdown showing only "Choose…". This fills sensible
+// defaults for exactly that case — a watch-list whose watch-status column has NO options yet — and
+// never touches a column that already has its own options. Runs on load; a no-op once set.
+const WATCH_STATUS_DEFAULTS = ['Want to watch', 'Watching', 'Watched']
+function normalizeWatchTrackers(trackers: Tracker[]): Tracker[] {
+  const isWatchList = (name: string) => /movie|film|tv|show|series|watch|cinema/i.test(name)
+  return trackers.map(t => {
+    if (!isWatchList(t.name)) return t
+    const cols: TrackerColumn[] = t.columns.map(c => ({ ...c }))
+    // The watch-status column: a status/select field named like Watch / Status / Seen / Progress
+    // that has no options defined yet. (A checkbox "Watched" is left alone — it's a different shape.)
+    const wc = cols.find(c => (c.type === 'status' || c.type === 'select') && /watch|status|seen|progress/i.test(c.name) && !(c.options?.length))
+    if (!wc) return t
+    wc.type = 'status' // so the Board view (which groups by a Status column) can render it
+    wc.options = [...WATCH_STATUS_DEFAULTS]
+    // A dependent column (e.g. Rating "appears when Watched reaches ___") left with a blank target
+    // never fires — point it at "Watched" now that the option exists.
+    for (const c of cols) {
+      if (c.showWhen && c.showWhen.columnKey === wc.key && !c.showWhen.equals) {
+        c.showWhen = { ...c.showWhen, equals: 'Watched' }
+      }
+    }
+    return { ...t, columns: cols }
+  })
+}
+
 async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<AppState> {
   const { data } = await supabase!.from('workspace_state').select('data').eq('workspace_id', ws.id).maybeSingle()
   if (data?.data && Object.keys(data.data).length > 0) {
@@ -156,7 +185,7 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
       // find by name) even though the code fully supports them. Backfill each by name only if
       // it's actually missing — never touches anything the person's already renamed/added.
       collections: backfillByName(loaded.collections, seedState().collections, ['notes', 'ideas', 'dates', 'health', 'learning']),
-      trackers: augmentStandardTrackers(backfillByName(loaded.trackers, seedState().trackers, ['notes', 'ideas', 'dates to remember', 'exercise', 'learning'])),
+      trackers: normalizeWatchTrackers(augmentStandardTrackers(backfillByName(loaded.trackers, seedState().trackers, ['notes', 'ideas', 'dates to remember', 'exercise', 'learning']))),
     }
   }
   const fresh = ws.kind === 'sample' ? seedState() : emptyState(ownerName || 'there')

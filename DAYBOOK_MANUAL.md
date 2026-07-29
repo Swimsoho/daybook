@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v84 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v85 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,12 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+70. **v85** — Watch‑lists get their statuses filled in automatically, and a **Tomorrow** page.
+
+    **Watch‑status auto‑fix.** A watch‑list you built by hand (like *TV Series*) often ended up with a “Watched” status field whose options were never typed in — so the Board was blank, the status filter showed only “All …”, and the entry’s dropdown said just “Choose…”. On load, Daybook now detects exactly that case — a Movies/TV/watch‑type list whose watch‑status column has **no options** — and fills in **Want to watch · Watching · Watched**, makes it a proper Status field (so the Board draws a column for each), and points a dependent Rating (“appears when Watched reaches …”) at *Watched* so it actually shows. It only ever touches a column with **no options of its own**, so anything you’ve set up yourself — including the built‑in Movies list — is left exactly as - is. Net effect: your TV Series list now has the three statuses everywhere (the entry dropdown, the header filter, and the Board), and *Watching* is where you note the season/episode you’re up to (in the Season field).
+
+    **Tomorrow page.** A **Tomorrow** button now sits between **Today** and **Overall** on the dashboard toggle. It’s a clean day‑ahead glance: everything actually dated for tomorrow (tasks and calls), any dates‑to‑remember landing tomorrow, and a quick‑add that files straight onto tomorrow — so the day doesn’t sneak up. (This complements the **Tomorrow** tab added to the Tasks page in v83.)
 
 69. **v84** — The **Board** view now explains itself instead of going blank.
 

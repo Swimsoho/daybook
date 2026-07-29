@@ -23,7 +23,7 @@ import SettingsPage from '@/pages/SettingsPage'
 import HistoryPage from '@/pages/HistoryPage'
 import AdminPage from '@/pages/AdminPage'
 
-type Page = 'today' | 'overall' | 'inbox' | 'tasks' | 'people' | 'projects' | 'collections' | 'calendar' | 'reports' | 'history' | 'settings' | 'admin'
+type Page = 'today' | 'tomorrow' | 'overall' | 'inbox' | 'tasks' | 'people' | 'projects' | 'collections' | 'calendar' | 'reports' | 'history' | 'settings' | 'admin'
 
 interface Impersonation {
   user: AdminUser
@@ -34,6 +34,7 @@ interface Impersonation {
 
 const TITLES: Record<Page, [string, string]> = {
   today: ['Today', 'Just this day — everything else stays one click away'],
+  tomorrow: ['Tomorrow', 'The day ahead — what’s scheduled so nothing sneaks up'],
   overall: ['Overall', 'The whole system at a glance, for weekly planning'],
   inbox: ['Inbox', 'Capture first, organize later — AI pre-files, you confirm'],
   tasks: ['Tasks', 'The atomic unit — priority and status decide what you see'],
@@ -272,10 +273,11 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
             <div className="min-w-0">
               <div className="flex items-baseline gap-3 flex-wrap">
                 <h1 className="font-display text-[20px] md:text-[22px] font-semibold tracking-tight truncate">{title}</h1>
-                {(page === 'today' || page === 'overall') && (
+                {(page === 'today' || page === 'tomorrow' || page === 'overall') && (
                   <div className="flex border border-border rounded-sm overflow-hidden text-[11.5px] shrink-0">
                     <button onClick={() => setPage('today')} className={cn('px-2 py-0.5', page === 'today' ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-accent')}>Today</button>
-                    <button onClick={() => setPage('overall')} className={cn('px-2 py-0.5', page === 'overall' ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-accent')}>Overall</button>
+                    <button onClick={() => setPage('tomorrow')} className={cn('px-2 py-0.5 border-l border-border', page === 'tomorrow' ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-accent')}>Tomorrow</button>
+                    <button onClick={() => setPage('overall')} className={cn('px-2 py-0.5 border-l border-border', page === 'overall' ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-accent')}>Overall</button>
                   </div>
                 )}
               </div>
@@ -311,7 +313,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
           </div>
         </header>
 
-        {(page === 'today' || page === 'overall' || page === 'tasks' || page === 'projects') && (
+        {(page === 'today' || page === 'tomorrow' || page === 'overall' || page === 'tasks' || page === 'projects') && (
           <div className="border-b border-border bg-muted px-4 md:px-6 py-2">
             <ProjectFilterBar value={projectFilter} onChange={setProjectFilter} />
           </div>
@@ -319,6 +321,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
 
         <main className="flex-1 px-4 md:px-6 py-4 md:py-5 max-w-[1240px] w-full mx-auto overflow-x-hidden">
           {page === 'today' && <Dashboard mode="today" goTo={p => setPage(p as Page)} projectFilter={projectFilter} viewerName={viewerFirstName} />}
+          {page === 'tomorrow' && <Dashboard mode="tomorrow" goTo={p => setPage(p as Page)} projectFilter={projectFilter} viewerName={viewerFirstName} />}
           {page === 'overall' && <Dashboard mode="overall" goTo={p => setPage(p as Page)} projectFilter={projectFilter} />}
           {page === 'inbox' && <InboxPage />}
           {page === 'tasks' && <TasksPage projectFilter={projectFilter} onClearProject={() => setProjectFilter(null)} />}

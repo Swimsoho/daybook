@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import {
-  Person, Task, daysBetween, daysSince, fmtDate, fmtDateLong, nextOccurrence, personOverdueBy, today,
+  Person, Task, addDays, daysBetween, daysSince, fmtDate, fmtDateLong, nextOccurrence, personOverdueBy, today,
 } from '@/lib/model'
 import {
   buildCallList, callsMadeOn, isOverdue, openTasks, stalledProjects, useStore,
@@ -15,8 +15,76 @@ import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { LogCallDialog, PersonDetail } from '@/components/people'
 import { TaskListTable } from '@/pages/TasksPage'
 
-export default function Dashboard({ mode, goTo, projectFilter, viewerName }: { mode: 'today' | 'overall'; goTo: (page: string) => void; projectFilter?: string | null; viewerName?: string }) {
+export default function Dashboard({ mode, goTo, projectFilter, viewerName }: { mode: 'today' | 'tomorrow' | 'overall'; goTo: (page: string) => void; projectFilter?: string | null; viewerName?: string }) {
+  if (mode === 'tomorrow') return <TomorrowDash goTo={goTo} projectFilter={projectFilter} />
   return mode === 'today' ? <TodayDash goTo={goTo} projectFilter={projectFilter} viewerName={viewerName} /> : <OverallDash goTo={goTo} projectFilter={projectFilter} />
+}
+
+// A focused day-ahead view — everything actually dated for tomorrow (tasks and calls), plus any
+// dates-to-remember landing tomorrow, and a quick-add that files straight onto tomorrow. Kept
+// deliberately simple: it's a glance, not the full Today command centre.
+function TomorrowDash({ projectFilter }: { goTo: (p: string) => void; projectFilter?: string | null }) {
+  const { state } = useStore()
+  const [openTask, setOpenTask] = useState<Task | null>(null)
+  const [editTask, setEditTask] = useState<Task | null>(null)
+  const tmrw = addDays(today(), 1)
+
+  const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
+  const callActionIds = new Set(state.actions.filter(a => a.name.trim().toLowerCase() === 'call').map(a => a.id))
+  const isCall = (t: Task) => t.type === 'call' || (t.actionIds ?? []).some(id => callActionIds.has(id))
+  const byPrio = (a: Task, b: Task) => a.priority.localeCompare(b.priority)
+  const tasks = open.filter(t => !isCall(t) && t.due === tmrw).sort(byPrio)
+  const callTasks = open.filter(t => isCall(t) && t.due === tmrw).sort(byPrio)
+
+  const datesTracker = state.trackers.find(t => t.id === DATE_TRACKER_ID && t.active)
+  const datesTomorrow = useMemo(() => {
+    if (!datesTracker) return [] as { id: string; name: string; type: string }[]
+    return state.entries
+      .filter(e => e.trackerId === datesTracker.id && e.values.date)
+      .map(e => ({ name: String(e.values.name ?? 'Untitled'), type: String(e.values.type ?? 'Other'), id: e.id, daysUntil: daysBetween(today(), nextOccurrence(String(e.values.date), !!e.values.recurring)) }))
+      .filter(x => x.daysUntil === 1)
+  }, [state.entries, datesTracker])
+
+  const total = tasks.length + callTasks.length
+  return (
+    <div className="grid grid-cols-1 gap-4 max-w-[900px]">
+      <section className="rise-in border border-border bg-card shadow-sm rounded-lg">
+        <div className="px-4 pt-3 pb-2 flex items-baseline gap-3">
+          <SectionTitle className="mb-0">Tomorrow</SectionTitle>
+          <span className="text-[11.5px] text-muted-foreground tabular">{fmtDateLong(tmrw)} · {total} item{total === 1 ? '' : 's'} scheduled</span>
+        </div>
+        <div className="px-3 pb-2"><QuickAdd due={tmrw} placeholder="Quick add for tomorrow — type and press Enter" /></div>
+        {tasks.length === 0
+          ? <EmptyNote>Nothing scheduled for tomorrow yet — add something above, or set a task’s due date to tomorrow.</EmptyNote>
+          : tasks.map(t => <TaskRow key={t.id} task={t} onOpen={setOpenTask} />)}
+      </section>
+
+      {callTasks.length > 0 && (
+        <section className="rise-in border border-border bg-card shadow-sm rounded-lg" style={{ animationDelay: '60ms' }}>
+          <div className="px-4 pt-3 pb-2"><SectionTitle className="mb-0">Calls due tomorrow</SectionTitle></div>
+          {callTasks.map(t => <TaskRow key={t.id} task={t} onOpen={setOpenTask} />)}
+        </section>
+      )}
+
+      {datesTomorrow.length > 0 && (
+        <section className="rise-in border border-border bg-card shadow-sm rounded-lg" style={{ animationDelay: '90ms' }}>
+          <div className="px-4 pt-3 pb-2"><SectionTitle className="mb-0">Dates tomorrow</SectionTitle></div>
+          <div className="px-4 pb-3 grid gap-1.5">
+            {datesTomorrow.map(d => (
+              <div key={d.id} className="flex items-center gap-2 text-[13px]">
+                {DATE_TYPE_ICON[d.type] ?? DATE_TYPE_ICON.Other}
+                <span className="font-medium">{d.name}</span>
+                <span className="text-[11.5px] text-muted-foreground">{d.type}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <TaskDetail task={openTask} onClose={() => setOpenTask(null)} onEdit={t => setEditTask(t)} />
+      <TaskDialog open={!!editTask} onClose={() => setEditTask(null)} task={editTask} />
+    </div>
+  )
 }
 
 function greeting(): string {
