@@ -19,7 +19,7 @@ import { ViewExport } from '@/lib/exportView'
 import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
-type View = 'today' | 'week' | 'day' | 'area' | 'waiting' | 'someday' | 'done' | 'all' | 'list'
+type View = 'today' | 'tomorrow' | 'week' | 'day' | 'area' | 'waiting' | 'someday' | 'done' | 'all' | 'list'
 type SortBy = 'due' | 'priority' | 'title' | 'created' | 'area'
 const SORT_BY_LABELS: Record<SortBy, string> = {
   due: 'Due date', priority: 'Priority', title: 'Title (A–Z)', created: 'Recently added', area: 'Area',
@@ -50,6 +50,7 @@ function endOfWeek(): string {
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'today', label: 'Today' },
+  { id: 'tomorrow', label: 'Tomorrow' },
   { id: 'week', label: 'This Week' },
   { id: 'day', label: 'By Day' },
   { id: 'area', label: 'By Area' },
@@ -117,6 +118,9 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
         // category) below so you can see and move all of them — not a due-date-filtered subset.
         // The grouping + drag-between-groups happens in `todayGroups` / the render.
         return ts.filter(t => t.status !== 'done' && t.status !== 'dropped')
+      case 'tomorrow':
+        // Everything actually dated for tomorrow — the day-ahead glance, so nothing sneaks up.
+        return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && t.due === addDays(today(), 1))
       case 'week':
         return ts.filter(t => t.status !== 'done' && t.status !== 'dropped' && (['P0', 'P1'].includes(t.priority) || (t.due && daysSince(t.due) >= -7)))
       case 'waiting':

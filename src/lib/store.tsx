@@ -142,6 +142,10 @@ export interface Store {
   sortActionsByName: () => void
   addProject: (p: Partial<AppState['projects'][0]> & { name: string; areaId: string }) => void
   updateProject: (id: string, patch: Partial<AppState['projects'][0]>) => void
+  // Bulk import of projects (and the areas they live under) in one atomic update. Areas are
+  // matched to existing ones by name (case-insensitive) and created when missing; projects are
+  // merged into an existing same-name project in the same area rather than duplicated.
+  importProjects: (rows: ImportProjectRow[]) => { areasCreated: number; projectsAdded: number; projectsMerged: number; newAreaNames: string[] }
   addAttachment: (taskId: string, attachment: TaskAttachment) => void
   removeAttachment: (taskId: string, attachmentId: string) => void
   addCollection: (c: Partial<Collection> & { name: string }) => Collection
@@ -153,6 +157,26 @@ export interface Store {
   removeAdminUser: (id: string, auditLabel?: string) => void
   logSuperAdmin: (action: string, detail: string) => void
 }
+
+// One row of a projects import — a project plus the name of the area it should live under. Extra
+// source columns (owner, tool, type, system…) are folded into `notes` by the importer, since the
+// Project model deliberately stays lean.
+export interface ImportProjectRow {
+  name: string
+  areaName: string
+  outcome?: string
+  notes?: string
+  status?: 'active' | 'on-hold' | 'done' | 'archived'
+  priority?: Priority
+  due?: string
+}
+
+// A small rotating palette for areas created during an import, so a batch of new areas doesn't all
+// come out the same colour (unlike addArea's single default, which is fine for one-at-a-time adds).
+const IMPORT_AREA_COLORS = [
+  'hsl(152 26% 34%)', 'hsl(17 63% 47%)', 'hsl(210 45% 42%)', 'hsl(280 30% 45%)',
+  'hsl(40 65% 42%)', 'hsl(340 45% 45%)', 'hsl(190 45% 38%)', 'hsl(95 35% 38%)',
+]
 
 const Ctx = createContext<Store | null>(null)
 
@@ -729,6 +753,59 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
       },
       updateProject(id, patch) {
         withAudit(s => ({ ...s, projects: s.projects.map(pr => pr.id === id ? { ...pr, ...patch, lastActivity: today() } : pr) }), auditEvent('updated', 'project', id, Object.keys(patch).join(', ') + ' changed'))
+      },
+      importProjects(rows) {
+        const user = userName ?? 'Craig'
+        let areasCreated = 0, projectsAdded = 0, projectsMerged = 0
+        const newAreaNames: string[] = []
+        apply(s => {
+          const areas = [...s.areas]
+          const projects = [...s.projects]
+          const audit = [...s.audit]
+          const findArea = (name: string) => areas.find(a => a.name.trim().toLowerCase() === name.trim().toLowerCase())
+          for (const r of rows) {
+            const areaName = (r.areaName || 'Imported').trim()
+            let area = findArea(areaName)
+            if (!area) {
+              area = {
+                id: uid('a'), name: areaName, description: '',
+                color: IMPORT_AREA_COLORS[areas.length % IMPORT_AREA_COLORS.length],
+                sort: areas.length, active: true, inBrief: true, reviewDay: 'Sunday',
+              }
+              areas.push(area)
+              areasCreated++; newAreaNames.push(areaName)
+              audit.unshift(baseAuditEvent('created', 'area', area.id, `${areaName} (from import)`, user))
+            }
+            const key = r.name.trim().toLowerCase()
+            const existing = projects.find(p => p.areaId === area!.id && p.name.trim().toLowerCase() === key)
+            if (existing) {
+              const idx = projects.indexOf(existing)
+              projects[idx] = {
+                ...existing,
+                outcome: r.outcome || existing.outcome,
+                notes: r.notes ?? existing.notes,
+                status: r.status ?? existing.status,
+                priority: r.priority ?? existing.priority,
+                due: r.due ?? existing.due,
+                lastActivity: today(),
+              }
+              projectsMerged++
+              audit.unshift(baseAuditEvent('updated', 'project', existing.id, `“${r.name}” merged from import`, user))
+            } else {
+              const proj = {
+                id: uid('pr'), areaId: area.id, name: r.name.trim(),
+                outcome: r.outcome ?? '', status: r.status ?? ('active' as const),
+                priority: r.priority ?? ('P2' as Priority), due: r.due, notes: r.notes,
+                lastActivity: today(),
+              }
+              projects.push(proj)
+              projectsAdded++
+              audit.unshift(baseAuditEvent('created', 'project', proj.id, `${r.name} → ${area.name} (import)`, user))
+            }
+          }
+          return { ...s, areas, projects, audit }
+        })
+        return { areasCreated, projectsAdded, projectsMerged, newAreaNames }
       },
       addAttachment(taskId, attachment) {
         const t = state.tasks.find(x => x.id === taskId)

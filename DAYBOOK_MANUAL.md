@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v82 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v83 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,12 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+68. **v83** — Import **Areas & Projects** from a spreadsheet, and a **Tomorrow** view.
+
+    **Projects import.** The Projects page now has the same **Excel template** and **Import** buttons as Contacts and Collections. It's format‑agnostic — drop in any spreadsheet and Daybook reads your own column headers and matches them (Project name, Area, Status, Priority, Outcome, plus owner/type/tool/system/notes, which get folded into the project's notes so nothing is lost). Every project is filed under an **Area**, and you choose how: *all under one area* (type a name like "AI Projects" and it's created for you), or *one area per value in a column* (e.g. group by the "For" or "Type" column). New areas are created automatically; a project that already exists in the same area is **merged, not duplicated**, so re‑importing just tops up. There's a preview first — how many projects, how many will merge, and which new areas will be created. (Tested against a real 40‑plus‑row projects export — imported cleanly under a new "AI Projects" area.)
+
+    **Tomorrow view.** The Tasks page gained a **Tomorrow** tab right next to Today and This Week — a clean day‑ahead glance showing everything actually dated for tomorrow, so nothing sneaks up on you. It respects the same search, filters and sort as the other views, and works in both Table and Cards layouts.
 
 67. **v82** — Add timestamped **notes / updates** to a task, right in its timeline.
 
