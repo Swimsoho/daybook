@@ -1047,9 +1047,11 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
             </div>
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="items-center">
+          <span className="mr-auto text-[11px] text-muted-foreground hidden sm:inline">Changes here save automatically</span>
           <Button variant="outline" onClick={() => { onClose(); onEdit(task) }}>Edit</Button>
           <Button variant="ghost" onClick={onClose}>Close</Button>
+          <Button onClick={() => { toast.success('Saved'); onClose() }}>Save &amp; Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

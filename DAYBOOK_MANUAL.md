@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v86 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v87 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,12 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+72. **v87** — A **due date** on Inbox cards, and a clear **Save & Close** on the task popup.
+
+    **Inbox due date.** Each Inbox card (for anything filing as a task) now has a **date picker** right alongside the title / file-as / area / category / action controls, so you can set — or change — the due date at the moment you confirm the capture, instead of filing it and then opening the task to add one. It pre-fills with whatever due date the router guessed (e.g. from “today”/“tomorrow” in the message); leave it, change it, or clear it, and the task lands with that date.
+
+    **Save & Close on the task popup.** Opening a task showed only **Edit** and **Close**, which made people unsure whether the inline changes (priority, status, type, due, area…) had actually saved. Those edits *do* save the instant you make them, so the popup now says so — a quiet “Changes here save automatically” note — and adds a primary **Save & Close** button that confirms with a “Saved” toast and closes, alongside the existing **Close** and **Edit**. (The deeper Edit form still has its own **Save changes** button.)
 
 71. **v86** — Telegram / Slack / SMS captures now appear in the Inbox **without a reload**.
 

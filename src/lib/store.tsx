@@ -111,7 +111,7 @@ export interface Store {
   // into that tracker/collection instead (even if the router had proposed a task) — this is the
   // manual safety net for whenever the keyword router doesn't recognize the tracker/collection a
   // message was really meant for. `title` optionally corrects the filed title before saving.
-  acceptCapture: (id: string, overrides?: { areaId?: string; projectId?: string; categoryIds?: string[]; actionIds?: string[]; trackerId?: string; title?: string }) => void
+  acceptCapture: (id: string, overrides?: { areaId?: string; projectId?: string; categoryIds?: string[]; actionIds?: string[]; trackerId?: string; title?: string; due?: string }) => void
   dismissCapture: (id: string) => void
   addEntry: (trackerId: string, values: Entry['values']) => void
   updateEntry: (id: string, values: Entry['values']) => void
@@ -618,6 +618,8 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
         const categoryIds = overrides?.categoryIds ?? p.categoryIds ?? []
         const actionIds = overrides?.actionIds ?? p.actionIds
         const title = overrides?.title?.trim() || p.title
+        // Due date set on the Inbox card wins over the router's guess; '' explicitly clears it.
+        const due = overrides?.due !== undefined ? (overrides.due || undefined) : p.due
         // A manual "File as" override always wins over the router's guess — '' means "file as a
         // task no matter what the router thought", any tracker id means "file into this
         // tracker/collection no matter what the router thought". Only when no override was
@@ -652,7 +654,7 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
         }
         const task: Task = {
           id: uid('t'), title, type: p.taskType, areaId, projectId,
-          personId: p.personId, categoryIds, actionIds, priority: p.priority, status: 'next', due: p.due,
+          personId: p.personId, categoryIds, actionIds, priority: p.priority, status: 'next', due,
           source: cap.source, created: today(),
         }
         withAudit(

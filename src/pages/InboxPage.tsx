@@ -28,6 +28,7 @@ export default function InboxPage() {
   // router's own guess alone" — only set once the person actually touches the File as picker.
   const [fileAs, setFileAs] = useState<Record<string, string>>({})
   const [titleEdit, setTitleEdit] = useState<Record<string, string>>({})
+  const [dueEdit, setDueEdit] = useState<Record<string, string>>({})
 
   // Every active tracker, across every Collection — this is what makes "add this to Notes /
   // Movies / whatever" possible from the Inbox even when the router filed it as a plain task
@@ -167,6 +168,14 @@ export default function InboxPage() {
                           searchPlaceholder="Search actions…"
                           className="h-7 w-[100px] sm:w-[116px] text-[11px] bg-background"
                         />
+                        {/* Due date — set (or change) when the task lands, right here on the card */}
+                        <input
+                          type="date"
+                          value={dueEdit[c.id] ?? p.due ?? ''}
+                          onChange={e => setDueEdit(d => ({ ...d, [c.id]: e.target.value }))}
+                          title="Due date"
+                          className="h-7 px-1.5 text-[11px] border border-border rounded-sm bg-background text-foreground outline-none cursor-pointer"
+                        />
                       </>
                     )}
                     <Button size="sm" className="h-7 px-2" onClick={() => {
@@ -176,6 +185,7 @@ export default function InboxPage() {
                         actionIds: (reassignAction[c.id] ?? p.actionIds?.[0]) ? [reassignAction[c.id] ?? p.actionIds![0]] : undefined,
                         trackerId: fileAs[c.id],
                         title: titleEdit[c.id],
+                        due: dueEdit[c.id],
                       })
                       toast.success('Filed — corrections teach the router over time')
                     }}><Check className="h-3.5 w-3.5" /></Button>
