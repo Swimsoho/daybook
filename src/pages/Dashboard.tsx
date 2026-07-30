@@ -726,6 +726,9 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
   const [allExpanded, setAllExpanded] = useState(false)
   const [portfolioView, setPortfolioView] = useState<'area' | 'list'>('area')
+  // Portfolio "By Area" hides areas with nothing in them by default (no open tasks and no live
+  // project), so empty areas like a fresh "AI" don't take up space; a toggle reveals them all.
+  const [showEmptyAreas, setShowEmptyAreas] = useState(false)
   const [viewPerson, setViewPerson] = useState<Person | null>(null)
   const [logPerson, setLogPerson] = useState<Person | null>(null)
   const [customize, setCustomize] = useState(false)
@@ -734,6 +737,12 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
   const overdue = open.filter(isOverdue).sort((a, b) => (a.due ?? '').localeCompare(b.due ?? ''))
   const stalled = stalledProjects(state)
   const activeProjects = state.projects.filter(p => p.status === 'active')
+  // An area is "empty" for the portfolio if it has no open tasks and no live (non-archived,
+  // non-done) project. Those are hidden unless the Show-all toggle is on.
+  const activeAreas = state.areas.filter(a => a.active)
+  const areaHasContent = (aid: string) => open.some(t => t.areaId === aid) || state.projects.some(p => p.areaId === aid && p.status !== 'archived' && p.status !== 'done')
+  const shownAreas = showEmptyAreas ? activeAreas : activeAreas.filter(a => areaHasContent(a.id))
+  const hiddenAreaCount = activeAreas.length - shownAreas.length
   const doneThisWeek = state.tasks.filter(t => t.status === 'done' && t.completedAt && daysSince(t.completedAt) <= 7 && matchesProject(t, projectFilter))
   const callsThisWeek = state.interactions.filter(i => daysSince(i.date) <= 7 && (i.channel === 'call' || i.channel === 'whatsapp')).length
   const overdueContacts = state.people.filter(p => p.tier !== 'dormant' && personOverdueBy(p, state.settings) > 0)
@@ -813,6 +822,11 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
                       List
                     </button>
                   </span>
+                  {portfolioView === 'area' && (hiddenAreaCount > 0 || showEmptyAreas) && (
+                    <button onClick={() => setShowEmptyAreas(v => !v)} className="text-[11.5px] border border-border rounded-sm px-2 py-0.5 hover:bg-accent">
+                      {showEmptyAreas ? 'Hide empty' : `Show all (${hiddenAreaCount} empty)`}
+                    </button>
+                  )}
                   {portfolioView === 'area' && (
                     <button onClick={toggleAll} className="text-[11.5px] border border-border rounded-sm px-2 py-0.5 hover:bg-accent">{allExpanded ? 'Collapse all' : 'Expand all'}</button>
                   )}
@@ -834,7 +848,8 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
             </div>
           ) : (
           <div className="pb-2">
-            {state.areas.filter(a => a.active).map(a => {
+            {shownAreas.length === 0 && <EmptyNote>No areas have open tasks or live projects right now.{hiddenAreaCount > 0 && ' Use “Show all” to see empty areas.'}</EmptyNote>}
+            {shownAreas.map(a => {
               const projs = state.projects.filter(p => p.areaId === a.id && p.status !== 'archived' && p.status !== 'done')
               const areaOpen = open.filter(t => t.areaId === a.id)
               // tasks filed straight under the area with no project — these were never rendered

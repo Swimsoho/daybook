@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v87 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v88 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+73. **v88** — The **Overall → Portfolio** (By Area) view hides empty areas by default.
+
+    An area with no open tasks and no live project (e.g. a fresh “AI” area) used to render an empty row — a heading, “no live projects,” and a quick-add — taking up space for nothing. The By-Area portfolio now shows **only areas that actually have something in them** (an open task or a live project), so the list is just your real work. A **“Show all (N empty)”** toggle at the top of the panel reveals the hidden areas when you want them (e.g. to quick-add into an empty one), and flips to **“Hide empty”** to collapse them again. The toggle only appears when there’s at least one empty area to hide, and an area counts as non-empty if it has open tasks *or* a live (non-done, non-archived) project — so nothing with real content is ever hidden.
 
 72. **v87** — A **due date** on Inbox cards, and a clear **Save & Close** on the task popup.
 
