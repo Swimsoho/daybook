@@ -393,6 +393,7 @@ export default function App() {
             key={cloud ? cloud.saveKey : 'demo'}
             initial={cloud ? () => cloud.state : undefined}
             onChange={cloud ? cloud.save : undefined}
+            fetchLatest={cloud ? cloud.fetchState : undefined}
             userName={cloud ? (cloud.profile.name || cloud.profile.email) : undefined}
           >
             <Root cloud={cloud} />

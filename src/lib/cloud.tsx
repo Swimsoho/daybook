@@ -41,6 +41,10 @@ export interface Cloud {
   state: AppState
   save: (s: AppState) => void
   saveKey: string // workspace id — remount key
+  // Re-read the active workspace's persisted state straight from the database. Used to pull in
+  // captures that arrived server-side (Telegram/Slack/SMS webhooks) after this tab loaded, without
+  // a full reload. Returns null if unavailable (not signed in / read failed).
+  fetchState: () => Promise<AppState | null>
   signOut: () => void
   setPassword: (pw: string) => Promise<string | null>
   setPhone: (phone: string) => Promise<string | null>
@@ -355,6 +359,12 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
     state: states[activeWs.id],
     saveKey: activeWs.id,
     save: s => debouncedSave(activeWs.id, s),
+    fetchState: async () => {
+      if (!supabase) return null
+      const { data, error } = await supabase.from('workspace_state').select('data').eq('workspace_id', activeWs.id).maybeSingle()
+      if (error || !data?.data) return null
+      return data.data as unknown as AppState
+    },
     signOut: () => { supabase!.auth.signOut() },
     setPassword: async pw => {
       const { error } = await supabase!.auth.updateUser({ password: pw })

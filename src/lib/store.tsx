@@ -374,7 +374,7 @@ export function routeCapture(text: string, state: AppState): RoutingProposal {
   }
 }
 
-export function StoreProvider({ children, initial, onChange, userName }: { children: React.ReactNode; initial?: () => AppState; onChange?: (s: AppState) => void; userName?: string }) {
+export function StoreProvider({ children, initial, onChange, fetchLatest, userName }: { children: React.ReactNode; initial?: () => AppState; onChange?: (s: AppState) => void; fetchLatest?: () => Promise<AppState | null>; userName?: string }) {
   const [state, setState] = useState<AppState>(initial ?? seedState)
   const first = React.useRef(true)
   const onChangeRef = React.useRef(onChange)
@@ -383,6 +383,42 @@ export function StoreProvider({ children, initial, onChange, userName }: { child
     if (first.current) { first.current = false; return }
     onChangeRef.current?.(state)
   }, [state])
+
+  // ---- Live capture sync ------------------------------------------------------------------------
+  // The app loads its state once and then owns it in memory, saving back on change. That means a
+  // capture written server-side by a webhook (Telegram / Slack / SMS → the *-inbound Edge Functions)
+  // never appears until a full reload — and worse, this tab's next autosave would overwrite it. So
+  // we periodically re-read the persisted state and merge in ONLY captures whose id we've never seen
+  // locally, appended at the front. We never remove or alter anything else, so unsaved local edits
+  // are safe; and because a dismissed/handled capture's id stays in `seenCaptureIds`, it's never
+  // resurrected. Runs on tab focus / becoming visible, plus a gentle poll while visible.
+  const fetchLatestRef = React.useRef(fetchLatest)
+  fetchLatestRef.current = fetchLatest
+  const seenCaptureIds = React.useRef<Set<string>>(new Set((initial ? initial() : seedState()).captures?.map(c => c.id) ?? []))
+  // Keep the seen-set current with whatever's in state now (covers dismissed ones too, so they
+  // don't come back on the next sync).
+  React.useEffect(() => { for (const c of state.captures ?? []) seenCaptureIds.current.add(c.id) }, [state.captures])
+
+  React.useEffect(() => {
+    if (!fetchLatestRef.current) return
+    let cancelled = false
+    const syncCaptures = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      const latest = await fetchLatestRef.current?.().catch(() => null)
+      if (cancelled || !latest?.captures?.length) return
+      const fresh = latest.captures.filter(c => c && c.id && !seenCaptureIds.current.has(c.id))
+      if (!fresh.length) return
+      for (const c of fresh) seenCaptureIds.current.add(c.id)
+      setState(s => ({ ...s, captures: [...fresh, ...(s.captures ?? [])] }))
+    }
+    const onVisible = () => { if (document.visibilityState === 'visible') syncCaptures() }
+    window.addEventListener('focus', syncCaptures)
+    document.addEventListener('visibilitychange', onVisible)
+    const iv = setInterval(syncCaptures, 45000)
+    syncCaptures() // catch anything that arrived before this tab opened
+    return () => { cancelled = true; window.removeEventListener('focus', syncCaptures); document.removeEventListener('visibilitychange', onVisible); clearInterval(iv) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const store = useMemo<Store>(() => {
     const apply = (fn: Updater) => setState(s => fn(s))
