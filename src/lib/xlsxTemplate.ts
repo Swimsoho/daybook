@@ -77,6 +77,98 @@ export async function downloadXlsxTemplateWithDropdowns(
   URL.revokeObjectURL(url)
 }
 
+// ---------- Download: a designed, report-style workbook (branded header, styling, print-ready) ----------
+// Used by the "Export → Excel" on every list page. Unlike downloadXlsxTemplate (a plain grid meant
+// to be re-imported), this is a polished deliverable: a green title band, a styled header row,
+// zebra striping, frozen header, an auto-filter, auto-fit columns, numeric columns right-aligned,
+// and landscape print setup — so it opens looking finished, not raw.
+export async function downloadStyledXlsx(
+  filename: string,
+  sheetName: string,
+  opts: { title: string; subtitle?: string; meta?: string; headers: string[]; rows: (string | number)[][] },
+) {
+  const { title, subtitle, meta, headers, rows } = opts
+  const ncols = Math.max(headers.length, 1)
+  const GREEN = 'FF2E4600', GREEN_TEXT = 'FF22331D', MUTED = 'FF6B7360', INK = 'FF1B2016', ZEBRA = 'FFF6F4EC', LINE = 'FFE6E3D7'
+
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'Daybook'
+  wb.created = new Date()
+  const ws = wb.addWorksheet(sheetName.slice(0, 31) || 'Export', {
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
+  })
+
+  // Title band
+  ws.mergeCells(1, 1, 1, ncols)
+  const titleCell = ws.getCell(1, 1)
+  titleCell.value = title
+  titleCell.font = { name: 'Calibri', size: 18, bold: true, color: { argb: GREEN_TEXT } }
+  titleCell.alignment = { vertical: 'middle' }
+  ws.getRow(1).height = 26
+
+  let r = 2
+  if (subtitle) {
+    ws.mergeCells(r, 1, r, ncols)
+    const c = ws.getCell(r, 1)
+    c.value = subtitle
+    c.font = { name: 'Calibri', size: 11, italic: true, color: { argb: MUTED } }
+    r++
+  }
+  if (meta) {
+    ws.mergeCells(r, 1, r, ncols)
+    const c = ws.getCell(r, 1)
+    c.value = meta
+    c.font = { name: 'Calibri', size: 10, color: { argb: MUTED } }
+    r++
+  }
+  r++ // one blank spacer row before the table
+
+  // Which columns are fully numeric → right-align them
+  const numericCol = Array.from({ length: ncols }, (_, i) =>
+    rows.length > 0 && rows.every(row => { const v = row[i]; return v === '' || v === undefined || v === null || typeof v === 'number' }))
+
+  // Header row
+  const headerRowIdx = r
+  const headerRow = ws.getRow(headerRowIdx)
+  headerRow.height = 20
+  headers.forEach((h, i) => {
+    const c = headerRow.getCell(i + 1)
+    c.value = h
+    c.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFFFF' } }
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GREEN } }
+    c.alignment = { vertical: 'middle', horizontal: numericCol[i] ? 'right' : 'left', wrapText: true }
+    c.border = { bottom: { style: 'thin', color: { argb: GREEN } } }
+  })
+
+  // Data rows
+  rows.forEach((row, ri) => {
+    const excelRow = ws.getRow(headerRowIdx + 1 + ri)
+    for (let ci = 0; ci < ncols; ci++) {
+      const c = excelRow.getCell(ci + 1)
+      c.value = row[ci] ?? ''
+      c.font = { name: 'Calibri', size: 10, color: { argb: INK } }
+      c.alignment = { vertical: 'top', wrapText: true, horizontal: numericCol[ci] ? 'right' : 'left' }
+      c.border = { bottom: { style: 'hair', color: { argb: LINE } } }
+      if (ri % 2 === 1) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ZEBRA } }
+    }
+  })
+
+  // Freeze the title/header, add a filter, and auto-fit columns
+  ws.views = [{ state: 'frozen', ySplit: headerRowIdx }]
+  ws.autoFilter = { from: { row: headerRowIdx, column: 1 }, to: { row: headerRowIdx, column: ncols } }
+  for (let ci = 1; ci <= ncols; ci++) {
+    let maxLen = String(headers[ci - 1] ?? '').length
+    for (const row of rows) { const len = String(row[ci - 1] ?? '').length; if (len > maxLen) maxLen = len }
+    ws.getColumn(ci).width = Math.min(Math.max(maxLen + 2, 10), 48)
+  }
+
+  const buf = await wb.xlsx.writeBuffer()
+  const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+  const a = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  URL.revokeObjectURL(url)
+}
+
 // ---------- Upload: accepts .xlsx *or* .csv, returns a plain string grid ----------
 
 export async function parseSpreadsheetFile(file: File): Promise<string[][]> {

@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v88 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v89 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+74. **v89** — **Print** your tasks and a genuinely professional **Excel** export.
+
+    Every list page’s **Export** button (Tasks, People, Projects, Collections/Notes, Reports) now offers **Excel (.xlsx)** and **Print / Save as PDF**, and both were upgraded to look like finished deliverables rather than raw dumps. The **Excel** is now a designed workbook: a bold green title band with the report name, a date-and-count line, a header row in Daybook green with white bold text, zebra-striped rows, thin rules, auto-fit column widths, numeric columns right-aligned, the **header row frozen** so it stays in view as you scroll, and a **filter** dropdown on every column — plus landscape print setup so it prints cleanly straight from Excel. The **Print / Save as PDF** option opens your browser’s print dialog on a branded, print-ready report (Georgia headings, green header band, striped rows, A4 landscape) — from there, print to paper or choose “Save as PDF.” Both always reflect **exactly what’s on screen** — your current search, filters and sort — so to print, say, just this week’s High-priority tasks, filter to them first and then Export. On Tasks it also honours a selection (tick rows to export only those). (This builds on the v79 export; v89 is the professional‑polish pass.)
 
 73. **v88** — The **Overall → Portfolio** (By Area) view hides empty areas by default.
 

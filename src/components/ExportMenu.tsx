@@ -1,5 +1,5 @@
 import React from 'react'
-import { Download, FileSpreadsheet, FileText } from 'lucide-react'
+import { Download, FileSpreadsheet, Printer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ViewExport, exportViewToPdf, exportViewToXlsx } from '@/lib/exportView'
@@ -24,7 +24,7 @@ export function ExportMenu({ getData, className, label = 'Export' }: {
           <FileSpreadsheet className="h-3.5 w-3.5 mr-2" />Excel (.xlsx)
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => exportViewToPdf(getData())}>
-          <FileText className="h-3.5 w-3.5 mr-2" />PDF (print / save)
+          <Printer className="h-3.5 w-3.5 mr-2" />Print / Save as PDF
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

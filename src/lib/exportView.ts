@@ -3,7 +3,7 @@
 // current search / filter / sort) and hands it here, so Excel and PDF look and behave consistently
 // everywhere. Rows are plain strings/numbers already formatted for display.
 
-import { downloadXlsxTemplate } from './xlsxTemplate'
+import { downloadStyledXlsx } from './xlsxTemplate'
 import { today } from './model'
 
 export interface ViewExport {
@@ -15,7 +15,13 @@ export interface ViewExport {
 }
 
 export function exportViewToXlsx(v: ViewExport) {
-  downloadXlsxTemplate(`${v.filenameBase}-${today()}.xlsx`, v.title.replace(/[^\w -]/g, '').slice(0, 31) || 'Export', [v.headers, ...v.rows])
+  const dateStr = new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const meta = `${dateStr} · ${v.rows.length} ${v.rows.length === 1 ? 'item' : 'items'}`
+  downloadStyledXlsx(
+    `${v.filenameBase}-${today()}.xlsx`,
+    v.title.replace(/[^\w -]/g, '').slice(0, 31) || 'Export',
+    { title: v.title, subtitle: v.subtitle, meta, headers: v.headers, rows: v.rows },
+  )
 }
 
 const esc = (s: unknown) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
