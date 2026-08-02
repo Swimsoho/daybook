@@ -69,6 +69,23 @@ export interface Cloud {
 
 interface WorkspaceRow { id: string; kind: 'real' | 'sample'; owner_id: string }
 
+// supabase-js wraps ANY non-2xx Edge Function response in a generic "Edge Function returned a
+// non-2xx status code" error and hides the response body — so users only ever saw that opaque line.
+// The real, actionable message (e.g. "email rate limit exceeded", "already signed in") is in
+// error.context (the underlying Response). This digs it out so the UI can show the true reason.
+async function readFnError(error: unknown): Promise<string> {
+  const ctx = (error as { context?: unknown } | null)?.context
+  try {
+    if (ctx instanceof Response) {
+      const body = await ctx.clone().json().catch(() => null) as { error?: string } | null
+      if (body?.error) return body.error
+      const text = await ctx.clone().text().catch(() => '')
+      if (text) return text.slice(0, 300)
+    }
+  } catch { /* fall through to the generic message */ }
+  return (error as { message?: string } | null)?.message ?? 'Unknown error'
+}
+
 // ---------- Persistence helpers ----------
 
 const saveTimers: Record<string, ReturnType<typeof setTimeout>> = {}
@@ -433,7 +450,7 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
       },
       async invite(u) {
         const { data, error } = await supabase!.functions.invoke('invite-user', { body: u })
-        if (error) return error.message
+        if (error) return await readFnError(error)
         if (data?.error) return String(data.error)
         return null
       },
@@ -455,13 +472,13 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
       },
       async deleteUser(userId) {
         const { data, error } = await supabase!.functions.invoke('manage-user', { body: { action: 'delete', userId } })
-        if (error) return error.message
+        if (error) return await readFnError(error)
         if (data?.error) return String(data.error)
         return null
       },
       async resendInvite(userId, u) {
         const { data, error } = await supabase!.functions.invoke('manage-user', { body: { action: 'resend', userId, ...u } })
-        if (error) return error.message
+        if (error) return await readFnError(error)
         if (data?.error) return String(data.error)
         return null
       },
