@@ -19,7 +19,7 @@ import {
   Priority, PRIORITY_DESC, PRIORITY_LABELS, STATUS_LABELS, Task, TaskStatus, TaskType, TYPE_LABELS, fmtDate, today, addDays, daysSince,
 } from '@/lib/model'
 import {
-  actionUsage, areaUsage, categoriesForArea, categoryUsage, personUsage, projectUsage, rollup, subtasksOf, useStore, vendorUsage, withPopularFirst,
+  actionUsage, areaUsage, categoriesForArea, categoryUsage, projectUsage, rollup, subtasksOf, useStore, vendorUsage, withPopularFirst,
 } from '@/lib/store'
 import { useCloud } from '@/lib/cloud'
 import { attachmentsAvailable, deleteAttachmentFile, fmtBytes, getAttachmentUrl, uploadAttachment } from '@/lib/attachments'
@@ -455,6 +455,77 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
 
 // ---------- Add / edit task dialog (type-dependent fields) ----------
 
+// A contact picker that (a) searches existing People, (b) links one to the task, and (c) lets you
+// QUICK-ADD a brand-new contact by typing a name — which is saved into People (marked "Added from a
+// task" so it's easy to tell apart from imported contacts) and linked in one step. Before creating,
+// it checks for an existing same-name contact and links that instead, so you never get a duplicate.
+function ContactPicker({ value, onChange }: { value?: string; onChange: (id: string | undefined) => void }) {
+  const { state, addPerson } = useStore()
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const selected = state.people.find(p => p.id === value)
+  const ql = q.trim().toLowerCase()
+  const matches = (ql
+    ? state.people.filter(p => p.name.toLowerCase().includes(ql) || (p.phone ?? '').includes(ql) || (p.email ?? '').toLowerCase().includes(ql))
+    : state.people
+  ).slice(0, 8)
+  const exact = state.people.find(p => p.name.trim().toLowerCase() === ql)
+  const canCreate = ql.length >= 2 && !exact
+
+  const choose = (id?: string) => { onChange(id); setOpen(false); setQ('') }
+  function createContact() {
+    const name = q.trim()
+    if (!name) return
+    // Duplicate guard: same-name contact already exists → link it instead of making a second one.
+    const dupe = state.people.find(p => p.name.trim().toLowerCase() === name.toLowerCase())
+    if (dupe) { choose(dupe.id); toast(`Linked existing contact “${dupe.name}”`); return }
+    const p = addPerson({ name, how: 'Added from a task' })
+    choose(p.id)
+    toast.success(`Added “${p.name}” to Contacts (People)`)
+  }
+
+  return (
+    <div className="relative">
+      {selected && !open ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="h-9 w-full flex items-center justify-between border border-input rounded-sm bg-card px-3 text-[13px] text-left hover:border-primary"
+        >
+          <span className="inline-flex items-center gap-1.5 truncate"><User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />{selected.name}</span>
+          <span onClick={e => { e.stopPropagation(); choose(undefined) }} className="text-[11px] text-muted-foreground hover:text-foreground shrink-0">clear</span>
+        </button>
+      ) : (
+        <Input
+          autoFocus={open}
+          value={q}
+          onChange={e => { setQ(e.target.value); setOpen(true) }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder="Search a contact, or type a new name…"
+          className="h-9"
+        />
+      )}
+      {open && (
+        <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-md border border-border bg-card shadow-lg text-[13px]">
+          <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-accent text-muted-foreground" onMouseDown={e => { e.preventDefault(); choose(undefined) }}>No contact</button>
+          {matches.map(p => (
+            <button key={p.id} type="button" className="w-full text-left px-3 py-1.5 hover:bg-accent" onMouseDown={e => { e.preventDefault(); choose(p.id) }}>
+              {p.name}{p.phone && <span className="text-muted-foreground text-[11px]"> · {p.phone}</span>}
+            </button>
+          ))}
+          {matches.length === 0 && !canCreate && <div className="px-3 py-1.5 text-muted-foreground italic">Type a name to add a new contact</div>}
+          {canCreate && (
+            <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-accent text-[hsl(17_63%_47%)] border-t border-border" onMouseDown={e => { e.preventDefault(); createContact() }}>
+              + Add “{q.trim()}” as a new contact
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function TaskDialog({ open, onClose, task, defaults }: {
   open: boolean
   onClose: () => void
@@ -471,7 +542,6 @@ export function TaskDialog({ open, onClose, task, defaults }: {
   const projects = state.projects.filter(p => p.status === 'active' && (!f.areaId || p.areaId === f.areaId))
   const mainCats = categoriesForArea(state.categories, f.areaId, f.categoryIds?.[0])
   const activeActions = state.actions.filter(a => a.active || a.id === f.actionIds?.[0])
-  const personOptionsBase = withPopularFirst(state.people, p => personUsage(state, p.id), p => p.name)
   const areaOptionsBase = withPopularFirst(state.areas.filter(a => a.active), a => areaUsage(state, a.id), a => a.name)
   const projectOptionsBase = withPopularFirst(projects, p => projectUsage(state, p.id), p => p.name)
   const categoryOptionsBase = withPopularFirst(mainCats, c => categoryUsage(state, c.id), c => c.name)
@@ -520,19 +590,10 @@ export function TaskDialog({ open, onClose, task, defaults }: {
             <Input value={f.title ?? ''} onChange={e => set({ title: e.target.value })} placeholder={f.type === 'call' ? 'Call…' : 'Book the hall…'} />
           </div>
 
-          {(f.type === 'call' || f.type === 'followup') && (
-            <div className="grid grid-cols-1 gap-1.5">
-              <Label className="text-xs">Contact {f.type === 'call' && <span className="text-muted-foreground">(one-tap dial shortcut shown on the task)</span>}</Label>
-              <SearchableSelect
-                value={f.personId ?? ''}
-                onValueChange={v => set({ personId: v || undefined })}
-                options={[{ value: '', label: 'No contact' }, ...personOptionsBase.ordered.map(p => ({ value: p.id, label: p.name }))]}
-                popularCount={personOptionsBase.popularCount > 0 ? personOptionsBase.popularCount + 1 : 0}
-                placeholder="Choose a person" searchPlaceholder="Search people…"
-                className="w-full"
-              />
-            </div>
-          )}
+          <div className="grid grid-cols-1 gap-1.5">
+            <Label className="text-xs">Contact person <span className="text-muted-foreground">(optional — links to People; type a new name to add &amp; save them)</span></Label>
+            <ContactPicker value={f.personId} onChange={id => set({ personId: id })} />
+          </div>
           {f.type === 'call' && (
             <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">What this call is about</Label>
@@ -565,7 +626,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Priority</Label>
               <Select value={f.priority} onValueChange={v => set({ priority: v as Priority })}>
@@ -578,8 +639,17 @@ export function TaskDialog({ open, onClose, task, defaults }: {
               </Select>
             </div>
             <div className="grid grid-cols-1 gap-1.5">
-              <Label className="text-xs">{f.type === 'followup' ? `Due (default +${state.settings.followUpDays}d)` : 'Due date'}</Label>
+              <Label className="text-xs">{f.type === 'followup' ? `Due (+${state.settings.followUpDays}d)` : 'Due date'}</Label>
               <Input type="date" value={f.due ?? (f.type === 'followup' ? addDays(today(), state.settings.followUpDays) : '')} onChange={e => set({ due: e.target.value || undefined })} />
+            </div>
+            <div className="grid grid-cols-1 gap-1.5">
+              <Label className="text-xs">Est. time <span className="text-muted-foreground">(min)</span></Label>
+              <Input
+                type="number" min={0} step={5} inputMode="numeric"
+                value={f.estMinutes ?? ''}
+                onChange={e => set({ estMinutes: e.target.value === '' ? undefined : Math.max(0, Math.round(Number(e.target.value))) })}
+                placeholder="e.g. 30"
+              />
             </div>
           </div>
 
@@ -983,6 +1053,7 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
             {area && <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: area.color }} />{area.name}</span>}
             {project && <span className="text-muted-foreground">› {project.name}</span>}
             {task.due && <span>Due <b>{fmtDate(task.due)}</b></span>}
+            {task.estMinutes ? <span>Est <b>{task.estMinutes} min</b></span> : null}
           </div>
           {person && (
             <div className="border border-border bg-accent/40 px-3 py-2 text-[13px]">

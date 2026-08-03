@@ -178,14 +178,15 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   // Export the current view (or just the selected tasks) — the same rows drive both Excel and PDF.
   function taskExportData(): ViewExport {
     const source = selected.size > 0 ? sorted.filter(t => selected.has(t.id)) : sorted
-    const headers = ['Title', 'Type', 'Area', 'Project', 'Category', 'Action', 'Priority', 'Status', 'Due', 'Created']
+    const headers = ['Title', 'Type', 'Area', 'Project', 'Category', 'Action', 'Contact', 'Priority', 'Status', 'Due', 'Est (min)', 'Created']
     const rows: (string | number)[][] = source.map(t => [
       t.title, TYPE_LABELS[t.type],
       state.areas.find(a => a.id === t.areaId)?.name ?? '',
       state.projects.find(p => p.id === t.projectId)?.name ?? '',
       state.categories.find(c => t.categoryIds.includes(c.id))?.name ?? '',
       state.actions.find(a => (t.actionIds ?? []).includes(a.id))?.name ?? '',
-      PRIORITY_LABELS[scheme][t.priority], STATUS_LABELS[t.status], t.due ?? '', t.created,
+      state.people.find(p => p.id === t.personId)?.name ?? '',
+      PRIORITY_LABELS[scheme][t.priority], STATUS_LABELS[t.status], t.due ?? '', t.estMinutes ?? '', t.created,
     ])
     const viewLabel = VIEWS.find(v => v.id === view)?.label ?? ''
     return {

@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v90 (July 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v91 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,15 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+76. **v91** — Two new task fields: **Est. time (minutes)** and a **Contact person** with quick‑add.
+
+    Every task (to‑do, call, or follow‑up) now has, in the New/Edit form:
+
+    - **Est. time (min)** — a numeric field, clearly labelled in minutes, sitting next to Priority and Due. It shows on the task’s detail popup (“Est 45 min”) and is included as its own **Est (min)** column in the Excel/PDF export, so you can plan and total your day’s workload.
+    - **Contact person** — like Vendor, but for people, and now available on *all* task types (not just calls). It’s a smart picker: search your existing contacts and link one, or **type a brand‑new name and add them on the spot** — the person is saved into **People (Contacts)** and linked to the task in one step. Two safeguards you asked for: it **checks for duplicates** first (a same‑name contact links to the existing person instead of creating a second), and every contact quick‑added this way is tagged **“Added from a task”** in their *how‑you‑know‑them* field, so they’re easy to tell apart from contacts you bulk‑import (filter/search People for “Added from a task” to review or re‑tier them later). The linked contact shows on the task and is included as a **Contact** column in the export.
+
+    Both fields are stored on the task itself, so they carry through everywhere the task appears and survive edits.
 
 75. **v90** — Admin errors now say **what actually went wrong** (not just “non-2xx”).
 

@@ -61,6 +61,8 @@ export interface Task {
   followUp?: string
   source: Source
   notes?: string
+  // Rough time this task is expected to take, in minutes — used for planning/reporting.
+  estMinutes?: number
   callAbout?: string
   waitingOn?: string
   waitingSince?: string
