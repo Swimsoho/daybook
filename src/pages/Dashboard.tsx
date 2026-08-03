@@ -15,9 +15,58 @@ import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { LogCallDialog, PersonDetail } from '@/components/people'
 import { TaskListTable } from '@/pages/TasksPage'
 
-export default function Dashboard({ mode, goTo, projectFilter, viewerName }: { mode: 'today' | 'tomorrow' | 'overall'; goTo: (page: string) => void; projectFilter?: string | null; viewerName?: string }) {
+export default function Dashboard({ mode, goTo, projectFilter, viewerName }: { mode: 'today' | 'tomorrow' | 'week' | 'overall'; goTo: (page: string) => void; projectFilter?: string | null; viewerName?: string }) {
   if (mode === 'tomorrow') return <TomorrowDash goTo={goTo} projectFilter={projectFilter} />
+  if (mode === 'week') return <WeekDash goTo={goTo} projectFilter={projectFilter} />
   return mode === 'today' ? <TodayDash goTo={goTo} projectFilter={projectFilter} viewerName={viewerName} /> : <OverallDash goTo={goTo} projectFilter={projectFilter} />
+}
+
+// The next seven days, grouped by day — a lightweight week planner. Each day lists the tasks due
+// then (calls included), soonest time first; anything overdue is gathered at the top so it isn't
+// lost. A quick-add on each day files straight onto that date.
+function WeekDash({ projectFilter }: { goTo: (p: string) => void; projectFilter?: string | null }) {
+  const { state } = useStore()
+  const [openTask, setOpenTask] = useState<Task | null>(null)
+  const [editTask, setEditTask] = useState<Task | null>(null)
+  const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
+  const byTimeThenPrio = (a: Task, b: Task) =>
+    (a.startTime ?? '99:99').localeCompare(b.startTime ?? '99:99') || a.priority.localeCompare(b.priority)
+  const days = Array.from({ length: 7 }, (_, i) => addDays(today(), i))
+  const groups = days.map(d => ({ iso: d, tasks: open.filter(t => t.due === d).sort(byTimeThenPrio) }))
+  const overdue = open.filter(t => t.due && daysSince(t.due) > 0).sort((a, b) => (a.due ?? '').localeCompare(b.due ?? ''))
+  const dayLabel = (iso: string) => iso === today() ? 'Today' : iso === addDays(today(), 1) ? 'Tomorrow'
+    : new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
+  const total = groups.reduce((n, g) => n + g.tasks.length, 0)
+
+  return (
+    <div className="grid grid-cols-1 gap-4 max-w-[920px]">
+      <div className="flex items-baseline gap-3">
+        <SectionTitle className="mb-0">This week</SectionTitle>
+        <span className="text-[11.5px] text-muted-foreground">{total} scheduled over 7 days{overdue.length ? ` · ${overdue.length} overdue` : ''}</span>
+      </div>
+
+      {overdue.length > 0 && (
+        <section className="rise-in border border-border bg-card shadow-sm rounded-lg">
+          <div className="px-4 py-2 border-b border-border text-[11px] uppercase tracking-wide font-semibold text-[hsl(8_60%_41%)]">Overdue — pull into the week</div>
+          {overdue.map(t => <TaskRow key={t.id} task={t} onOpen={setOpenTask} />)}
+        </section>
+      )}
+
+      {groups.map((g, i) => (
+        <section key={g.iso} className="rise-in border border-border bg-card shadow-sm rounded-lg" style={{ animationDelay: `${i * 40}ms` }}>
+          <div className="px-4 py-2 border-b border-border flex items-baseline justify-between">
+            <span className="font-display text-[14.5px] font-semibold">{dayLabel(g.iso)}</span>
+            <span className="text-[11px] text-muted-foreground tabular">{g.tasks.length ? `${g.tasks.length} task${g.tasks.length === 1 ? '' : 's'}` : 'clear'}</span>
+          </div>
+          {g.tasks.map(t => <TaskRow key={t.id} task={t} onOpen={setOpenTask} />)}
+          <QuickAdd due={g.iso} placeholder={`Add for ${dayLabel(g.iso)} — type and press Enter`} />
+        </section>
+      ))}
+
+      <TaskDetail task={openTask} onClose={() => setOpenTask(null)} onEdit={t => setEditTask(t)} />
+      <TaskDialog open={!!editTask} onClose={() => setEditTask(null)} task={editTask} />
+    </div>
+  )
 }
 
 // A focused day-ahead view — everything actually dated for tomorrow (tasks and calls), plus any

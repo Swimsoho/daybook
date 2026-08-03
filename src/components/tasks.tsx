@@ -30,6 +30,7 @@ import { AreaDot, DueChip, PriorityChip } from './bits'
 export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, placeholder }: { areaId?: string; due?: string; projectId?: string; placeholder?: string }) {
   const { state, addTask } = useStore()
   const [text, setText] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
   // Area/project pick right inline — only shown for whichever level isn't already fixed by the caller,
   // so a task never has to be filed "blind" and re-sorted later.
   const [pickedAreaId, setPickedAreaId] = useState('')
@@ -48,7 +49,8 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
   const actionOptionsBase = withPopularFirst(state.actions.filter(a => a.active), a => actionUsage(state, a.id), a => a.name)
 
   function add() {
-    if (!text.trim()) return
+    // Never a silent no-op: an empty box focuses the field and says so, rather than "doing nothing".
+    if (!text.trim()) { toast('Type a task first, then Add'); inputRef.current?.focus(); return }
     addTask({
       title: text.trim(), areaId, projectId, due, priority: due === today() ? 'P1' : 'P2', status: 'next', type: 'todo', source: 'manual',
       categoryIds: pickedCategoryId ? [pickedCategoryId] : [],
@@ -66,6 +68,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
     <div className="flex flex-wrap items-center gap-1.5 px-4 py-1.5 border-b border-dashed border-border/70 bg-background/40 focus-within:bg-background">
       <span className="text-muted-foreground text-[15px] leading-none shrink-0">+</span>
       <input
+        ref={inputRef}
         value={text}
         onChange={e => setText(e.target.value)}
         onKeyDown={e => e.key === 'Enter' && add()}

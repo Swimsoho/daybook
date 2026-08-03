@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v93 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v94 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,12 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+79. **v94** — Quick‑add **Add** button never “does nothing”, and a **This Week** view up top.
+
+    Two fixes. **Add button:** the quick‑add rows (Today, By‑Area, Calendar day, etc.) have an **Add** button beside the type‑and‑Enter box. Clicking it *with text* always adds the task (and shows a confirmation toast), but clicking it with an **empty** box used to do nothing at all — which read as “broken”. It now nudges you (“Type a task first”) and focuses the box, so it’s never a silent no‑op. (If you add a task to an already‑over‑capacity day, it still gets added — it just sorts into the list by priority rather than jumping to the top, so watch for the toast.)
+
+    **This Week:** the dashboard’s top toggle is now **Today · Tomorrow · This Week · Overall**. *This Week* lays out the next seven days, one card per day (Today, Tomorrow, then weekday names), listing each day’s tasks soonest‑time‑first, with any **overdue** items gathered at the top so they get pulled in — and a quick‑add on every day to drop a task straight onto that date. It respects the project filter like the other dashboard views.
 
 78. **v93** — Give a task a **time of day** and it blocks out on a new Calendar **Day** view.
 
