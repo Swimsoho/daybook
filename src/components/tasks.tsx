@@ -626,7 +626,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="grid grid-cols-1 gap-1.5">
               <Label className="text-xs">Priority</Label>
               <Select value={f.priority} onValueChange={v => set({ priority: v as Priority })}>
@@ -643,12 +643,16 @@ export function TaskDialog({ open, onClose, task, defaults }: {
               <Input type="date" value={f.due ?? (f.type === 'followup' ? addDays(today(), state.settings.followUpDays) : '')} onChange={e => set({ due: e.target.value || undefined })} />
             </div>
             <div className="grid grid-cols-1 gap-1.5">
-              <Label className="text-xs">Est. time <span className="text-muted-foreground">(min)</span></Label>
+              <Label className="text-xs">Time <span className="text-muted-foreground">(day)</span></Label>
+              <Input type="time" value={f.startTime ?? ''} onChange={e => set({ startTime: e.target.value || undefined })} />
+            </div>
+            <div className="grid grid-cols-1 gap-1.5">
+              <Label className="text-xs">Est. <span className="text-muted-foreground">(min)</span></Label>
               <Input
                 type="number" min={0} step={5} inputMode="numeric"
                 value={f.estMinutes ?? ''}
                 onChange={e => set({ estMinutes: e.target.value === '' ? undefined : Math.max(0, Math.round(Number(e.target.value))) })}
-                placeholder="e.g. 30"
+                placeholder="30"
               />
             </div>
           </div>
@@ -970,6 +974,14 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
               {task.due
                 ? <button onClick={() => updateTask(task.id, { due: undefined }, 'due date cleared')} className="text-[11px] text-muted-foreground hover:text-foreground">clear</button>
                 : <span className="text-[11px] text-muted-foreground italic">no date set</span>}
+              {/* Start time — with a due date, this places the task on the Calendar Day timeline */}
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground ml-3 mr-0.5">At</span>
+              <input
+                type="time"
+                value={task.startTime ?? ''}
+                onChange={e => updateTask(task.id, { startTime: e.target.value || undefined }, e.target.value ? `time → ${e.target.value}` : 'time cleared')}
+                className="h-7 px-1.5 text-[11.5px] border border-border rounded-sm bg-card text-foreground outline-none cursor-pointer"
+              />
               {/* Est. time (minutes) — editable right here on the view, not just the Edit form */}
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground ml-3 mr-0.5">Est <span className="normal-case">(min)</span></span>
               <input
@@ -1068,7 +1080,7 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
             <span><PriorityChip p={task.priority} /></span>
             {area && <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: area.color }} />{area.name}</span>}
             {project && <span className="text-muted-foreground">› {project.name}</span>}
-            {task.due && <span>Due <b>{fmtDate(task.due)}</b></span>}
+            {task.due && <span>Due <b>{fmtDate(task.due)}</b>{task.startTime && <> at <b>{task.startTime}</b></>}</span>}
             {task.estMinutes ? <span>Est <b>{task.estMinutes} min</b></span> : null}
           </div>
           {person && (

@@ -439,7 +439,7 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
           parentId: t.parentId, personId: t.personId, vendorId: t.vendorId, categoryIds: t.categoryIds ?? [],
           actionIds: t.actionIds,
           priority: t.priority ?? 'P2', status: t.status ?? 'next', due: t.due, followUp: t.followUp,
-          source: t.source ?? 'manual', notes: t.notes, estMinutes: t.estMinutes, callAbout: t.callAbout, waitingOn: t.waitingOn,
+          source: t.source ?? 'manual', notes: t.notes, estMinutes: t.estMinutes, startTime: t.startTime, callAbout: t.callAbout, waitingOn: t.waitingOn,
           // If a task is created already in "waiting" status (e.g. from an import) stamp when the
           // wait started, so "days waiting" is a real number instead of an unknown-date sentinel.
           waitingSince: t.waitingSince ?? (t.status === 'waiting' ? today() : undefined),

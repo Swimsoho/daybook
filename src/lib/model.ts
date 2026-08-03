@@ -61,8 +61,12 @@ export interface Task {
   followUp?: string
   source: Source
   notes?: string
-  // Rough time this task is expected to take, in minutes — used for planning/reporting.
+  // Rough time this task is expected to take, in minutes — used for planning/reporting and as the
+  // block length on the Calendar's Day timeline.
   estMinutes?: number
+  // Start time on its due date, "HH:MM" (24h). When set (with a due date), the task shows as a
+  // time block on the Calendar Day view; est minutes give it its height.
+  startTime?: string
   callAbout?: string
   waitingOn?: string
   waitingSince?: string

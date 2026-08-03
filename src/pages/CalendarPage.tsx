@@ -29,7 +29,7 @@ const DATE_ICON: Record<string, React.ReactNode> = {
 export default function CalendarPage() {
   const { state } = useStore()
   const now = new Date()
-  const [view, setView] = useState<'month' | 'agenda'>('month')
+  const [view, setView] = useState<'month' | 'day' | 'agenda'>('month')
   const [cursor, setCursor] = useState({ y: now.getFullYear(), m: now.getMonth() }) // month being viewed
   const [selected, setSelected] = useState<string>(today())
   const [openTask, setOpenTask] = useState<Task | null>(null)
@@ -100,6 +100,34 @@ export default function CalendarPage() {
   const todayIso = today()
   const selItems = { tasks: tasksOn(selected), dates: datesOn(selected) }
 
+  // ---- Day timeline: lay the selected day's timed tasks out as blocks by start time ----
+  const shiftDay = (delta: number) => { const d = new Date(selected + 'T12:00:00'); d.setDate(d.getDate() + delta); setSelected(ymd(d)) }
+  const PX_PER_MIN = 0.9
+  const isTime = (s?: string) => /^\d{2}:\d{2}$/.test(s ?? '')
+  const minutesOf = (hhmm: string) => { const [h, m] = hhmm.split(':').map(Number); return h * 60 + (m || 0) }
+  const dayLayout = useMemo(() => {
+    const all = tasksOn(selected)
+    const timed = all.filter(t => isTime(t.startTime)).sort((a, b) => minutesOf(a.startTime!) - minutesOf(b.startTime!))
+    const unscheduled = all.filter(t => !isTime(t.startTime))
+    let startH = 7, endH = 20
+    for (const t of timed) {
+      const s = minutesOf(t.startTime!); const e = s + Math.max(t.estMinutes ?? 30, 15)
+      startH = Math.min(startH, Math.floor(s / 60)); endH = Math.max(endH, Math.ceil(e / 60))
+    }
+    startH = Math.max(0, startH); endH = Math.min(24, Math.max(endH, startH + 1))
+    const laneEnds: number[] = []
+    const placed = timed.map(t => {
+      const s = minutesOf(t.startTime!); const dur = Math.max(t.estMinutes ?? 30, 15); const e = s + dur
+      let lane = laneEnds.findIndex(end => s >= end)
+      if (lane === -1) { lane = laneEnds.length; laneEnds.push(e) } else laneEnds[lane] = e
+      return { t, s, e, lane }
+    })
+    const hours = Array.from({ length: endH - startH + 1 }, (_, i) => startH + i)
+    return { placed, unscheduled, dates: datesOn(selected), startH, endH, hours, laneCount: Math.max(1, laneEnds.length) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, tasksByDate, datesByFull, datesByMonthDay])
+  const nowMin = now.getHours() * 60 + now.getMinutes()
+
   // ---- Agenda: next 60 days, only days that have something ----
   const agenda = useMemo(() => {
     const out: { iso: string; tasks: Task[]; dates: DateItem[] }[] = []
@@ -126,6 +154,7 @@ export default function CalendarPage() {
         <h2 className="font-display text-[18px] font-semibold tracking-tight ml-1">{MONTHS[cursor.m]} {cursor.y}</h2>
         <div className="ml-auto flex border border-border rounded-sm overflow-hidden text-[12px]">
           <button onClick={() => setView('month')} className={cn('px-2.5 py-1', view === 'month' ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-accent')}>Month</button>
+          <button onClick={() => setView('day')} className={cn('px-2.5 py-1 border-l border-border', view === 'day' ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-accent')}>Day</button>
           <button onClick={() => setView('agenda')} className={cn('px-2.5 py-1 border-l border-border', view === 'agenda' ? 'bg-primary text-primary-foreground' : 'bg-card hover:bg-accent')}>Agenda</button>
         </div>
       </div>
@@ -202,6 +231,7 @@ export default function CalendarPage() {
               {selItems.tasks.map(t => (
                 <button key={t.id} onClick={() => setOpenTask(t)} className="flex items-center gap-2 text-[13px] text-left hover:text-[hsl(17_63%_47%)]">
                   <span className="h-2 w-2 rounded-full shrink-0" style={{ background: areaColor(t.areaId) }} />
+                  {t.startTime && <span className="text-[11px] text-muted-foreground tabular shrink-0">{t.startTime}</span>}
                   <span className={cn('flex-1 truncate', isOverdue(t) && 'text-[hsl(8_60%_45%)]')}>{t.title}</span>
                   <PriorityChip p={t.priority} />
                 </button>
@@ -216,6 +246,67 @@ export default function CalendarPage() {
             </div>
           </section>
         </>
+      ) : view === 'day' ? (
+        <section className="border border-border bg-card shadow-sm rounded-lg overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-border flex items-center gap-2">
+            <button onClick={() => shiftDay(-1)} className="h-7 w-7 grid place-items-center border border-border rounded-sm hover:bg-accent"><ChevronLeft className="h-3.5 w-3.5" /></button>
+            <button onClick={() => shiftDay(1)} className="h-7 w-7 grid place-items-center border border-border rounded-sm hover:bg-accent"><ChevronRight className="h-3.5 w-3.5" /></button>
+            <h3 className="font-display text-[15px] font-semibold ml-1">{fmtDate(selected)}{selected === todayIso && <span className="text-[11px] text-muted-foreground font-normal"> · today</span>}</h3>
+            <span className="ml-auto text-[11px] text-muted-foreground">{dayLayout.placed.length} timed · {dayLayout.unscheduled.length} untimed</span>
+          </div>
+
+          {(dayLayout.dates.length > 0 || dayLayout.unscheduled.length > 0) && (
+            <div className="px-4 py-2 border-b border-border/60 flex flex-wrap gap-1.5 items-center">
+              {dayLayout.dates.map(d => (
+                <span key={d.id} className="inline-flex items-center gap-1 text-[11.5px] border border-border rounded-sm bg-background px-1.5 py-0.5">{DATE_ICON[d.type] ?? DATE_ICON.Other}{d.name}</span>
+              ))}
+              {dayLayout.unscheduled.length > 0 && <span className="text-[10.5px] uppercase tracking-wide text-muted-foreground">No time yet:</span>}
+              {dayLayout.unscheduled.map(t => (
+                <button key={t.id} onClick={() => setOpenTask(t)} title="Open to set a time" className="inline-flex items-center gap-1 text-[11.5px] border border-dashed border-border rounded-sm bg-background px-1.5 py-0.5 hover:border-input">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: areaColor(t.areaId) }} />{t.title}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="px-3 py-3 overflow-y-auto" style={{ maxHeight: '64vh' }}>
+            <div className="relative" style={{ height: (dayLayout.endH - dayLayout.startH) * 60 * PX_PER_MIN }}>
+              {dayLayout.hours.map(h => (
+                <div key={h} className="absolute left-0 right-0 border-t border-border/50" style={{ top: (h - dayLayout.startH) * 60 * PX_PER_MIN }}>
+                  <span className="absolute -top-2 left-0 text-[10px] text-muted-foreground bg-card pr-1 tabular">{pad(h)}:00</span>
+                </div>
+              ))}
+              {selected === todayIso && nowMin >= dayLayout.startH * 60 && nowMin <= dayLayout.endH * 60 && (
+                <div className="absolute left-[40px] right-0 border-t-2 border-[hsl(8_70%_50%)] z-10" style={{ top: (nowMin - dayLayout.startH * 60) * PX_PER_MIN }}>
+                  <span className="absolute -top-[5px] -left-[6px] h-2.5 w-2.5 rounded-full bg-[hsl(8_70%_50%)]" />
+                </div>
+              )}
+              {dayLayout.placed.map(({ t, s, e, lane }) => {
+                const top = (s - dayLayout.startH * 60) * PX_PER_MIN
+                const height = Math.max((e - s) * PX_PER_MIN, 18)
+                const w = 100 / dayLayout.laneCount
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setOpenTask(t)}
+                    style={{ top, height, left: `calc(${lane * w}% + 44px)`, width: `calc(${w}% - 48px)`, borderLeft: `3px solid ${areaColor(t.areaId)}` }}
+                    className={cn('absolute rounded-sm bg-accent/60 hover:bg-accent px-1.5 py-0.5 text-left overflow-hidden shadow-sm transition-colors', isOverdue(t) && 'ring-1 ring-[hsl(8_60%_50%)]')}
+                  >
+                    <div className="text-[11px] font-medium truncate leading-tight">{t.startTime} · {t.title}</div>
+                    {height > 30 && t.estMinutes ? <div className="text-[10px] text-muted-foreground truncate">{t.estMinutes} min</div> : null}
+                  </button>
+                )
+              })}
+              {dayLayout.placed.length === 0 && (
+                <div className="absolute inset-x-10 top-6 text-[12.5px] text-muted-foreground italic">No timed tasks for this day. Open any task and set its <b>“At”</b> time (plus an Est. time for length) to block it here.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="px-4 py-2 border-t border-border/60">
+            <QuickAdd due={selected} placeholder={`Add a task for ${fmtDate(selected)} — open it to set a time`} />
+          </div>
+        </section>
       ) : (
         <section className="border border-border bg-card shadow-sm rounded-lg">
           <div className="px-4 py-2.5 border-b border-border">
@@ -234,6 +325,7 @@ export default function CalendarPage() {
               {day.tasks.map(t => (
                 <button key={t.id} onClick={() => setOpenTask(t)} className="flex items-center gap-2 text-[13px] pl-1 text-left hover:text-[hsl(17_63%_47%)]">
                   <span className="h-2 w-2 rounded-full shrink-0" style={{ background: areaColor(t.areaId) }} />
+                  {t.startTime && <span className="text-[11px] text-muted-foreground tabular shrink-0">{t.startTime}</span>}
                   <span className={cn('flex-1 truncate', isOverdue(t) && 'text-[hsl(8_60%_45%)]')}>{t.title}</span>
                   <PriorityChip p={t.priority} />
                 </button>
