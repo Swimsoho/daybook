@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v91 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v92 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+77. **v92** — Est. time & Contact are now on the task **view** popup, which is also **bigger**.
+
+    Following on from v91: both new fields were only in the deeper Edit form, so they weren’t visible on the task **detail popup** (the one with the one‑tap actions and Save & Close). Now they’re right there on the view, editable inline like Priority/Status/Due — **Est (min)** sits on the Due row, and a **Contact** row carries the same smart picker (search a contact, or type a new name to add them to People and link in one go, with the duplicate‑check). Changes save instantly, same as the other inline controls. The task popup is also **noticeably larger** (wider and taller) so everything’s easier to see and reach, and the Edit form was widened to match its new three‑across Priority · Due · Est. time row.
 
 76. **v91** — Two new task fields: **Est. time (minutes)** and a **Contact person** with quick‑add.
 

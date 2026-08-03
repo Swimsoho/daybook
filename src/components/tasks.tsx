@@ -563,7 +563,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
 
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) { setForm({}); onClose() } }}>
-      <DialogContent className="sm:max-w-[520px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[620px] max-h-[88vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-lg">{editing ? 'Edit task' : 'Detailed entry'}</DialogTitle>
         </DialogHeader>
@@ -876,7 +876,7 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
 
   return (
     <Dialog open={!!task} onOpenChange={o => !o && onClose()}>
-      <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[720px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground uppercase tracking-wide">
             {TYPE_LABELS[task.type]} · {STATUS_LABELS[task.status]}
@@ -970,6 +970,22 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
               {task.due
                 ? <button onClick={() => updateTask(task.id, { due: undefined }, 'due date cleared')} className="text-[11px] text-muted-foreground hover:text-foreground">clear</button>
                 : <span className="text-[11px] text-muted-foreground italic">no date set</span>}
+              {/* Est. time (minutes) — editable right here on the view, not just the Edit form */}
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground ml-3 mr-0.5">Est <span className="normal-case">(min)</span></span>
+              <input
+                type="number" min={0} step={5} inputMode="numeric"
+                value={task.estMinutes ?? ''}
+                onChange={e => updateTask(task.id, { estMinutes: e.target.value === '' ? undefined : Math.max(0, Math.round(Number(e.target.value))) }, e.target.value ? `est → ${e.target.value} min` : 'est time cleared')}
+                placeholder="—"
+                className="h-7 w-16 px-1.5 text-[11.5px] border border-border rounded-sm bg-card text-foreground outline-none"
+              />
+            </div>
+            {/* Contact person — link a person (or type a new name to add them to People on the spot) */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-0.5">Contact</span>
+              <div className="w-[260px]">
+                <ContactPicker value={task.personId} onChange={id => updateTask(task.id, { personId: id }, id ? 'contact linked' : 'contact cleared')} />
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-0.5">Move to</span>
