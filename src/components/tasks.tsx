@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarDays, Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, Loader2, MoreHorizontal, Paperclip, Phone, Send, Trash2, User } from 'lucide-react'
+import { CalendarDays, Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, Loader2, MoreHorizontal, Paperclip, Phone, Send, Timer, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -134,6 +134,12 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
   const [localExp, setLocalExp] = useState<boolean | null>(null)
   // null = the "pick a date" dialog is closed; a date string = open, pre-filled with that value.
   const [pickDate, setPickDate] = useState<string | null>(null)
+  // null = the "pick a time" dialog is closed; a 'HH:MM' string (or '') = open.
+  const [pickTime, setPickTime] = useState<string | null>(null)
+  // null = the "set estimate" dialog is closed; a number-as-string = open.
+  const [pickEst, setPickEst] = useState<string | null>(null)
+  // the contact-assign dialog (reuses ContactPicker's search + quick-add + dedupe).
+  const [contactOpen, setContactOpen] = useState(false)
   React.useEffect(() => { setLocalExp(null) }, [expandAll])
   const expanded = localExp ?? expandAll ?? false
   const setExpanded = (fn: (v: boolean) => boolean) => setLocalExp(fn(expanded))
@@ -155,6 +161,26 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
       action: { label: 'Undo', onClick: () => reinsertTasks(removed) },
       duration: 6000,
     })
+  }
+
+  // Set a quick estimate (minutes). Clearing passes undefined.
+  function applyEst(n: number | undefined) {
+    updateTask(task.id, { estMinutes: n }, n ? `est → ${n}m` : 'estimate cleared')
+    toast(n ? `Est. ${n} min` : 'Estimate cleared')
+  }
+
+  // Set a start time so the task lands on the Calendar Day timeline. A time only shows on the
+  // calendar if the task also has a due date, so if there isn't one we set it to today — that's
+  // the "if a date, add time, so it goes on the calendar" behaviour. Clearing passes undefined.
+  function applyTime(t: string | undefined) {
+    if (!t) { updateTask(task.id, { startTime: undefined }, 'start time cleared'); toast('Start time cleared'); return }
+    if (task.due) {
+      updateTask(task.id, { startTime: t }, `start time → ${t}`)
+      toast.success(`Time set to ${t} — now on the calendar`)
+    } else {
+      updateTask(task.id, { startTime: t, due: today() }, `start time → ${t} (due today)`)
+      toast.success(`Time ${t} · due today — added to the calendar`)
+    }
   }
 
   return (
@@ -321,6 +347,55 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               )}
+
+              {/* Add a start time → puts the task on the Calendar Day timeline (needs a due date,
+                  which we set to today if missing). */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger><Clock className="h-3.5 w-3.5 mr-2" />Set time (calendar)</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="max-h-72 overflow-y-auto">
+                  {['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00'].map(t => (
+                    <DropdownMenuItem key={t} onClick={() => applyTime(t)}>
+                      {t}{task.startTime === t && <Check className="h-3.5 w-3.5 ml-auto" />}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setPickTime(task.startTime ?? '09:00')}>
+                    <Clock className="h-3.5 w-3.5 mr-2" />Pick a time…
+                  </DropdownMenuItem>
+                  {task.startTime && (
+                    <DropdownMenuItem onClick={() => applyTime(undefined)}>
+                      <span className="text-muted-foreground">Clear time</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
+              {/* Estimated time (minutes) — drives the calendar block height too. */}
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger><Timer className="h-3.5 w-3.5 mr-2" />Est. time</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {[15, 30, 45, 60, 90, 120].map(n => (
+                    <DropdownMenuItem key={n} onClick={() => applyEst(n)}>
+                      {n < 60 ? `${n} min` : n === 60 ? '1 hr' : `${n / 60} hr`}{task.estMinutes === n && <Check className="h-3.5 w-3.5 ml-auto" />}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setPickEst(String(task.estMinutes ?? 30))}>
+                    <Timer className="h-3.5 w-3.5 mr-2" />Custom…
+                  </DropdownMenuItem>
+                  {task.estMinutes != null && (
+                    <DropdownMenuItem onClick={() => applyEst(undefined)}>
+                      <span className="text-muted-foreground">Clear estimate</span>
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+
+              {/* Link a contact (person). Opens a small dialog so it can search + quick-add + dedupe. */}
+              <DropdownMenuItem onSelect={e => { e.preventDefault(); setContactOpen(true) }}>
+                <User className="h-3.5 w-3.5 mr-2" />{person ? `Contact: ${person.name}` : 'Add contact'}
+              </DropdownMenuItem>
+
               {qa.reassign && (
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>Reassign area</DropdownMenuSubTrigger>
@@ -448,6 +523,73 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
               >
                 Set date
               </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* "Pick a time" — arbitrary start time. Setting one puts the task on the Calendar Day view
+          (adding a due date of today if it has none). */}
+      {pickTime !== null && (
+        <Dialog open onOpenChange={o => { if (!o) setPickTime(null) }}>
+          <DialogContent className="sm:max-w-[340px]">
+            <DialogHeader>
+              <DialogTitle className="font-display text-base">Set start time</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 gap-2">
+              <Label className="text-xs">Start time</Label>
+              <Input type="time" value={pickTime} autoFocus onChange={e => setPickTime(e.target.value)} />
+              <p className="text-[11px] text-muted-foreground">A task with a time shows as a block on the <b>Calendar → Day</b> view. {task.due ? null : <>It has no due date, so it will be scheduled for <b>today</b>.</>}</p>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setPickTime(null)}>Cancel</Button>
+              <Button onClick={() => { applyTime(pickTime || undefined); setPickTime(null) }}>Set time</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* "Custom estimate" — arbitrary minutes. Also drives the calendar block height. */}
+      {pickEst !== null && (
+        <Dialog open onOpenChange={o => { if (!o) setPickEst(null) }}>
+          <DialogContent className="sm:max-w-[340px]">
+            <DialogHeader>
+              <DialogTitle className="font-display text-base">Estimated time</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 gap-2">
+              <Label className="text-xs">Minutes</Label>
+              <Input type="number" min={0} step={5} value={pickEst} autoFocus onChange={e => setPickEst(e.target.value)} />
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setPickEst(null)}>Cancel</Button>
+              <Button
+                onClick={() => {
+                  const n = Math.max(0, Math.round(Number(pickEst)))
+                  applyEst(pickEst.trim() === '' || Number.isNaN(n) || n === 0 ? undefined : n)
+                  setPickEst(null)
+                }}
+              >
+                Set estimate
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* "Add contact" — assign / quick-add a person, reusing ContactPicker's search + dedupe. */}
+      {contactOpen && (
+        <Dialog open onOpenChange={o => { if (!o) setContactOpen(false) }}>
+          <DialogContent className="sm:max-w-[400px]">
+            <DialogHeader>
+              <DialogTitle className="font-display text-base">Contact / assign person</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 gap-2">
+              <Label className="text-xs">Contact</Label>
+              <ContactPicker value={task.personId} onChange={id => updateTask(task.id, { personId: id }, id ? 'contact linked' : 'contact removed')} />
+              <p className="text-[11px] text-muted-foreground">Search existing contacts or type a new name to add one — it's saved under Contacts (People).</p>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setContactOpen(false)}>Done</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
