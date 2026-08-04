@@ -990,8 +990,9 @@ export function buildCallList(s: AppState): CallSuggestion[] {
     .filter(p => p.tier !== 'dormant' && personOverdueBy(p, s.settings) > 0)
     .sort((a, b) => personOverdueBy(b, s.settings) - personOverdueBy(a, s.settings))
   for (const p of over) add(p, `${daysSince(p.lastContact)} days since contact — ${tierLabel(s.settings, p.tier)} tier target is every ${personCadence(p, s.settings)}`, 'overdue')
-  // one dormant reconnect
-  const dorm = s.people.filter(p => p.tier === 'dormant').sort((a, b) => daysSince(b.lastContact) - daysSince(a.lastContact))[0]
+  // one dormant reconnect — only among dormant contacts you've actually spoken to before (a
+  // never-contacted contact has no "since you spoke" to count from).
+  const dorm = s.people.filter(p => p.tier === 'dormant' && p.lastContact).sort((a, b) => daysSince(b.lastContact) - daysSince(a.lastContact))[0]
   if (dorm) add(dorm, `Reconnect — ${daysSince(dorm.lastContact)} days since you spoke`, 'reconnect')
   return out
 }

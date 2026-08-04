@@ -122,7 +122,8 @@ export function PersonDetail({ person, onClose, onLog }: { person: Person | null
   const openTasks = state.tasks.filter(t => t.personId === person.id && t.status !== 'done' && t.status !== 'dropped')
   const cad = personCadence(person, state.settings)
   const since = daysSince(person.lastContact)
-  const overdue = since > cad
+  // Never-contacted contacts (no lastContact) aren't "overdue" — the cadence clock hasn't started.
+  const overdue = !!person.lastContact && since > cad
 
   return (
     <Dialog open={!!person} onOpenChange={o => !o && onClose()}>

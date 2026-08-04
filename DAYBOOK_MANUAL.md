@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v95 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v96 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+81. **v96** — A brand‑new contact is no longer shown as **“9999 days since contact.”**
+
+    Before you've ever logged a call or touch with someone, there's no "last contact" date to count from — so the app was treating a just‑added contact as if it had been ignored forever (`daysSince` returns a 9999 "never" sentinel), which surfaced them in **Today's Calls** as *"9999 days since contact — … tier target is every 30"* and flagged them red on their profile. Now the **cadence clock only starts once you've actually made first contact**: a contact with no logged interaction is simply **not** "overdue for a call," so they stay out of the Today's‑Calls overdue list, out of the Overall/Portfolio overdue counts, and out of the morning‑brief call push — and their profile shows **"—"** for days‑since instead of a red 9999. The moment you log your first touch (or the contact was imported with a last‑contact date), the normal cadence tracking kicks in exactly as before. (Single‑source fix in `personOverdueBy`, so every "who should I call" surface picks it up.)
 
 80. **v95** — The task **quick‑actions “…” menu** can now set **time**, **estimate** and **contact**.
 

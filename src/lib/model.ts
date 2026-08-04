@@ -482,5 +482,10 @@ export function personCadence(p: Person, s: Settings): number {
 }
 
 export function personOverdueBy(p: Person, s: Settings): number {
+  // The cadence timer only starts once you've actually made contact. A brand-new contact with no
+  // logged interaction (lastContact undefined) is NOT overdue — otherwise daysSince() returns its
+  // 9999 "never" sentinel and every freshly-added contact looks wildly overdue ("9999 days since
+  // contact"). Return 0 so they stay out of the "overdue for a call" surfaces until first contact.
+  if (!p.lastContact) return 0
   return daysSince(p.lastContact) - personCadence(p, s)
 }
