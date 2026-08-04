@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v96 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v97 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+82. **v97** — **“Log & follow up”** — did the work, but waiting on a reply? Capture it and roll the *same* task forward.
+
+    This is for the very common case where you *do* a task (email someone, leave a message, send a quote) but can't tick it off yet because you're **waiting on a response**. Open the task and there's a new **“Log & follow up”** button in the top action bar. It opens a small panel where you: write **what you just did** ("Emailed him the Rubiks quote"), pick **when to follow up** (a date, or the quick chips *In 2 days / Next week / In 2 weeks* — defaulting to your follow‑up interval), and optionally note **who/what you're waiting on**. Hit **Log & set follow‑up** and the *same task* rolls forward — it becomes a **Follow‑up** with status **Waiting on**, its due date moves to the follow‑up day, and **two entries land in its own history**: the note of what you did, and "Follow‑up set for … · waiting on …". Nothing is duplicated and nothing is lost — the whole story of the task (what you did, what you're waiting for, when to chase) stays in one place, and it comes back to you on the follow‑up date. This is different from the existing **“Called — new follow‑up task”** button (still there for calls), which *closes* the call and spins up a *separate* follow‑up task; **Log & follow up** keeps everything on the one task. (Uses the existing waiting/auto‑nudge mechanics, so a waiting follow‑up still surfaces for attention if it goes quiet.)
 
 81. **v96** — A brand‑new contact is no longer shown as **“9999 days since contact.”**
 

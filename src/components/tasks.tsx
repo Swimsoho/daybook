@@ -1007,6 +1007,12 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
   const task = taskProp ? (state.tasks.find(t => t.id === taskProp.id) ?? taskProp) : null
   const history = useMemo(() => state.audit.filter(a => a.entityId === task?.id), [state.audit, task])
   const [note, setNote] = useState('')
+  // "Log & follow up" panel — capture what you just did, then roll THIS task forward into a
+  // waiting follow-up (new due date), keeping it one task with the whole story in its timeline.
+  const [logOpen, setLogOpen] = useState(false)
+  const [logNote, setLogNote] = useState('')
+  const [logWait, setLogWait] = useState('')
+  const [logDate, setLogDate] = useState('')
   if (!task) return null
   const addNote = () => {
     const t = note.trim()
@@ -1014,6 +1020,28 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
     noteTask(task.id, t)
     setNote('')
     toast.success('Note added to history')
+  }
+  const openLog = () => {
+    setLogNote(''); setLogWait(task.waitingOn ?? '')
+    setLogDate(addDays(today(), state.settings.followUpDays))
+    setLogOpen(true)
+  }
+  const doLogFollowUp = () => {
+    const n = logNote.trim()
+    const w = logWait.trim()
+    const d = logDate || addDays(today(), state.settings.followUpDays)
+    // 1) record what you did as a timeline note (only if you typed something)
+    if (n) noteTask(task.id, `Did: ${n}${w ? ` — now waiting on ${w}` : ''}`)
+    // 2) roll the same task forward: it becomes a waiting follow-up with a fresh due date
+    updateTask(task.id, {
+      type: 'followup',
+      status: 'waiting',
+      waitingOn: w || task.waitingOn,
+      waitingSince: today(),
+      due: d,
+    }, `Follow-up set for ${fmtDate(d)}${w ? ` · waiting on ${w}` : ''}`)
+    toast.success(`Logged — follow-up ${fmtDate(d)}${w ? `, waiting on ${w}` : ''}`)
+    setLogOpen(false); setLogNote(''); setLogWait('')
   }
   const area = state.areas.find(a => a.id === task.areaId)
   const project = state.projects.find(p => p.id === task.projectId)
@@ -1045,9 +1073,14 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
               }}>
                 <Check className="h-3.5 w-3.5 mr-1" />Done
               </Button>
+              {/* Did the work but can't close it yet (waiting on a reply)? Log what you did and
+                  roll this same task forward into a waiting follow-up — one task, full history. */}
+              <Button size="sm" variant={logOpen ? 'default' : 'outline'} className="h-7 px-2.5 text-[12px]" onClick={() => logOpen ? setLogOpen(false) : openLog()}>
+                <Send className="h-3 w-3 mr-1" />Log &amp; follow up
+              </Button>
               {(task.type === 'call' || task.personId) && (
                 <Button size="sm" variant="outline" className="h-7 px-2.5 text-[12px]" onClick={() => { calledFollowUp(task.id); toast.success(`Call logged — follow-up due ${fmtDate(addDays(today(), state.settings.followUpDays))}`); onClose() }}>
-                  <Phone className="h-3 w-3 mr-1" />Called — follow-up
+                  <Phone className="h-3 w-3 mr-1" />Called — new follow-up task
                 </Button>
               )}
               <Button size="sm" variant="outline" className="h-7 px-2.5 text-[12px]" onClick={() => { snoozeTask(task.id, 1); toast(`Snoozed to tomorrow`) }}>
@@ -1220,6 +1253,58 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
             </div>
           </div>
         )}
+
+        {/* Log & follow up panel — capture the action, set the next follow-up, keep it one task. */}
+        {!done && logOpen && (
+          <div className="border border-[hsl(17_63%_47%_/_0.5)] bg-[hsl(35_70%_96%)] rounded-sm p-3 grid grid-cols-1 gap-2.5">
+            <div className="text-[11px] uppercase tracking-wide text-[hsl(28_60%_32%)] font-semibold">Log what you did · set a follow-up</div>
+            <Textarea
+              rows={2}
+              autoFocus
+              value={logNote}
+              onChange={e => setLogNote(e.target.value)}
+              onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); doLogFollowUp() } }}
+              placeholder="What did you do? e.g. “Emailed him the quote — waiting on his reply”"
+              className="text-[12.5px] min-h-0 resize-y bg-card"
+            />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Follow up on</span>
+              <input
+                type="date"
+                value={logDate}
+                onChange={e => setLogDate(e.target.value)}
+                className="h-7 px-1.5 text-[11.5px] border border-border rounded-sm bg-card text-foreground outline-none cursor-pointer"
+              />
+              <div className="flex items-center gap-1">
+                {[2, 7, 14].map(dd => (
+                  <button
+                    key={dd}
+                    type="button"
+                    onClick={() => setLogDate(addDays(today(), dd))}
+                    className="h-6 px-1.5 text-[10.5px] rounded-sm border border-border bg-card hover:bg-accent text-muted-foreground hover:text-foreground"
+                  >
+                    {dd === 2 ? 'In 2 days' : dd === 7 ? 'Next week' : 'In 2 weeks'}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground ml-1">Waiting on</span>
+              <Input
+                value={logWait}
+                onChange={e => setLogWait(e.target.value)}
+                placeholder="who / what (optional)"
+                className="h-7 w-[160px] text-[11.5px] bg-card"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" className="h-7 px-3 text-[12px]" onClick={doLogFollowUp}>
+                <Send className="h-3.5 w-3.5 mr-1" />Log &amp; set follow-up
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 px-2.5 text-[12px]" onClick={() => setLogOpen(false)}>Cancel</Button>
+              <span className="text-[11px] text-muted-foreground">This task becomes a <b>waiting follow-up</b> — the note is saved to its history below.</span>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-2 text-sm">
           <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-[13px]">
             <span><PriorityChip p={task.priority} /></span>
