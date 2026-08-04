@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v97 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v98 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,16 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+83. **v98** — The **New / Edit task** dialog is redesigned, dropdowns no longer get cut off, and you can **create a project on the fly**.
+
+    Three things, from the feedback that the pop-ups were cramped and a dropdown was being clipped.
+
+    **Dropdowns fixed.** Every searchable picker (Area, Project, Category, Vendor, Action, and the same control elsewhere) used to open *downward inside* the dialog, so near the bottom of the form the list was cut off — you couldn't see or reach the lower options. Now the panel is height-aware: it measures the room it has and **flips upward** when it's near the bottom, and caps its own height with an internal scroll, so the full list is always visible and reachable no matter where the field sits. The panels also got a visual pass — a search box, **Frequent / All** grouping, and little **colour dots** for areas/categories so you can recognise them at a glance.
+
+    **The dialog is redesigned.** The **New task** pop-up (and Edit) is wider and calmer, with a soft coloured header band, the To-do / To-call / Follow-up **type shown as a proper segmented control**, and the fields grouped into labelled sections — *Where it lives* (Area · Project), *When & how big* (Priority · Due · Time · Est.), and *Classify* (Category · Vendor · Action) — with more breathing room, larger inputs, and a footer that reads clearly. Much easier to scan and fill.
+
+    **Create a project inline.** If the project you want isn't in the list, just **type its name in the Project picker and pick “Add …”** — it's created under the chosen Area and selected in one step (you need an Area first, since projects live inside areas). New projects show up on the **Projects** page like any other, where they're fully managed and editable. And when you **archive/remove a project that still has tasks on it**, Daybook now **prompts you** — move those tasks to another project (searchable picker) or clear the project link — so nothing is ever left pointing at a project that's gone.
 
 82. **v97** — **“Log & follow up”** — did the work, but waiting on a reply? Capture it and roll the *same* task forward.
 

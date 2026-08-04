@@ -140,8 +140,12 @@ export interface Store {
   sortAreasByName: () => void
   sortCategoriesByName: () => void
   sortActionsByName: () => void
-  addProject: (p: Partial<AppState['projects'][0]> & { name: string; areaId: string }) => void
+  addProject: (p: Partial<AppState['projects'][0]> & { name: string; areaId: string }) => AppState['projects'][0]
   updateProject: (id: string, patch: Partial<AppState['projects'][0]>) => void
+  /** Move every task on `fromId` to project `toId` (adopting its area), or clear the project link
+   *  when `toId` is null. Used when a project is archived/removed so no task is left orphaned.
+   *  Returns how many tasks were changed. */
+  reassignProject: (fromId: string, toId: string | null) => number
   // Bulk import of projects (and the areas they live under) in one atomic update. Areas are
   // matched to existing ones by name (case-insensitive) and created when missing; projects are
   // merged into an existing same-name project in the same area rather than duplicated.
@@ -788,9 +792,28 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
       addProject(p) {
         const proj = { id: uid('pr'), areaId: p.areaId, name: p.name, outcome: p.outcome ?? '', status: p.status ?? 'active' as const, priority: p.priority ?? 'P2' as Priority, due: p.due, notes: p.notes, lastActivity: today() }
         withAudit(s => ({ ...s, projects: [...s.projects, proj] }), auditEvent('created', 'project', proj.id, p.name))
+        return proj
       },
       updateProject(id, patch) {
         withAudit(s => ({ ...s, projects: s.projects.map(pr => pr.id === id ? { ...pr, ...patch, lastActivity: today() } : pr) }), auditEvent('updated', 'project', id, Object.keys(patch).join(', ') + ' changed'))
+      },
+      reassignProject(fromId, toId) {
+        const affected = state.tasks.filter(t => t.projectId === fromId)
+        if (!affected.length) return 0
+        const from = state.projects.find(p => p.id === fromId)
+        const to = toId ? state.projects.find(p => p.id === toId) : null
+        withAudit(
+          s => ({
+            ...s,
+            tasks: s.tasks.map(t => t.projectId === fromId
+              ? { ...t, projectId: to ? to.id : undefined, areaId: to ? to.areaId : t.areaId }
+              : t),
+          }),
+          auditEvent('updated', 'project', fromId, to
+            ? `moved ${affected.length} task${affected.length === 1 ? '' : 's'} from ${from?.name ?? 'project'} → ${to.name}`
+            : `cleared project link from ${affected.length} task${affected.length === 1 ? '' : 's'} (was ${from?.name ?? 'project'})`),
+        )
+        return affected.length
       },
       importProjects(rows) {
         const user = userName ?? 'Craig'

@@ -677,7 +677,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
   task?: Task | null
   defaults?: Partial<Task>
 }) {
-  const { state, addTask, updateTask } = useStore()
+  const { state, addTask, updateTask, addProject } = useStore()
   const editing = !!task
   const [form, setForm] = useState<Partial<Task>>({})
   const f = { type: 'todo' as TaskType, priority: 'P2' as Priority, ...(task ?? defaults ?? {}), ...form }
@@ -706,149 +706,177 @@ export function TaskDialog({ open, onClose, task, defaults }: {
     onClose()
   }
 
+  // Inline project creation — type a new name in the Project picker and it's saved under the
+  // chosen Area (and immediately selected). A project must belong to an Area, so we require one.
+  const createProject = (name: string) => {
+    if (!f.areaId) { toast.error('Pick an Area first, then add the project'); return }
+    const proj = addProject({ name, areaId: f.areaId })
+    set({ projectId: proj.id })
+    toast.success(`Project “${proj.name}” created`)
+  }
+
+  const areaColor = (id?: string) => state.areas.find(a => a.id === id)?.color
+  const selectedArea = state.areas.find(a => a.id === f.areaId)
+
   return (
     <Dialog open={open} onOpenChange={o => { if (!o) { setForm({}); onClose() } }}>
-      <DialogContent className="sm:max-w-[620px] max-h-[88vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="font-display text-lg">{editing ? 'Edit task' : 'Detailed entry'}</DialogTitle>
-        </DialogHeader>
-        <div className="grid grid-cols-1 gap-3.5">
-          {/* type selector drives visible fields */}
-          <div className="flex gap-1.5">
+      <DialogContent className="sm:max-w-[720px] max-h-[92vh] overflow-y-auto p-0 gap-0">
+        {/* Coloured header band — sets the tone and hosts the type segmented-control */}
+        <div className="bg-gradient-to-br from-[hsl(var(--primary)/0.12)] to-[hsl(var(--primary)/0.03)] border-b border-border px-6 pt-5 pb-4">
+          <DialogHeader className="space-y-1 text-left">
+            <DialogTitle className="font-display text-2xl tracking-tight">{editing ? 'Edit task' : 'New task'}</DialogTitle>
+            <p className="text-[12.5px] text-muted-foreground">Fill in as much or as little as you like — only a title is required.</p>
+          </DialogHeader>
+          <div className="mt-3.5 inline-flex rounded-lg border border-border bg-card p-1 shadow-sm">
             {(Object.keys(TYPE_LABELS) as TaskType[]).map(tt => (
               <button
                 key={tt}
                 onClick={() => set({ type: tt })}
                 className={cn(
-                  'px-3 py-1.5 text-xs border rounded-sm transition-colors',
-                  f.type === tt ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent',
+                  'px-4 py-1.5 text-[12.5px] font-medium rounded-md transition-all',
+                  f.type === tt ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
                 )}
               >
                 {TYPE_LABELS[tt]}
               </button>
             ))}
-            <span className="text-[10.5px] text-muted-foreground self-center ml-1">fields follow the type</span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-1.5">
-            <Label className="text-xs">Title</Label>
-            <Input value={f.title ?? ''} onChange={e => set({ title: e.target.value })} placeholder={f.type === 'call' ? 'Call…' : 'Book the hall…'} />
-          </div>
-
-          <div className="grid grid-cols-1 gap-1.5">
-            <Label className="text-xs">Contact person <span className="text-muted-foreground">(optional — links to People; type a new name to add &amp; save them)</span></Label>
-            <ContactPicker value={f.personId} onChange={id => set({ personId: id })} />
-          </div>
-          {f.type === 'call' && (
-            <div className="grid grid-cols-1 gap-1.5">
-              <Label className="text-xs">What this call is about</Label>
-              <Input value={f.callAbout ?? ''} onChange={e => set({ callAbout: e.target.value })} placeholder="Final headcount and dietary list" />
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="grid grid-cols-1 gap-1.5">
-              <Label className="text-xs">Area</Label>
-              <SearchableSelect
-                value={f.areaId ?? ''}
-                onValueChange={v => set({ areaId: v || undefined, projectId: undefined })}
-                options={[{ value: '', label: 'No area' }, ...areaOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))]}
-                popularCount={areaOptionsBase.popularCount > 0 ? areaOptionsBase.popularCount + 1 : 0}
-                placeholder="Area" searchPlaceholder="Search areas…"
-                className="w-full"
-              />
-            </div>
-            <div className="grid grid-cols-1 gap-1.5">
-              <Label className="text-xs">Project <span className="text-muted-foreground">(optional)</span></Label>
-              <SearchableSelect
-                value={f.projectId ?? 'none'}
-                onValueChange={v => set({ projectId: v === 'none' ? undefined : v })}
-                options={[{ value: 'none', label: 'None — loose one-off' }, ...projectOptionsBase.ordered.map(p => ({ value: p.id, label: p.name }))]}
-                popularCount={projectOptionsBase.popularCount}
-                placeholder="None — loose one-off" searchPlaceholder="Search projects…"
-                className="w-full"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="grid grid-cols-1 gap-1.5">
-              <Label className="text-xs">Priority</Label>
-              <Select value={f.priority} onValueChange={v => set({ priority: v as Priority })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {(['P0', 'P1', 'P2', 'P3'] as Priority[]).map(p => (
-                    <SelectItem key={p} value={p}>{PRIORITY_LABELS[scheme][p]} — {PRIORITY_DESC[p]}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid grid-cols-1 gap-1.5">
-              <Label className="text-xs">{f.type === 'followup' ? `Due (+${state.settings.followUpDays}d)` : 'Due date'}</Label>
-              <Input type="date" value={f.due ?? (f.type === 'followup' ? addDays(today(), state.settings.followUpDays) : '')} onChange={e => set({ due: e.target.value || undefined })} />
-            </div>
-            <div className="grid grid-cols-1 gap-1.5">
-              <Label className="text-xs">Time <span className="text-muted-foreground">(day)</span></Label>
-              <Input type="time" value={f.startTime ?? ''} onChange={e => set({ startTime: e.target.value || undefined })} />
-            </div>
-            <div className="grid grid-cols-1 gap-1.5">
-              <Label className="text-xs">Est. <span className="text-muted-foreground">(min)</span></Label>
-              <Input
-                type="number" min={0} step={5} inputMode="numeric"
-                value={f.estMinutes ?? ''}
-                onChange={e => set({ estMinutes: e.target.value === '' ? undefined : Math.max(0, Math.round(Number(e.target.value))) })}
-                placeholder="30"
-              />
-            </div>
-          </div>
-
-          {f.type === 'todo' && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid grid-cols-1 gap-1.5">
-                <Label className="text-xs">Category</Label>
-                <SearchableSelect
-                  value={f.categoryIds?.[0] ?? 'none'}
-                  onValueChange={v => set({ categoryIds: v === 'none' ? [] : [v] })}
-                  options={[{ value: 'none', label: 'None' }, ...categoryOptionsBase.ordered.map(c => ({ value: c.id, label: `${c.level > 0 ? '› ' : ''}${c.name}` }))]}
-                  popularCount={categoryOptionsBase.popularCount > 0 ? categoryOptionsBase.popularCount + 1 : 0}
-                  placeholder="None" searchPlaceholder="Search categories…"
-                  className="w-full"
-                />
-              </div>
-              <div className="grid grid-cols-1 gap-1.5">
-                <Label className="text-xs">Vendor <span className="text-muted-foreground">(optional)</span></Label>
-                <SearchableSelect
-                  value={f.vendorId ?? 'none'}
-                  onValueChange={v => set({ vendorId: v === 'none' ? undefined : v })}
-                  options={[{ value: 'none', label: 'None' }, ...vendorOptionsBase.ordered.map(v => ({ value: v.id, label: v.name }))]}
-                  popularCount={vendorOptionsBase.popularCount > 0 ? vendorOptionsBase.popularCount + 1 : 0}
-                  placeholder="None" searchPlaceholder="Search vendors…"
-                  className="w-full"
-                />
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-1.5">
-            <Label className="text-xs">Action <span className="text-muted-foreground">(optional — what kind of action this is)</span></Label>
-            <SearchableSelect
-              value={f.actionIds?.[0] ?? 'none'}
-              onValueChange={v => set({ actionIds: v === 'none' ? [] : [v] })}
-              options={[{ value: 'none', label: 'None' }, ...actionOptionsBase.ordered.map(a => ({ value: a.id, label: a.name }))]}
-              popularCount={actionOptionsBase.popularCount > 0 ? actionOptionsBase.popularCount + 1 : 0}
-              placeholder="None" searchPlaceholder="Search actions…"
-              className="w-full"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 gap-1.5">
-            <Label className="text-xs">Notes</Label>
-            <Textarea rows={2} value={f.notes ?? ''} onChange={e => set({ notes: e.target.value })} />
           </div>
         </div>
-        <DialogFooter>
+
+        <div className="px-6 py-5 grid grid-cols-1 gap-5">
+          {/* ---- Section: What & who ---- */}
+          <section className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 gap-1.5">
+              <Label className="text-[12px] font-semibold text-foreground/80">Title</Label>
+              <Input value={f.title ?? ''} onChange={e => set({ title: e.target.value })} placeholder={f.type === 'call' ? 'Call Malka about the headcount…' : 'Book the hall…'} className="h-10 text-[14px]" />
+            </div>
+            <div className="grid grid-cols-1 gap-1.5">
+              <Label className="text-[12px] font-semibold text-foreground/80">Contact person <span className="font-normal text-muted-foreground">— optional, type a new name to add them</span></Label>
+              <ContactPicker value={f.personId} onChange={id => set({ personId: id })} />
+            </div>
+            {f.type === 'call' && (
+              <div className="grid grid-cols-1 gap-1.5">
+                <Label className="text-[12px] font-semibold text-foreground/80">What this call is about</Label>
+                <Input value={f.callAbout ?? ''} onChange={e => set({ callAbout: e.target.value })} placeholder="Final headcount and dietary list" />
+              </div>
+            )}
+          </section>
+
+          {/* ---- Section: Where it lives ---- */}
+          <section className="rounded-lg border border-border bg-muted/30 p-4 grid grid-cols-1 gap-3">
+            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Where it lives</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-1.5">
+                <Label className="text-[12px] font-semibold text-foreground/80">Area</Label>
+                <SearchableSelect
+                  value={f.areaId ?? ''}
+                  onValueChange={v => set({ areaId: v || undefined, projectId: undefined })}
+                  options={[{ value: '', label: 'No area' }, ...areaOptionsBase.ordered.map(a => ({ value: a.id, label: a.name, color: a.color }))]}
+                  popularCount={areaOptionsBase.popularCount > 0 ? areaOptionsBase.popularCount + 1 : 0}
+                  placeholder="Choose an area" searchPlaceholder="Search areas…"
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-1.5">
+                <Label className="text-[12px] font-semibold text-foreground/80">Project <span className="font-normal text-muted-foreground">— optional</span></Label>
+                <SearchableSelect
+                  value={f.projectId ?? 'none'}
+                  onValueChange={v => set({ projectId: v === 'none' ? undefined : v })}
+                  options={[{ value: 'none', label: 'None — loose one-off' }, ...projectOptionsBase.ordered.map(p => ({ value: p.id, label: p.name, color: areaColor(p.areaId) }))]}
+                  popularCount={projectOptionsBase.popularCount}
+                  placeholder="None — loose one-off" searchPlaceholder="Search or type to add…"
+                  onCreate={createProject}
+                  createLabel={q => `Add project “${q}”${selectedArea ? ` in ${selectedArea.name}` : ''}`}
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* ---- Section: When ---- */}
+          <section className="grid grid-cols-1 gap-3">
+            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">When &amp; how big</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 gap-1.5">
+                <Label className="text-[12px] font-semibold text-foreground/80">Priority</Label>
+                <Select value={f.priority} onValueChange={v => set({ priority: v as Priority })}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(['P0', 'P1', 'P2', 'P3'] as Priority[]).map(p => (
+                      <SelectItem key={p} value={p}>{PRIORITY_LABELS[scheme][p]} — {PRIORITY_DESC[p]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-1 gap-1.5">
+                <Label className="text-[12px] font-semibold text-foreground/80">{f.type === 'followup' ? `Due (+${state.settings.followUpDays}d)` : 'Due date'}</Label>
+                <Input type="date" value={f.due ?? (f.type === 'followup' ? addDays(today(), state.settings.followUpDays) : '')} onChange={e => set({ due: e.target.value || undefined })} className="h-9" />
+              </div>
+              <div className="grid grid-cols-1 gap-1.5">
+                <Label className="text-[12px] font-semibold text-foreground/80">Time <span className="font-normal text-muted-foreground">(day)</span></Label>
+                <Input type="time" value={f.startTime ?? ''} onChange={e => set({ startTime: e.target.value || undefined })} className="h-9" />
+              </div>
+              <div className="grid grid-cols-1 gap-1.5">
+                <Label className="text-[12px] font-semibold text-foreground/80">Est. <span className="font-normal text-muted-foreground">(min)</span></Label>
+                <Input
+                  type="number" min={0} step={5} inputMode="numeric"
+                  value={f.estMinutes ?? ''}
+                  onChange={e => set({ estMinutes: e.target.value === '' ? undefined : Math.max(0, Math.round(Number(e.target.value))) })}
+                  placeholder="30" className="h-9"
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* ---- Section: Classify ---- */}
+          <section className="grid grid-cols-1 gap-3">
+            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Classify</div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {f.type === 'todo' && (
+                <div className="grid grid-cols-1 gap-1.5">
+                  <Label className="text-[12px] font-semibold text-foreground/80">Category</Label>
+                  <SearchableSelect
+                    value={f.categoryIds?.[0] ?? 'none'}
+                    onValueChange={v => set({ categoryIds: v === 'none' ? [] : [v] })}
+                    options={[{ value: 'none', label: 'None' }, ...categoryOptionsBase.ordered.map(c => ({ value: c.id, label: `${c.level > 0 ? '› ' : ''}${c.name}`, color: c.color }))]}
+                    popularCount={categoryOptionsBase.popularCount > 0 ? categoryOptionsBase.popularCount + 1 : 0}
+                    placeholder="None" searchPlaceholder="Search categories…"
+                  />
+                </div>
+              )}
+              {f.type === 'todo' && (
+                <div className="grid grid-cols-1 gap-1.5">
+                  <Label className="text-[12px] font-semibold text-foreground/80">Vendor <span className="font-normal text-muted-foreground">— optional</span></Label>
+                  <SearchableSelect
+                    value={f.vendorId ?? 'none'}
+                    onValueChange={v => set({ vendorId: v === 'none' ? undefined : v })}
+                    options={[{ value: 'none', label: 'None' }, ...vendorOptionsBase.ordered.map(v => ({ value: v.id, label: v.name }))]}
+                    popularCount={vendorOptionsBase.popularCount > 0 ? vendorOptionsBase.popularCount + 1 : 0}
+                    placeholder="None" searchPlaceholder="Search vendors…"
+                  />
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-1.5">
+                <Label className="text-[12px] font-semibold text-foreground/80">Action <span className="font-normal text-muted-foreground">— optional</span></Label>
+                <SearchableSelect
+                  value={f.actionIds?.[0] ?? 'none'}
+                  onValueChange={v => set({ actionIds: v === 'none' ? [] : [v] })}
+                  options={[{ value: 'none', label: 'None' }, ...actionOptionsBase.ordered.map(a => ({ value: a.id, label: a.name, color: a.color }))]}
+                  popularCount={actionOptionsBase.popularCount > 0 ? actionOptionsBase.popularCount + 1 : 0}
+                  placeholder="None" searchPlaceholder="Search actions…"
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* ---- Section: Notes ---- */}
+          <section className="grid grid-cols-1 gap-1.5">
+            <Label className="text-[12px] font-semibold text-foreground/80">Notes</Label>
+            <Textarea rows={2} value={f.notes ?? ''} onChange={e => set({ notes: e.target.value })} placeholder="Anything worth remembering…" />
+          </section>
+        </div>
+
+        <DialogFooter className="px-6 py-4 border-t border-border bg-muted/30">
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={save}>{editing ? 'Save changes' : 'Add task'}</Button>
+          <Button onClick={save} className="px-5">{editing ? 'Save changes' : 'Add task'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1000,7 +1028,7 @@ function TaskShare({ task }: { task: Task }) {
 // ---------- Task detail sheet (with per-item history) ----------
 
 export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | null; onClose: () => void; onEdit: (t: Task) => void }) {
-  const { state, completeTask, calledFollowUp, snoozeTask, updateTask, dropTask, noteTask } = useStore()
+  const { state, completeTask, calledFollowUp, snoozeTask, updateTask, dropTask, noteTask, addProject } = useStore()
   // Always read the LIVE task from the store — the `task` passed in is a snapshot from when the
   // panel opened, so without this, changes made here (Type, Priority, Status, Move-to) wouldn't
   // visibly update the buttons/labels until the panel was closed and reopened.
@@ -1209,7 +1237,9 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                     }}
                     options={[{ value: '__none__', label: 'No project' }, ...b.ordered.map(p => ({ value: p.id, label: p.name }))]}
                     popularCount={b.popularCount > 0 ? b.popularCount + 1 : 0}
-                    placeholder="Project" searchPlaceholder="Search projects…"
+                    placeholder="Project" searchPlaceholder="Search or type to add…"
+                    onCreate={name => { const proj = addProject({ name, areaId: task.areaId! }); updateTask(task.id, { projectId: proj.id }, `moved to project ${proj.name}`); toast.success(`Project “${proj.name}” created`) }}
+                    createLabel={q => `Add project “${q}”`}
                     className="h-7 w-[150px] text-[11.5px] bg-card"
                   />
                 )

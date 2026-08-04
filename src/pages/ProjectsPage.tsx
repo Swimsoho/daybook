@@ -14,10 +14,15 @@ import { ExportMenu } from '@/components/ExportMenu'
 import { ViewExport } from '@/lib/exportView'
 import { TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 
 export default function ProjectsPage() {
-  const { state, updateProject, addProject } = useStore()
+  const { state, updateProject, addProject, reassignProject } = useStore()
   const [openProjectId, setOpenProjectId] = useState<string | null>(null)
+  // When a project is archived/removed while it still has tasks, we prompt: move them to another
+  // project, or clear the link. `reassignFor` holds the project being removed while the prompt is up.
+  const [reassignFor, setReassignFor] = useState<{ id: string; name: string; count: number } | null>(null)
+  const [reassignTarget, setReassignTarget] = useState<string>('')
   const [openTask, setOpenTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [addTaskFor, setAddTaskFor] = useState<{ areaId: string; projectId: string } | null>(null)
@@ -46,7 +51,15 @@ export default function ProjectsPage() {
               {openProject.due && <p className="text-[12px] text-muted-foreground mt-0.5 tabular">Due {fmtDate(openProject.due)}</p>}
             </div>
             <div className="flex gap-2 shrink-0">
-              <Select value={openProject.status} onValueChange={v => { updateProject(openProject.id, { status: v as never }); toast(`Project → ${v}`) }}>
+              <Select value={openProject.status} onValueChange={v => {
+                updateProject(openProject.id, { status: v as never })
+                toast(`Project → ${v}`)
+                // Archiving a project with tasks still attached? Offer to re-home them.
+                if (v === 'archived') {
+                  const linked = state.tasks.filter(t => t.projectId === openProject.id).length
+                  if (linked > 0) { setReassignTarget(''); setReassignFor({ id: openProject.id, name: openProject.name, count: linked }) }
+                }
+              }}>
                 <SelectTrigger className="h-8 w-32 bg-card text-[12.5px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {['active', 'on-hold', 'done', 'archived'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
@@ -56,6 +69,7 @@ export default function ProjectsPage() {
             </div>
           </div>
         </div>
+        {reassignFor && <ReassignProjectDialog info={reassignFor} state={state} reassignProject={reassignProject} onClose={() => setReassignFor(null)} target={reassignTarget} setTarget={setReassignTarget} />}
         <section className="border border-border bg-card shadow-sm rounded-lg">
           {tasks.length === 0 && <EmptyNote>No tasks yet — add the first next action.</EmptyNote>}
           {tasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} />)}
@@ -158,6 +172,54 @@ export default function ProjectsPage() {
       <TaskDetail task={openTask} onClose={() => setOpenTask(null)} onEdit={t => setEditTask(t)} />
       <TaskDialog open={!!editTask} onClose={() => setEditTask(null)} task={editTask} />
     </div>
+  )
+}
+
+// Shown when a project is archived while tasks are still attached. Lets you move those tasks to
+// another project or clear the link, so nothing is left pointing at a removed project.
+function ReassignProjectDialog({ info, state, reassignProject, onClose, target, setTarget }: {
+  info: { id: string; name: string; count: number }
+  state: ReturnType<typeof useStore>['state']
+  reassignProject: (fromId: string, toId: string | null) => number
+  onClose: () => void
+  target: string
+  setTarget: (v: string) => void
+}) {
+  const dests = state.projects
+    .filter(p => p.id !== info.id && (p.status === 'active' || p.status === 'on-hold'))
+    .map(p => ({ value: p.id, label: p.name, hint: state.areas.find(a => a.id === p.areaId)?.name, color: state.areas.find(a => a.id === p.areaId)?.color }))
+  return (
+    <Dialog open onOpenChange={o => !o && onClose()}>
+      <DialogContent className="sm:max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl">Re-home the tasks?</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-1 gap-3">
+          <p className="text-[13px] text-muted-foreground">
+            You archived <b className="text-foreground">{info.name}</b>, and <b className="text-foreground">{info.count} task{info.count === 1 ? '' : 's'}</b> {info.count === 1 ? 'is' : 'are'} still attached to it. Move {info.count === 1 ? 'it' : 'them'} to another project, or clear the project link.
+          </p>
+          <div className="grid grid-cols-1 gap-1.5">
+            <Label className="text-[12px] font-semibold text-foreground/80">Move to project</Label>
+            <SearchableSelect
+              value={target}
+              onValueChange={setTarget}
+              options={dests}
+              placeholder={dests.length ? 'Choose a project…' : 'No other active projects'}
+              searchPlaceholder="Search projects…"
+            />
+          </div>
+        </div>
+        <DialogFooter className="flex-col-reverse sm:flex-row gap-2">
+          <Button variant="ghost" onClick={onClose}>Leave on archived project</Button>
+          <Button variant="outline" onClick={() => { const n = reassignProject(info.id, null); toast.success(`Cleared project from ${n} task${n === 1 ? '' : 's'}`); onClose() }}>
+            Clear project link
+          </Button>
+          <Button disabled={!target} onClick={() => { const n = reassignProject(info.id, target); const to = state.projects.find(p => p.id === target); toast.success(`Moved ${n} task${n === 1 ? '' : 's'} to ${to?.name ?? 'project'}`); onClose() }}>
+            Move {info.count} here
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
