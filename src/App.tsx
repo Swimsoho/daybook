@@ -2,8 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Toaster, toast } from 'sonner'
 import {
   Archive, CalendarDays, CalendarRange, Eye, FolderKanban, History, Inbox as InboxIcon,
-  LayoutDashboard, ListChecks, Menu, Mic, Send, Settings as SettingsIcon, ShieldCheck, Sparkles, Users, X,
-} from 'lucide-react'
+  LayoutDashboard, ListChecks, Menu, Mic, Send, Settings as SettingsIcon, ShieldCheck, Sparkles, Users, X, TriangleAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AdminUser, fmtDateLong, today } from '@/lib/model'
 import { StoreProvider, useStore } from '@/lib/store'
@@ -131,6 +130,40 @@ function SidebarContent({
   )
 }
 
+/**
+ * Shown whenever the app is running WITHOUT a database connection.
+ *
+ * When VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY are absent at build time,
+ * `supabase` is null, AuthGate skips the login screen entirely and the app runs
+ * on seedState() — the built-in demo world. That is a reasonable fallback, but
+ * silently is not: the demo world contains realistic names and tasks, so a build
+ * missing its env vars looks exactly like a working app showing somebody else's
+ * data. This says so, unmissably, wherever it happens.
+ *
+ * Most common cause: a Vercel Preview deployment, where the environment
+ * variables are scoped to Production only.
+ */
+function DemoModeBanner({ fixed = false }: { fixed?: boolean }) {
+  return (
+    <div
+      className={cn(
+        'z-[100] flex items-center gap-2 px-4 py-2 text-[12px] leading-tight',
+        fixed && 'fixed inset-x-0 top-0 h-[40px]',
+      )}
+      style={{ background: 'hsl(8 60% 41%)', color: 'hsl(45 50% 96%)' }}
+    >
+      <TriangleAlert className="h-4 w-4 shrink-0" />
+      <span className="min-w-0">
+        <b>Demo mode — this is not your data.</b>
+        <span className="hidden sm:inline">
+          {' '}This build has no database connection, so nothing here is saved and
+          nothing is yours. Check the deployment&rsquo;s environment variables.
+        </span>
+      </span>
+    </div>
+  )
+}
+
 function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impersonation; onImpersonate?: (u: AdminUser, m: 'sample' | 'real') => void; cloud?: Cloud | null }) {
   const { state, capture } = useStore()
   const [page, setPage] = useState<Page>('today')
@@ -217,11 +250,20 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
   // Same app, same store, same save path — just laid out for a phone. This sits
   // below every hook above so the hook order is identical in both branches.
   if (isMobile) {
-    return <MobileShell onSwitchToDesktop={() => setLayoutOverride('desktop')} />
+    return (
+      <>
+        {!cloud && <DemoModeBanner fixed />}
+        <MobileShell
+          demoMode={!cloud}
+          onSwitchToDesktop={() => setLayoutOverride('desktop')}
+        />
+      </>
+    )
   }
 
   return (
     <div ref={scaleRef} className="min-h-screen flex flex-col">
+      {!cloud && <DemoModeBanner />}
       {/* Impersonation banner — powerful but never invisible */}
       {impersonation && (
         <div className="sticky top-0 z-30 flex flex-wrap items-center gap-2 sm:gap-3 px-4 py-2 bg-[hsl(40_65%_42%)] text-[hsl(45_50%_97%)] text-[12.5px]">

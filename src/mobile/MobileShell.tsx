@@ -51,7 +51,14 @@ const SUB_TITLES: Record<SubPage, [string, string]> = {
   settings: ['Settings', 'The control room'],
 }
 
-export function MobileShell({ onSwitchToDesktop }: { onSwitchToDesktop?: () => void }) {
+export function MobileShell({
+  onSwitchToDesktop,
+  demoMode = false,
+}: {
+  onSwitchToDesktop?: () => void
+  /** running without a database connection — a fixed warning bar sits above us */
+  demoMode?: boolean
+}) {
   const store = useStore()
   const { state } = store
 
@@ -103,7 +110,10 @@ export function MobileShell({ onSwitchToDesktop }: { onSwitchToDesktop?: () => v
   const pending = state.captures.filter(c => c.status === 'pending').length
 
   return (
-    <div className="relative mx-auto flex h-[100dvh] max-w-[520px] flex-col overflow-hidden bg-background text-[14px]">
+    <div
+      className="relative mx-auto flex h-[100dvh] max-w-[520px] flex-col overflow-hidden bg-background text-[14px]"
+      style={demoMode ? { paddingTop: 40, boxSizing: 'border-box' } : undefined}
+    >
       <header className="safe-top relative shrink-0 border-b border-border bg-card px-4 pb-3">
         <span className="absolute inset-x-0 top-0 h-[3px] bg-primary" aria-hidden />
         <div className="flex items-baseline justify-between gap-2">
