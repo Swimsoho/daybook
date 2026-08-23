@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Toaster, toast } from 'sonner'
 import { supabase } from './supabase'
 import { AdminUser, AppState, Role, Tracker, TrackerColumn } from './model'
+import { mergeStates, saveWorkspaceState } from './sync'
 import { emptyState, seedState } from './seed'
 
 // ---------- Types ----------
@@ -90,16 +91,152 @@ async function readFnError(error: unknown): Promise<string> {
 
 const saveTimers: Record<string, ReturnType<typeof setTimeout>> = {}
 
-function debouncedSave(workspaceId: string, s: AppState) {
+/**
+ * Per-workspace sync bookkeeping.
+ *  - `version`  the row version this client last agreed with the server on
+ *  - `base`     the state at that version — the reference point for merging
+ *  - `latest`   the most recent state handed to save(), i.e. what's on screen
+ *  - `legacy`   true once we've discovered the versioned save isn't available
+ *               (migration 0006 not applied), so we stop retrying it
+ */
+type SyncInfo = {
+  version: number | null
+  base: AppState | null
+  latest: AppState | null
+  legacy: boolean
+  onRemote?: (next: AppState) => void
+}
+const sync: Record<string, SyncInfo> = {}
+
+function syncInfo(workspaceId: string): SyncInfo {
+  sync[workspaceId] ??= { version: null, base: null, latest: null, legacy: false }
+  return sync[workspaceId]
+}
+
+/** Called after a successful load so the first save has something to merge against. */
+export function noteLoadedState(workspaceId: string, s: AppState, version: number | null) {
+  const info = syncInfo(workspaceId)
+  info.base = s
+  info.latest = s
+  info.version = version
+}
+
+/** Lets the store receive state that arrived from another device. */
+export function onRemoteState(workspaceId: string, fn: (next: AppState) => void): () => void {
+  const info = syncInfo(workspaceId)
+  info.onRemote = fn
+  return () => {
+    if (info.onRemote === fn) info.onRemote = undefined
+  }
+}
+
+let warnedLegacy = false
+
+/**
+ * Save with optimistic concurrency.
+ *
+ * On conflict we do NOT overwrite: we merge our own changes onto whatever the
+ * other client saved, hand the result back to the UI, and save that. Up to a
+ * few attempts, because a third client could write in between.
+ */
+async function pushState(workspaceId: string, s: AppState, attempt = 0): Promise<void> {
   if (!supabase) return
   const sb = supabase
-  clearTimeout(saveTimers[workspaceId])
-  saveTimers[workspaceId] = setTimeout(async () => {
+  const info = syncInfo(workspaceId)
+  info.latest = s
+
+  // Pre-migration fallback: the old blind upsert. Still lossy — which is the
+  // whole reason for migration 0006 — so it warns once rather than silently
+  // pretending everything is fine.
+  if (info.legacy) {
     const { error } = await sb
       .from('workspace_state')
       .upsert({ workspace_id: workspaceId, data: s as unknown as Record<string, unknown>, updated_at: new Date().toISOString() })
     if (error) toast.error('Cloud save failed — ' + error.message)
-  }, 800)
+    else info.base = s
+    return
+  }
+
+  const outcome = await saveWorkspaceState(sb as unknown as Parameters<typeof saveWorkspaceState>[0], workspaceId, s, info.version)
+
+  if (outcome.status === 'saved') {
+    info.version = outcome.version
+    info.base = s
+    return
+  }
+
+  if (outcome.status === 'unsupported') {
+    info.legacy = true
+    if (!warnedLegacy) {
+      warnedLegacy = true
+      toast.warning('Multi-device protection is off', {
+        description: 'Run migration 0006 in Supabase so two devices can’t overwrite each other.',
+        duration: 10000,
+      })
+    }
+    return pushState(workspaceId, s, attempt)
+  }
+
+  if (outcome.status === 'error') {
+    toast.error('Cloud save failed — ' + outcome.message)
+    return
+  }
+
+  // conflict — someone else saved first
+  if (attempt >= 3) {
+    toast.error('Couldn’t save — too many changes at once', {
+      description: 'Your latest edit may not have saved. Reload to see the current version.',
+    })
+    return
+  }
+
+  const merged = mergeStates(info.base, info.latest ?? s, outcome.serverData)
+  info.version = outcome.version
+  info.base = outcome.serverData
+  info.latest = merged
+  info.onRemote?.(merged) // put the other device's work on screen straight away
+  return pushState(workspaceId, merged, attempt + 1)
+}
+
+function debouncedSave(workspaceId: string, s: AppState) {
+  if (!supabase) return
+  syncInfo(workspaceId).latest = s
+  clearTimeout(saveTimers[workspaceId])
+  saveTimers[workspaceId] = setTimeout(() => { void pushState(workspaceId, s) }, 800)
+}
+
+/**
+ * Watch a workspace for changes made anywhere else — another tab, a laptop, a
+ * phone, or an Edge Function filing a capture from Telegram — and merge them in
+ * as they happen rather than discovering them at save time.
+ */
+export function subscribeWorkspace(workspaceId: string): () => void {
+  if (!supabase) return () => {}
+  const sb = supabase
+  const info = syncInfo(workspaceId)
+
+  const channel = sb
+    .channel(`workspace_state:${workspaceId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'workspace_state', filter: `workspace_id=eq.${workspaceId}` },
+      payload => {
+        const row = payload.new as { version?: number; data?: unknown } | null
+        if (!row?.data) return
+        const version = Number(row.version ?? 0)
+        if (info.version !== null && version <= info.version) return // our own write echoing back
+
+        const theirs = row.data as unknown as AppState
+        const merged = mergeStates(info.base, info.latest ?? theirs, theirs)
+        info.version = version
+        info.base = theirs
+        info.latest = merged
+        info.onRemote?.(merged)
+      },
+    )
+    .subscribe()
+
+  return () => { void sb.removeChannel(channel) }
 }
 
 // Fields added to Settings after some accounts were already saved to Supabase — a loaded
@@ -180,10 +317,26 @@ function normalizeWatchTrackers(trackers: Tracker[]): Tracker[] {
 }
 
 async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<AppState> {
-  const { data } = await supabase!.from('workspace_state').select('data').eq('workspace_id', ws.id).maybeSingle()
+  // `version` is added by migration 0006. Selecting it before that migration is
+  // applied would error, so fall back to the data-only select in that case —
+  // the app then saves the old (unguarded) way until the migration lands.
+  type StateRow = { data?: Record<string, unknown>; version?: number }
+  let data: StateRow | null = null
+  const versioned = await supabase!
+    .from('workspace_state')
+    .select('data, version')
+    .eq('workspace_id', ws.id)
+    .maybeSingle()
+  if (versioned.error) {
+    const plain = await supabase!.from('workspace_state').select('data').eq('workspace_id', ws.id).maybeSingle()
+    data = (plain.data ?? null) as StateRow | null
+  } else {
+    data = (versioned.data ?? null) as StateRow | null
+  }
+
   if (data?.data && Object.keys(data.data).length > 0) {
     const loaded = data.data as unknown as AppState
-    return {
+    const normalised: AppState = {
       ...loaded,
       settings: {
         ...SETTINGS_BACKFILL,
@@ -208,9 +361,17 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
       collections: backfillByName(loaded.collections, seedState().collections, ['notes', 'ideas', 'dates', 'health', 'learning']),
       trackers: normalizeWatchTrackers(augmentStandardTrackers(backfillByName(loaded.trackers, seedState().trackers, ['notes', 'ideas', 'dates to remember', 'exercise', 'learning']))),
     }
+    // Record what the server holds, and at which version, so the first save can
+    // tell "I changed this" apart from "they changed this" (see lib/sync.ts).
+    // The baseline is the *loaded* blob, not the normalised one — the backfills
+    // above are local repairs we haven't saved yet, and treating them as the
+    // server's own would make every one of them look like a remote change.
+    noteLoadedState(ws.id, loaded, data.version === undefined ? null : Number(data.version))
+    return normalised
   }
   const fresh = ws.kind === 'sample' ? seedState() : emptyState(ownerName || 'there')
   await supabase!.from('workspace_state').upsert({ workspace_id: ws.id, data: fresh as unknown as Record<string, unknown> })
+  noteLoadedState(ws.id, fresh, null)
   return fresh
 }
 
@@ -334,6 +495,16 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
   const [mode, setMode] = useState<'real' | 'sample'>('real')
   const [err, setErr] = useState<string | null>(null)
   const loaded = useRef(false)
+
+  // Watch the workspace that's on screen for changes made anywhere else — the
+  // other tab, the laptop, the phone, or an Edge Function filing a capture from
+  // Telegram. Without this, the only way you'd learn about someone else's work
+  // was by colliding with it.
+  const activeWorkspaceId = (workspaces.find(w => w.kind === mode) ?? workspaces[0])?.id
+  useEffect(() => {
+    if (!activeWorkspaceId) return
+    return subscribeWorkspace(activeWorkspaceId)
+  }, [activeWorkspaceId])
 
   useEffect(() => {
     if (loaded.current || !supabase) return

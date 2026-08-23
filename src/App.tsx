@@ -7,8 +7,10 @@ import {
 import { cn } from '@/lib/utils'
 import { AdminUser, fmtDateLong, today } from '@/lib/model'
 import { StoreProvider, useStore } from '@/lib/store'
+import { MobileShell } from '@/mobile/MobileShell'
+import { useIsMobile } from '@/mobile/lib/useIsMobile'
 import { emptyState, seedState } from '@/lib/seed'
-import { AuthGate, Cloud, CloudProvider, PortalHandle } from '@/lib/cloud'
+import { AuthGate, Cloud, CloudProvider, PortalHandle, onRemoteState } from '@/lib/cloud'
 import { useSpeech } from '@/hooks/useSpeech'
 import { ProjectFilterBar } from '@/components/ProjectFilter'
 import Dashboard from '@/pages/Dashboard'
@@ -136,6 +138,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
   const [projectFilter, setProjectFilter] = useState<string | null>(null)
   const [navW, setNavW] = useState(200)
   const [navOpen, setNavOpen] = useState(false)
+  const { isMobile, setOverride: setLayoutOverride } = useIsMobile()
   const scaleRef = React.useRef<HTMLDivElement>(null)
   const compactNav = navW < 168
   const viewerFirstName = (impersonation ? impersonation.user.name : cloud ? (cloud.profile.name || cloud.profile.email) : 'Craig').split(' ')[0]
@@ -210,6 +213,12 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
   }
 
   const [title, subtitle] = TITLES[page]
+
+  // Same app, same store, same save path — just laid out for a phone. This sits
+  // below every hook above so the hook order is identical in both branches.
+  if (isMobile) {
+    return <MobileShell onSwitchToDesktop={() => setLayoutOverride('desktop')} />
+  }
 
   return (
     <div ref={scaleRef} className="min-h-screen flex flex-col">
@@ -398,6 +407,7 @@ export default function App() {
             onChange={cloud ? cloud.save : undefined}
             fetchLatest={cloud ? cloud.fetchState : undefined}
             userName={cloud ? (cloud.profile.name || cloud.profile.email) : undefined}
+            subscribeRemote={cloud ? apply => onRemoteState(cloud.saveKey, apply) : undefined}
           >
             <Root cloud={cloud} />
           </StoreProvider>

@@ -378,7 +378,7 @@ export function routeCapture(text: string, state: AppState): RoutingProposal {
   }
 }
 
-export function StoreProvider({ children, initial, onChange, fetchLatest, userName }: { children: React.ReactNode; initial?: () => AppState; onChange?: (s: AppState) => void; fetchLatest?: () => Promise<AppState | null>; userName?: string }) {
+export function StoreProvider({ children, initial, onChange, fetchLatest, userName, subscribeRemote }: { children: React.ReactNode; initial?: () => AppState; onChange?: (s: AppState) => void; fetchLatest?: () => Promise<AppState | null>; userName?: string; subscribeRemote?: (apply: (next: AppState) => void) => () => void }) {
   const [state, setState] = useState<AppState>(initial ?? seedState)
   const first = React.useRef(true)
   const onChangeRef = React.useRef(onChange)
@@ -387,6 +387,15 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
     if (first.current) { first.current = false; return }
     onChangeRef.current?.(state)
   }, [state])
+
+  // ---- Remote changes ---------------------------------------------------------------------------
+  // Another device (or another tab) saved. cloud.tsx has already merged their work with ours —
+  // record-by-record, so nothing of either side is lost — and hands us the result to display.
+  // Applying it here is what makes two screens on the same account agree without a reload.
+  React.useEffect(() => {
+    if (!subscribeRemote) return
+    return subscribeRemote(next => setState(next))
+  }, [subscribeRemote])
 
   // ---- Live capture sync ------------------------------------------------------------------------
   // The app loads its state once and then owns it in memory, saving back on change. That means a

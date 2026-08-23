@@ -1,4 +1,27 @@
+# dependencies
 node_modules
+
+# build output
 dist
+dist-ssr
+*.local
+
+# secrets — never commit these
 .env
-.env.local
+.env.*
+!.env.example
+
+# editor / OS noise
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# tooling
+coverage
+*.tsbuildinfo
+.vercel
+
+# Dropbox makes these when two machines touch a file at once
+*conflicted copy*
