@@ -4,6 +4,7 @@ import {
   RoutingProposal, Settings, Task, TaskAttachment, TaskStatus, TierDef, Tracker, addDays, personCadence, personOverdueBy,
   daysSince, resolveTiers, tierLabel, today, uid,
 } from './model'
+import type { Plan } from './planImport'
 import { seedState } from './seed'
 import { nextDot } from './colors'
 
@@ -163,6 +164,8 @@ export interface Store {
   reorderMilestone: (id: string, dir: 'up' | 'down') => void
   /** Move a task into a phase (or out of one, with null). */
   setTaskMilestone: (taskId: string, milestoneId: string | null) => void
+  /** Create a whole plan — phases, tasks, owners and dependencies — under one project. */
+  importProjectPlan: (projectId: string, plan: Plan) => { phasesAdded: number; tasksAdded: number; peopleAdded: number }
   // Bulk import of projects (and the areas they live under) in one atomic update. Areas are
   // matched to existing ones by name (case-insensitive) and created when missing; projects are
   // merged into an existing same-name project in the same area rather than duplicated.
@@ -958,6 +961,93 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
           s => ({ ...s, tasks: s.tasks.map(t => t.id === taskId ? { ...t, milestoneId: milestoneId ?? undefined } : t) }),
           auditEvent('updated', 'task', taskId, `${task?.title ?? 'task'} → ${ms ? ms.name : 'no phase'}`),
         )
+      },
+      importProjectPlan(projectId, plan) {
+        const proj = state.projects.find(p => p.id === projectId)
+        let phasesAdded = 0, tasksAdded = 0, peopleAdded = 0
+
+        apply(s => {
+          const milestones = [...(s.milestones ?? [])]
+          const tasks = [...s.tasks]
+          const people = [...s.people]
+          const audit = [...s.audit]
+
+          // Phases: match an existing one by name so re-importing a plan updates it
+          // rather than growing a second "Foundation" beside the first.
+          const phaseId = new Map<string, string>()
+          for (const m of milestones.filter(x => x.projectId === projectId)) {
+            phaseId.set(m.name.trim().toLowerCase(), m.id)
+          }
+          let sort = milestones.filter(m => m.projectId === projectId).length
+          for (const name of plan.phases) {
+            const key = name.trim().toLowerCase()
+            if (phaseId.has(key)) continue
+            const id = uid('ms')
+            milestones.push({ id, projectId, name: name.trim(), sort: sort++, status: 'open' })
+            phaseId.set(key, id)
+            phasesAdded++
+          }
+
+          // Owners: matched by name, created when unknown. An imported name that
+          // matches nobody is still worth keeping — it's who owes you the work.
+          const personId = new Map<string, string>()
+          for (const p of people) personId.set(p.name.trim().toLowerCase(), p.id)
+          const findOwner = (name?: string) => {
+            if (!name) return undefined
+            const key = name.trim().toLowerCase()
+            const hit = personId.get(key)
+            if (hit) return hit
+            const id = uid('p')
+            people.push({
+              id, name: name.trim(), tier: 'network',
+              how: 'Imported with a project plan', topics: '',
+              vip: false, flaggedForCall: false,
+            })
+            personId.set(key, id)
+            peopleAdded++
+            return id
+          }
+
+          // Two passes: every task needs an id before any dependency can point at
+          // one, since a plan routinely lists a blocker below the task it blocks.
+          const byRef = new Map<string, string>()
+          const created = plan.tasks.map(t => {
+            const id = uid('t')
+            if (t.ref) byRef.set(t.ref.trim().toLowerCase(), id)
+            return { id, src: t }
+          })
+
+          for (const { id, src } of created) {
+            tasks.push({
+              id,
+              title: src.title,
+              type: 'todo',
+              areaId: proj?.areaId,
+              projectId,
+              milestoneId: src.phase ? phaseId.get(src.phase.trim().toLowerCase()) : undefined,
+              personId: findOwner(src.owner),
+              categoryIds: [],
+              priority: src.priority,
+              status: src.status,
+              due: src.due,
+              notes: src.notes,
+              source: 'manual',
+              created: today(),
+              completedAt: src.status === 'done' ? today() : undefined,
+              blockedBy: src.blockedByRefs
+                .map(r => byRef.get(r.trim().toLowerCase()))
+                .filter((x): x is string => !!x && x !== id),
+            })
+            tasksAdded++
+          }
+
+          audit.unshift(auditEvent('imported', 'project', projectId,
+            `${tasksAdded} task${tasksAdded === 1 ? '' : 's'} imported into ${proj?.name ?? 'project'}${phasesAdded ? ` across ${phasesAdded} new phase${phasesAdded === 1 ? '' : 's'}` : ''}`))
+
+          return { ...s, milestones, tasks, people, audit }
+        })
+
+        return { phasesAdded, tasksAdded, peopleAdded }
       },
       reassignProject(fromId, toId) {
         const affected = state.tasks.filter(t => t.projectId === fromId)

@@ -51,28 +51,56 @@ export function Projects({ onOpenTask }: { onOpenTask?: (id: string) => void }) 
               />
             ))}
 
-            {loose.length ? (
-              <div className="mt-2 rounded-[10px] border border-dashed border-border p-3">
-                <div className="mb-1 text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">
-                  Loose tasks · no project
-                </div>
-                {loose.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => onOpenTask?.(t.id)}
-                    className="block w-full py-[3px] text-left text-[12.5px] active:opacity-60"
-                  >
-                    {t.title}
-                  </button>
-                ))}
-              </div>
-            ) : null}
+            {loose.length ? <UnfiledTasks tasks={loose} onOpenTask={onOpenTask} /> : null}
           </div>
         );
       })}
 
       {state.projects.length === 0 ? <EmptyState>No projects yet.</EmptyState> : null}
+    </div>
+  );
+}
+
+/**
+ * Area tasks with no project, collapsed.
+ *
+ * Listed in full they turned this screen into a second task list — the same
+ * to-dos already on the Tasks tab, without the project structure that's the
+ * reason to be here. Collapsed, the page stays about projects and the loose ends
+ * are still one tap away.
+ */
+function UnfiledTasks({
+  tasks,
+  onOpenTask,
+}: {
+  tasks: { id: string; title: string }[];
+  onOpenTask?: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mt-2 rounded-[10px] border border-dashed border-border p-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 text-left"
+      >
+        <span className="text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">
+          {tasks.length} task{tasks.length === 1 ? '' : 's'} with no project
+        </span>
+        <span className="ml-auto text-[10.5px] text-muted-foreground">{open ? 'Hide' : 'Show'}</span>
+      </button>
+      {open
+        ? tasks.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onOpenTask?.(t.id)}
+              className="block w-full py-[3px] text-left text-[12.5px] active:opacity-60"
+            >
+              {t.title}
+            </button>
+          ))
+        : null}
     </div>
   );
 }

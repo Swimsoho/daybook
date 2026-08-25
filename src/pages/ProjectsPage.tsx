@@ -164,11 +164,7 @@ export default function ProjectsPage() {
               })}
               {projs.length === 0 && <div className="bg-card px-4 py-3 text-[12.5px] text-muted-foreground italic">No projects — loose tasks live directly under the area.</div>}
             </div>
-            {looseAreaTasks.length > 0 && (
-              <div className="border-t border-border">
-                {looseAreaTasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} />)}
-              </div>
-            )}
+            {looseAreaTasks.length > 0 && <UnfiledTasks tasks={looseAreaTasks} onOpen={setOpenTask} />}
           </section>
         )
       })}
@@ -176,6 +172,37 @@ export default function ProjectsPage() {
       <ImportProjectsDialog open={importing} onClose={() => setImporting(false)} />
       <TaskDetail task={openTask} onClose={() => setOpenTask(null)} onEdit={t => setEditTask(t)} />
       <TaskDialog open={!!editTask} onClose={() => setEditTask(null)} task={editTask} />
+    </div>
+  )
+}
+
+/**
+ * Tasks filed to an area but to no project.
+ *
+ * These used to render in full under every area, which made the Projects page a
+ * second copy of the task list — the same to-dos you'd just scrolled past in
+ * Tasks, with none of the project structure that's the point of this page.
+ *
+ * They can't simply be hidden either: a task with no project is the one most
+ * likely to be forgotten, and this is the only screen where its absence from a
+ * project is visible. So it's a collapsed count, framed as work to file rather
+ * than work to read — the page stays about projects, and the loose ends stay
+ * reachable in one click.
+ */
+function UnfiledTasks({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="border-t border-border">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full px-4 py-2 flex items-center gap-2 text-left hover:bg-accent/40 transition-colors"
+      >
+        <span className="text-[11.5px] text-muted-foreground">
+          {tasks.length} task{tasks.length === 1 ? '' : 's'} in this area with no project
+        </span>
+        <span className="text-[11px] text-muted-foreground ml-auto">{open ? 'Hide' : 'Show'}</span>
+      </button>
+      {open && tasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={onOpen} />)}
     </div>
   )
 }

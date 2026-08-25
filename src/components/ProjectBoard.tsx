@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp, GripVertical, Lock, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Lock, Pencil, Plus, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,7 @@ import { useStore } from '@/lib/store'
 import {
   NO_PHASE, openBlockers, phaseRefs, progress, projectStats, projectTasks, groupByPhase,
 } from '@/lib/milestones'
+import { ImportPlanDialog } from '@/components/ImportPlanDialog'
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -51,6 +52,7 @@ export function ProjectBoard({ project, onOpenTask, onAddTask }: {
   const [hideDone, setHideDone] = useState(false)
   const [editPhase, setEditPhase] = useState<string | 'new' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
 
   const all = useMemo(() => projectTasks(state, project.id), [state, project.id])
   const refs = useMemo(() => phaseRefs(state, project.id), [state, project.id])
@@ -121,10 +123,28 @@ export function ProjectBoard({ project, onOpenTask, onAddTask }: {
         <span className="ml-auto text-[12px] text-muted-foreground tabular">
           {filtered.length} of {all.length} shown
         </span>
+        <Button size="sm" variant="outline" className="h-8" onClick={() => setImporting(true)}>
+          <Upload className="h-3.5 w-3.5 mr-1.5" />Import plan
+        </Button>
         <Button size="sm" variant="outline" className="h-8" onClick={() => setEditPhase('new')}>
           <Plus className="h-3.5 w-3.5 mr-1.5" />Phase
         </Button>
       </div>
+
+      {/* A project with no phases and no tasks is where someone arrives holding a
+          plan they built elsewhere. Say so, instead of showing an empty board. */}
+      {all.length === 0 && phases.length === 0 && (
+        <div className="rounded-lg border border-dashed border-border p-6 text-center">
+          <p className="text-[13.5px] font-medium">Nothing in this project yet.</p>
+          <p className="text-[12.5px] text-muted-foreground mt-1 max-w-md mx-auto">
+            Already have this plan in a tracker or a spreadsheet? Paste the table in and it becomes phases and tasks — owners, dates and dependencies included.
+          </p>
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <Button size="sm" onClick={() => setImporting(true)}><Upload className="h-3.5 w-3.5 mr-1.5" />Import a plan</Button>
+            <Button size="sm" variant="outline" onClick={() => setEditPhase('new')}>Add a phase</Button>
+          </div>
+        </div>
+      )}
 
       {/* ---- Phase by phase ---- */}
       {groups.map(({ milestone, tasks }, gi) => {
@@ -205,6 +225,7 @@ export function ProjectBoard({ project, onOpenTask, onAddTask }: {
         onClose={() => setEditPhase(null)}
       />
       <DeletePhaseDialog id={confirmDelete} onClose={() => setConfirmDelete(null)} />
+      <ImportPlanDialog project={project} open={importing} onClose={() => setImporting(false)} />
     </div>
   )
 }

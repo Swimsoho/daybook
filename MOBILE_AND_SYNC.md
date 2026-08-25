@@ -147,6 +147,41 @@ want and the reason not to add a fourth person-shaped field alongside `personId`
 `src/lib/milestones.ts` holds the arithmetic so both layouts count identically;
 `src/lib/milestones.test.ts` covers it.
 
+### Importing a plan
+
+Phases give a project a shape; typing forty rows to get one is a chore. **Import
+plan** on the project board takes a pasted table (copy it straight out of a
+tracker — you get tabs) or a CSV/Excel file, and turns it into phases and tasks.
+
+Columns are auto-detected and then *shown, editable, before anything is created*.
+Recognised: ID, Task, Description, Status, Owner, Priority, Target date, Phase,
+Waiting on. An unrecognised column stays unmapped rather than being guessed at.
+
+Three rules the parser follows, each because the alternative is worse:
+
+- **Negations are checked first.** "Not started" contains "started" and "not done"
+  contains "done" — matching those positively imported an untouched plan as
+  already underway. This was a real bug, caught by its test.
+- **An unreadable status becomes open, never done.** A stray task in your queue is
+  visible and fixable; one silently marked done is neither.
+- **An ambiguous date is dropped, not guessed.** `13/04/2026` is provably
+  day-first; `04/03/2026` is not, so it's left blank.
+
+Owners are matched to People by name and created when unknown. `Waiting on` cells
+are resolved against the ID column *after* every task exists, so a plan that
+lists a blocker below the task it blocks still wires up. Re-importing reuses a
+phase of the same name rather than growing a second one.
+
+`src/lib/planImport.ts` + `planImport.test.ts`.
+
+### Unfiled tasks on the Projects page
+
+Tasks filed to an area but no project used to render in full under every area,
+which made this page a second copy of the task list. They're now a collapsed
+count — the page stays about projects, and the loose ends stay one click away
+rather than being hidden entirely, since a task with no project is the one most
+likely to be forgotten.
+
 ---
 
 ## Deploy order
