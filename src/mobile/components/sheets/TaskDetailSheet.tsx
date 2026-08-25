@@ -12,6 +12,7 @@ import {
   type TaskStatus,
   type TaskType,
 } from '@/lib/model'
+import { openBlockers, projectMilestones } from '@/lib/milestones'
 import { PRIORITY_SOLID } from '@/mobile/lib/colors'
 import { areaOf, dueLabel, isDone } from '@/mobile/lib/select'
 import { BottomSheet, SheetTitle } from '@/mobile/components/BottomSheet'
@@ -43,6 +44,7 @@ type Draft = {
   priority: Priority
   areaId: string
   projectId: string
+  milestoneId: string
   categoryId: string
   actionId: string
   personId: string
@@ -79,6 +81,7 @@ export function TaskDetailSheet({
       priority: task.priority,
       areaId: task.areaId ?? '',
       projectId: task.projectId ?? '',
+      milestoneId: task.milestoneId ?? '',
       categoryId: task.categoryIds?.[0] ?? '',
       actionId: task.actionIds?.[0] ?? '',
       personId: task.personId ?? '',
@@ -103,6 +106,7 @@ export function TaskDetailSheet({
     c => c.active && (!c.areaIds?.length || !draft.areaId || c.areaIds.includes(draft.areaId)),
   )
   const actions = state.actions.filter(a => a.active)
+  const phases = draft.projectId ? projectMilestones(state, draft.projectId) : []
 
   const save = () => {
     onSave(task.id, {
@@ -112,6 +116,7 @@ export function TaskDetailSheet({
       priority: draft.priority,
       areaId: draft.areaId || undefined,
       projectId: draft.projectId || undefined,
+      milestoneId: draft.milestoneId || undefined,
       categoryIds: draft.categoryId ? [draft.categoryId] : [],
       actionIds: draft.actionId ? [draft.actionId] : undefined,
       personId: draft.personId || undefined,
@@ -215,9 +220,27 @@ export function TaskDetailSheet({
 
           {projects.length ? (
             <Field label="Project">
-              <select value={draft.projectId} onChange={e => set('projectId', e.target.value)} className={inputClass}>
+              <select
+                value={draft.projectId}
+                onChange={e => {
+                  set('projectId', e.target.value)
+                  set('milestoneId', '') // phases belong to one project
+                }}
+                className={inputClass}
+              >
                 <option value="">—</option>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </Field>
+          ) : null}
+
+          {/* Only projects that actually have phases offer the picker — most don't,
+              and an empty dropdown is just a dead row on a small screen. */}
+          {phases.length ? (
+            <Field label="Phase">
+              <select value={draft.milestoneId} onChange={e => set('milestoneId', e.target.value)} className={inputClass}>
+                <option value="">No phase</option>
+                {phases.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
             </Field>
           ) : null}
@@ -319,6 +342,10 @@ export function TaskDetailSheet({
 function TaskFacts({ task }: { task: Task }) {
   const { state } = useStore()
   const project = state.projects.find(p => p.id === task.projectId)
+  const phase = state.milestones.find(m => m.id === task.milestoneId)
+  // Only blockers that are still open. A finished blocker isn't holding anything up,
+  // so listing it would report a constraint that no longer exists.
+  const blockers = openBlockers(state, task)
   const person = state.people.find(p => p.id === task.personId)
   const category = state.categories.find(c => c.id === task.categoryIds?.[0])
   const action = state.actions.find(a => a.id === task.actionIds?.[0])
@@ -327,6 +354,8 @@ function TaskFacts({ task }: { task: Task }) {
     ['Status', STATUS_LABELS[task.status]],
     ['Type', TYPE_LABELS[task.type]],
     ...(project ? ([['Project', project.name]] as [string, string][]) : []),
+    ...(phase ? ([['Phase', phase.name]] as [string, string][]) : []),
+    ...(blockers.length ? ([['Blocked by', blockers.map(b => b.title).join(', ')]] as [string, string][]) : []),
     ...(category ? ([['Category', category.name]] as [string, string][]) : []),
     ...(action ? ([['Action', action.name]] as [string, string][]) : []),
     ...(person ? ([['Person', person.name]] as [string, string][]) : []),

@@ -21,6 +21,7 @@ import {
 import {
   actionUsage, areaUsage, categoriesForArea, categoryUsage, projectUsage, rollup, subtasksOf, useStore, vendorUsage, withPopularFirst,
 } from '@/lib/store'
+import { eligibleBlockers, projectMilestones } from '@/lib/milestones'
 import { useCloud } from '@/lib/cloud'
 import { attachmentsAvailable, deleteAttachmentFile, fmtBytes, getAttachmentUrl, uploadAttachment } from '@/lib/attachments'
 import { AreaDot, DueChip, PriorityChip } from './bits'
@@ -671,6 +672,50 @@ function ContactPicker({ value, onChange }: { value?: string; onChange: (id: str
   )
 }
 
+/**
+ * Picks the other tasks this one is waiting on.
+ *
+ * A plain multi-select would hide the current answer behind a click; dependencies
+ * are the thing you most want to see without opening anything, so chosen blockers
+ * render as removable chips and the dropdown only ever adds.
+ */
+function BlockerPicker({ value, options, onChange }: {
+  value: string[]
+  options: Task[]
+  onChange: (ids: string[]) => void
+}) {
+  const chosen = value.map(id => options.find(o => o.id === id)).filter((t): t is Task => !!t)
+  const rest = options.filter(o => !value.includes(o.id))
+  return (
+    <div className="grid grid-cols-1 gap-1.5">
+      {chosen.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {chosen.map(t => (
+            <span key={t.id} className="inline-flex items-center gap-1 rounded-sm border border-border bg-muted px-1.5 py-0.5 text-[11.5px]">
+              <span className="max-w-[150px] truncate">{t.title}</span>
+              <button
+                type="button" aria-label={`Stop waiting on ${t.title}`}
+                onClick={() => onChange(value.filter(id => id !== t.id))}
+                className="text-muted-foreground hover:text-foreground"
+              >×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <Select value="" onValueChange={v => v && onChange([...value, v])}>
+        <SelectTrigger className="h-9">
+          <span className="text-muted-foreground text-[13px]">
+            {rest.length ? 'Add a blocking task…' : 'Nothing else to wait on'}
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          {rest.map(t => <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>)}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
 export function TaskDialog({ open, onClose, task, defaults }: {
   open: boolean
   onClose: () => void
@@ -692,6 +737,14 @@ export function TaskDialog({ open, onClose, task, defaults }: {
   const categoryOptionsBase = withPopularFirst(mainCats, c => categoryUsage(state, c.id), c => c.name)
   const vendorOptionsBase = withPopularFirst(state.vendors, v => vendorUsage(state, v.id), v => v.name)
   const actionOptionsBase = withPopularFirst(activeActions, a => actionUsage(state, a.id), a => a.name)
+
+  const phaseOptions = f.projectId ? projectMilestones(state, f.projectId) : []
+  // `eligibleBlockers` walks the dependency graph and removes anything downstream of
+  // this task, so the picker cannot be used to build a cycle. A new task has no id
+  // yet, which is fine — nothing can depend on it, so every sibling is eligible.
+  const blockerOptions = f.projectId
+    ? eligibleBlockers(state, { ...(f as Task), id: task?.id ?? '__new__' })
+    : []
 
   function save() {
     if (!f.title?.trim()) { toast.error('A title is all that’s required'); return }
@@ -789,6 +842,34 @@ export function TaskDialog({ open, onClose, task, defaults }: {
                 />
               </div>
             </div>
+            {/* Phase and dependencies only exist inside a project, so they only appear
+                once one is chosen — showing them on a loose task would offer a choice
+                with nothing behind it. */}
+            {f.projectId && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-1.5">
+                  <Label className="text-[12px] font-semibold text-foreground/80">Phase <span className="font-normal text-muted-foreground">— optional</span></Label>
+                  <Select value={f.milestoneId ?? 'none'} onValueChange={v => set({ milestoneId: v === 'none' ? undefined : v })}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No phase</SelectItem>
+                      {phaseOptions.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {phaseOptions.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground">This project has no phases yet — add them on the project board.</p>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 gap-1.5">
+                  <Label className="text-[12px] font-semibold text-foreground/80">Waiting on <span className="font-normal text-muted-foreground">— another task</span></Label>
+                  <BlockerPicker
+                    value={f.blockedBy ?? []}
+                    options={blockerOptions}
+                    onChange={ids => set({ blockedBy: ids.length ? ids : undefined })}
+                  />
+                </div>
+              </div>
+            )}
           </section>
 
           {/* ---- Section: When ---- */}

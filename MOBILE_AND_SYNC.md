@@ -93,10 +93,68 @@ you're simply back to the old risk until the migration runs.
 
 ---
 
+## 3. Projects have phases
+
+Areas hold projects and projects hold tasks. That's enough for "book the hall,
+send the invitations" and not enough for a build with a sequence — a long project
+reads as forty rows in one column, with no way to see that the first block is
+finished and the third hasn't started.
+
+`Milestone` adds the level between. It is deliberately thin: a name, an optional
+subtitle ("Phase 1 · Weeks 1–3"), an order and an optional date.
+
+**A phase never contains its tasks — tasks point at it.** That asymmetry is the
+whole design:
+
+| You do this | What happens to the work |
+|---|---|
+| Rename or reorder a phase | nothing — tasks aren't touched |
+| Delete a phase | its tasks stay on the project, under **No phase** |
+| Move a project's tasks elsewhere | the phase link clears; tasks keep everything else |
+| A task points at a missing phase | it renders under **No phase**, never disappears |
+
+Phases are opt-in. A project without them behaves exactly as it did before, and
+no existing project gets any — inventing phases would rearrange a plan nobody
+asked us to touch. The sample workspace has three on the Shul dinner so the
+feature is discoverable.
+
+### Dependencies
+
+`Task.blockedBy` names other tasks that have to finish first. This is distinct
+from `waitingOn`, which is free text for waiting on a *person*.
+
+Nothing is enforced — a plan that refuses to let you work out of order is a plan
+people work around. A task with an open blocker is flagged, and stops being
+flagged the moment the blocker is done. The picker walks the dependency graph and
+hides anything downstream, so a cycle can't be built through the UI; deleting a
+task strips its id from everything that was waiting on it, so no dependency is
+left pointing at nothing.
+
+### The project board
+
+Opening a project now gives you a stat strip (tasks / done / in progress /
+unassigned / blocked / top-priority open), filters for phase, owner, status and
+priority, and each phase as its own section with its own `n of m done`.
+
+Progress bars always count the **unfiltered** phase — a bar that moved because
+you ticked "hide done" would be telling you something untrue.
+
+"Owner" is the task's existing contact person, not a new field. A task assigned
+to someone therefore shows up on their contact card, which is the behaviour you
+want and the reason not to add a fourth person-shaped field alongside `personId`,
+`waitingOn` and `shared.sharedWith`.
+
+`src/lib/milestones.ts` holds the arithmetic so both layouts count identically;
+`src/lib/milestones.test.ts` covers it.
+
+---
+
 ## Deploy order
 
 1. **Apply the migration first.** Supabase dashboard → SQL Editor → paste
    `supabase/migrations/0006_workspace_state_sync.sql` → Run. Safe to re-run.
+   *Phases need no migration* — the workspace is one JSON blob, and accounts
+   saved before phases existed are backfilled with an empty list on load.
 2. **Then deploy the app.** Order isn't critical (step 1 doesn't break the old
    client, and the new client tolerates step 1 being missing), but doing it this
    way means you're never running unprotected.

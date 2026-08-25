@@ -373,6 +373,12 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
       // call across the app would throw on undefined. Backfill the standard starter set once;
       // it behaves exactly like a freshly seeded account from here on.
       actions: loaded.actions ?? seedState().actions,
+      // Project phases shipped after every existing account was already saved, so
+      // their blob has no `milestones` key at all and every `state.milestones.filter(…)`
+      // would throw on undefined. Empty, never seeded: an existing project has no
+      // phases until its owner adds one, and inventing some would rearrange a plan
+      // nobody asked us to touch.
+      milestones: loaded.milestones ?? [],
       // Notes (v33) and Ideas trackers shipped after some accounts were already saved — a blob
       // saved before either existed has no matching collection/tracker at all, so the
       // "n:"/"note:"/"i:"/"idea:" capture prefixes would silently do nothing (no tracker to

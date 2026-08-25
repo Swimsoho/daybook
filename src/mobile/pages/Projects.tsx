@@ -3,12 +3,13 @@ import { toast } from 'sonner';
 import { EmptyState, PriorityChip, SectionTitle } from '@/mobile/components/bits';
 import { activeAreas, isClosed, isDone, isStalled, staleDays } from '@/mobile/lib/select';
 import { useStore } from '@/lib/store';
+import { groupByPhase, openBlockers, progress, projectTasks } from '@/lib/milestones';
 import type { Project } from '@/lib/model';
 
 type Status = Project['status'];
 
 /** Projects — grouped by area, with stall detection and the WIP guardrail */
-export function Projects() {
+export function Projects({ onOpenTask }: { onOpenTask?: (id: string) => void }) {
   const { state, updateProject } = useStore();
   const areas = activeAreas(state);
 
@@ -42,6 +43,7 @@ export function Projects() {
               <ProjectCard
                 key={project.id}
                 project={project}
+                onOpenTask={onOpenTask}
                 onStatusChange={(status) => {
                   updateProject(project.id, { status });
                   toast.success(`Moved to ${status}`);
@@ -55,9 +57,14 @@ export function Projects() {
                   Loose tasks · no project
                 </div>
                 {loose.map((t) => (
-                  <div key={t.id} className="py-[3px] text-[12.5px]">
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => onOpenTask?.(t.id)}
+                    className="block w-full py-[3px] text-left text-[12.5px] active:opacity-60"
+                  >
                     {t.title}
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : null}
@@ -73,14 +80,19 @@ export function Projects() {
 function ProjectCard({
   project,
   onStatusChange,
+  onOpenTask,
 }: {
   project: Project;
   onStatusChange: (status: Status) => void;
+  onOpenTask?: (id: string) => void;
 }) {
   const { state } = useStore();
   const [open, setOpen] = useState(false);
 
-  const mine = state.tasks.filter((t) => t.projectId === project.id);
+  // Top-level tasks only — subtasks belong under their parent, not on the board,
+  // which is the same rule the desktop project view uses.
+  const mine = projectTasks(state, project.id);
+  const groups = groupByPhase(state, project.id, mine);
   const done = mine.filter(isDone).length;
   const pct = mine.length ? Math.round((done / mine.length) * 100) : 0;
   const stalled = isStalled(project, state.settings.stallDays);
@@ -132,13 +144,54 @@ function ProjectCard({
       {open ? (
         <div className="mt-3 border-t border-border pt-3">
           {mine.length ? (
-            mine.map((t) => (
-              <div key={t.id} className="py-[3px] text-[12.5px]">
-                <span style={isDone(t) ? { textDecoration: 'line-through', opacity: 0.5 } : undefined}>
-                  {t.title}
-                </span>
-              </div>
-            ))
+            groups.map(({ milestone, tasks }) => {
+              const p = progress(tasks);
+              return (
+                <div key={milestone?.id ?? 'none'} className="mb-3 last:mb-0">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+                      {milestone ? milestone.name : 'No phase'}
+                    </span>
+                    <span className="tabular text-[10.5px] text-muted-foreground">
+                      {p.done} of {p.total}
+                    </span>
+                    <div
+                      className="ml-auto h-[4px] w-[52px] shrink-0 overflow-hidden rounded-full"
+                      style={{ background: 'hsl(var(--muted))' }}
+                    >
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${p.pct}%` }} />
+                    </div>
+                  </div>
+                  {milestone?.detail ? (
+                    <p className="m-0 mt-[1px] text-[10.5px] leading-[1.4] text-muted-foreground">
+                      {milestone.detail}
+                    </p>
+                  ) : null}
+                  {tasks.length ? (
+                    tasks.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => onOpenTask?.(t.id)}
+                        className="block w-full py-[4px] text-left text-[12.5px] active:opacity-60"
+                      >
+                        <span style={isDone(t) ? { textDecoration: 'line-through', opacity: 0.5 } : undefined}>
+                          {t.title}
+                        </span>
+                        {/* Only open blockers — a finished one isn't holding this up. */}
+                        {openBlockers(state, t).length ? (
+                          <span className="ml-[6px] text-[10.5px] font-semibold text-[hsl(8_55%_45%)]">
+                            waiting on {openBlockers(state, t).length}
+                          </span>
+                        ) : null}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="m-0 py-[3px] text-[11.5px] italic opacity-50">Nothing here yet.</p>
+                  )}
+                </div>
+              );
+            })
           ) : (
             <p className="m-0 text-[12px] italic opacity-55">No tasks filed to this project.</p>
           )}

@@ -13,6 +13,7 @@ import { EmptyNote, PriorityChip } from '@/components/bits'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ViewExport } from '@/lib/exportView'
 import { TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
+import { ProjectBoard } from '@/components/ProjectBoard'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 
@@ -25,7 +26,7 @@ export default function ProjectsPage() {
   const [reassignTarget, setReassignTarget] = useState<string>('')
   const [openTask, setOpenTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
-  const [addTaskFor, setAddTaskFor] = useState<{ areaId: string; projectId: string } | null>(null)
+  const [addTaskFor, setAddTaskFor] = useState<{ areaId: string; projectId: string; milestoneId?: string } | null>(null)
   const [addingProject, setAddingProject] = useState(false)
   const [importing, setImporting] = useState(false)
   const open = openTasks(state)
@@ -34,7 +35,6 @@ export default function ProjectsPage() {
   const openProject = state.projects.find(p => p.id === openProjectId)
 
   if (openProject) {
-    const tasks = state.tasks.filter(t => t.projectId === openProject.id && !t.parentId)
     const area = state.areas.find(a => a.id === openProject.areaId)
     return (
       <div className="grid grid-cols-1 gap-4">
@@ -70,10 +70,11 @@ export default function ProjectsPage() {
           </div>
         </div>
         {reassignFor && <ReassignProjectDialog info={reassignFor} state={state} reassignProject={reassignProject} onClose={() => setReassignFor(null)} target={reassignTarget} setTarget={setReassignTarget} />}
-        <section className="border border-border bg-card shadow-sm rounded-lg">
-          {tasks.length === 0 && <EmptyNote>No tasks yet — add the first next action.</EmptyNote>}
-          {tasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} />)}
-        </section>
+        <ProjectBoard
+          project={openProject}
+          onOpenTask={setOpenTask}
+          onAddTask={milestoneId => setAddTaskFor({ areaId: openProject.areaId, projectId: openProject.id, milestoneId })}
+        />
         <TaskDetail task={openTask} onClose={() => setOpenTask(null)} onEdit={t => setEditTask(t)} />
         <TaskDialog open={!!editTask || !!addTaskFor} onClose={() => { setEditTask(null); setAddTaskFor(null) }} task={editTask} defaults={addTaskFor ?? undefined} />
       </div>
@@ -134,6 +135,9 @@ export default function ProjectsPage() {
                 const done = state.tasks.filter(t => t.projectId === p.id && t.status === 'done').length
                 const total = state.tasks.filter(t => t.projectId === p.id).length
                 const isStalled = stalled.includes(p)
+                // Phases are opt-in, so the count only appears on projects that have
+                // them — an unphased project shouldn't grow a "0 phases" label.
+                const phases = state.milestones.filter(m => m.projectId === p.id)
                 return (
                   <button key={p.id} onClick={() => setOpenProjectId(p.id)} className="bg-card text-left px-4 py-3 hover:bg-accent/50 transition-colors">
                     <div className="flex items-center gap-2">
@@ -151,6 +155,7 @@ export default function ProjectsPage() {
                       {p.status === 'on-hold' && <span className="text-muted-foreground">on hold</span>}
                       {p.status === 'done' && <span className="text-[hsl(152_25%_35%)]">done</span>}
                       {isStalled && <span className="text-[hsl(8_60%_41%)] font-semibold">stalled {daysSince(p.lastActivity)}d</span>}
+                      {phases.length > 0 && <span className="text-muted-foreground normal-case tracking-normal tabular">{phases.length} phase{phases.length === 1 ? '' : 's'}</span>}
                       {p.due && p.status === 'active' && <span className="text-muted-foreground normal-case tracking-normal tabular">due {fmtDate(p.due)}</span>}
                       <span className="ml-auto text-muted-foreground tabular normal-case">{pt.length} open</span>
                     </div>

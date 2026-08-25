@@ -166,7 +166,7 @@ export function MobileShell({
         {tab === 'more' && !sub ? <More onOpen={setSub} /> : null}
 
         {sub === 'overall' ? <Overall onOpenProjects={() => setSub('projects')} /> : null}
-        {sub === 'projects' ? <Projects /> : null}
+        {sub === 'projects' ? <Projects onOpenTask={setTaskDetailId} /> : null}
         {sub === 'collections' ? <Collections /> : null}
         {sub === 'reports' ? <Reports /> : null}
         {sub === 'history' ? <History /> : null}

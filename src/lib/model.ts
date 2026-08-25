@@ -35,6 +35,31 @@ export interface Project {
   lastActivity: string // ISO date, for stall detection
 }
 
+/**
+ * A phase of a project — the level between "project" and "task".
+ *
+ * Areas hold projects and projects hold tasks, which is enough for a project you
+ * can hold in your head. It isn't enough for a build with a sequence: a long
+ * project reads as one undifferentiated list of forty things, with no way to see
+ * that Foundation is finished and Platform hasn't started.
+ *
+ * A milestone is deliberately thin — a name, an optional subtitle for the
+ * calendar framing ("Phase 1 · Weeks 1–3"), an order and an optional date. It
+ * owns no tasks of its own; tasks point at it. That means a phase can be
+ * renamed, reordered or deleted without touching the work underneath, and a
+ * project with no phases behaves exactly as it always did.
+ */
+export interface Milestone {
+  id: string
+  projectId: string
+  name: string
+  /** free text under the name — "Phase 1 · Weeks 1–3", "blocked on funding" */
+  detail?: string
+  sort: number
+  due?: string
+  status: 'open' | 'done'
+}
+
 export interface TaskAttachment {
   id: string
   name: string
@@ -50,7 +75,17 @@ export interface Task {
   type: TaskType
   areaId?: string
   projectId?: string
+  /** which phase of the project this sits in. Undefined = filed to the project but no phase yet. */
+  milestoneId?: string
   parentId?: string
+  /**
+   * Other tasks that have to finish first. This is a real dependency between two
+   * pieces of work — distinct from `waitingOn`, which is free text for waiting on
+   * a *person* ("waiting on Malka's numbers"). A task whose blockers are all done
+   * stops showing as blocked on its own; nothing is enforced, because a plan that
+   * refuses to let you work out of order is a plan people work around.
+   */
+  blockedBy?: string[]
   personId?: string
   vendorId?: string
   categoryIds: string[]
@@ -335,6 +370,7 @@ export interface Settings {
 export interface AppState {
   areas: Area[]
   projects: Project[]
+  milestones: Milestone[]
   tasks: Task[]
   people: Person[]
   interactions: Interaction[]

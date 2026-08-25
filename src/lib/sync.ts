@@ -31,6 +31,7 @@ import type { AppState } from './model'
 const COLLECTIONS = [
   'areas',
   'projects',
+  'milestones',
   'tasks',
   'people',
   'interactions',

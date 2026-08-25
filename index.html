@@ -6,7 +6,19 @@
     <title>Daybook — run your life from it</title>
     <meta name="description" content="Areas, projects, tasks, people, and trackers — one place to run your life from." />
     <meta name="theme-color" content="#20351f" />
-    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <!--
+      The Db mark, declared three ways on purpose.
+
+      `sizes="any"` used to sit on the .ico, which in the HTML spec means "this
+      icon is scalable" — the idiom for SVG. Handing a raster .ico to a browser
+      under that promise is how a correctly-drawn favicon still ends up as a
+      blank page sheet in the tab. It's a fixed 32×32 file, so it now says so,
+      and the two PNGs (which shipped in /public but were never linked) give
+      Chrome and Firefox an exact-size match to prefer.
+    -->
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

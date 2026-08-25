@@ -153,6 +153,16 @@ export interface Store {
    *  when `toId` is null. Used when a project is archived/removed so no task is left orphaned.
    *  Returns how many tasks were changed. */
   reassignProject: (fromId: string, toId: string | null) => number
+  // Project phases — the level between a project and its tasks. A phase points at
+  // its project; tasks point at the phase. Deleting a phase therefore never
+  // deletes work: the tasks come back to the project unphased.
+  addMilestone: (m: { projectId: string; name: string; detail?: string; due?: string }) => AppState['milestones'][0]
+  updateMilestone: (id: string, patch: Partial<AppState['milestones'][0]>) => void
+  /** Removes the phase and unphases its tasks. Returns how many tasks were unphased. */
+  deleteMilestone: (id: string) => number
+  reorderMilestone: (id: string, dir: 'up' | 'down') => void
+  /** Move a task into a phase (or out of one, with null). */
+  setTaskMilestone: (taskId: string, milestoneId: string | null) => void
   // Bulk import of projects (and the areas they live under) in one atomic update. Areas are
   // matched to existing ones by name (case-insensitive) and created when missing; projects are
   // merged into an existing same-name project in the same area rather than duplicated.
@@ -497,7 +507,17 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
         const target = state.tasks.find(t => t.id === id)
         const removed = state.tasks.filter(t => t.id === id || t.parentId === id)
         withAudit(
-          s => ({ ...s, tasks: s.tasks.filter(t => t.id !== id && t.parentId !== id) }),
+          s => ({
+            ...s,
+            tasks: s.tasks
+              .filter(t => t.id !== id && t.parentId !== id)
+              // Anything that was waiting on the deleted task is no longer waiting on
+              // anything. Left in place the id would dangle, and the dependency would
+              // read as satisfied for the wrong reason — the blocker isn't done, it's gone.
+              .map(t => t.blockedBy?.some(b => b === id || removed.some(r => r.id === b))
+                ? { ...t, blockedBy: t.blockedBy.filter(b => !removed.some(r => r.id === b)) }
+                : t),
+          }),
           auditEvent('deleted', 'task', id, `${target?.title ?? 'task'} permanently deleted${removed.length > 1 ? ` (with ${removed.length - 1} subtask${removed.length - 1 === 1 ? '' : 's'})` : ''}`),
         )
         return removed
@@ -871,6 +891,74 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
       updateProject(id, patch) {
         withAudit(s => ({ ...s, projects: s.projects.map(pr => pr.id === id ? { ...pr, ...patch, lastActivity: today() } : pr) }), auditEvent('updated', 'project', id, Object.keys(patch).join(', ') + ' changed'))
       },
+      addMilestone(m) {
+        const siblings = (state.milestones ?? []).filter(x => x.projectId === m.projectId)
+        const ms = {
+          id: uid('ms'),
+          projectId: m.projectId,
+          name: m.name.trim(),
+          detail: m.detail?.trim() || undefined,
+          due: m.due,
+          sort: siblings.length ? Math.max(...siblings.map(s => s.sort)) + 1 : 0,
+          status: 'open' as const,
+        }
+        const proj = state.projects.find(p => p.id === m.projectId)
+        withAudit(
+          s => ({ ...s, milestones: [...(s.milestones ?? []), ms] }),
+          auditEvent('created', 'milestone', ms.id, `${ms.name} added to ${proj?.name ?? 'project'}`),
+        )
+        return ms
+      },
+      updateMilestone(id, patch) {
+        const before = (state.milestones ?? []).find(m => m.id === id)
+        withAudit(
+          s => ({ ...s, milestones: (s.milestones ?? []).map(m => m.id === id ? { ...m, ...patch } : m) }),
+          auditEvent('updated', 'milestone', id, `${before?.name ?? 'phase'} — ${Object.keys(patch).join(', ')} changed`),
+        )
+      },
+      deleteMilestone(id) {
+        const ms = (state.milestones ?? []).find(m => m.id === id)
+        const orphaned = state.tasks.filter(t => t.milestoneId === id).length
+        withAudit(
+          s => ({
+            ...s,
+            milestones: (s.milestones ?? []).filter(m => m.id !== id),
+            // The tasks stay. Removing a phase is a change to the plan's shape, not
+            // an instruction to throw away the work sitting inside it.
+            tasks: s.tasks.map(t => t.milestoneId === id ? { ...t, milestoneId: undefined } : t),
+          }),
+          auditEvent('deleted', 'milestone', id, orphaned
+            ? `${ms?.name ?? 'phase'} removed — ${orphaned} task${orphaned === 1 ? '' : 's'} kept, now unphased`
+            : `${ms?.name ?? 'phase'} removed`),
+        )
+        return orphaned
+      },
+      reorderMilestone(id, dir) {
+        const ms = (state.milestones ?? []).find(m => m.id === id)
+        if (!ms) return
+        const siblings = (state.milestones ?? [])
+          .filter(m => m.projectId === ms.projectId)
+          .sort((a, b) => a.sort - b.sort)
+        const i = siblings.findIndex(m => m.id === id)
+        const j = dir === 'up' ? i - 1 : i + 1
+        if (j < 0 || j >= siblings.length) return
+        const [moved] = siblings.splice(i, 1)
+        siblings.splice(j, 0, moved)
+        // Renumber from zero so `sort` can never drift into ties after repeated moves.
+        const order = new Map(siblings.map((m, n) => [m.id, n]))
+        withAudit(
+          s => ({ ...s, milestones: (s.milestones ?? []).map(m => order.has(m.id) ? { ...m, sort: order.get(m.id)! } : m) }),
+          auditEvent('reordered', 'milestone', id, `${ms.name} moved ${dir}`),
+        )
+      },
+      setTaskMilestone(taskId, milestoneId) {
+        const task = state.tasks.find(t => t.id === taskId)
+        const ms = milestoneId ? (state.milestones ?? []).find(m => m.id === milestoneId) : null
+        withAudit(
+          s => ({ ...s, tasks: s.tasks.map(t => t.id === taskId ? { ...t, milestoneId: milestoneId ?? undefined } : t) }),
+          auditEvent('updated', 'task', taskId, `${task?.title ?? 'task'} → ${ms ? ms.name : 'no phase'}`),
+        )
+      },
       reassignProject(fromId, toId) {
         const affected = state.tasks.filter(t => t.projectId === fromId)
         if (!affected.length) return 0
@@ -879,9 +967,12 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
         withAudit(
           s => ({
             ...s,
+            // The phase goes with the old project, so it's cleared on the way out —
+            // a task can't sit in a phase of a project it no longer belongs to.
             tasks: s.tasks.map(t => t.projectId === fromId
-              ? { ...t, projectId: to ? to.id : undefined, areaId: to ? to.areaId : t.areaId }
+              ? { ...t, projectId: to ? to.id : undefined, areaId: to ? to.areaId : t.areaId, milestoneId: undefined }
               : t),
+            milestones: to ? (s.milestones ?? []) : (s.milestones ?? []).filter(m => m.projectId !== fromId),
           }),
           auditEvent('updated', 'project', fromId, to
             ? `moved ${affected.length} task${affected.length === 1 ? '' : 's'} from ${from?.name ?? 'project'} → ${to.name}`

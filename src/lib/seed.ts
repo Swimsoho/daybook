@@ -22,13 +22,28 @@ export function seedState(): AppState {
       { id: 'pr_fridge', areaId: 'a_ideas', name: 'Family calendar on the fridge screen', outcome: 'Explore: shared screen showing the week', status: 'active', priority: 'P3', lastActivity: daysAgo(15) },
       { id: 'pr_garden', areaId: 'a_family', name: 'Garden landscaping', outcome: 'Usable garden by summer', status: 'done', priority: 'P2', lastActivity: daysAgo(30) },
     ],
+    // Phases on the dinner, so the sample workspace shows what a phased project
+    // looks like. Every other project has none — which is the point: phases are
+    // opt-in, and a project without them behaves exactly as it always did.
+    milestones: [
+      { id: 'ms_dinner_book', projectId: 'pr_dinner', name: 'Booked', detail: 'Venue, caterer and budget signed off', sort: 0, status: 'done' },
+      { id: 'ms_dinner_guests', projectId: 'pr_dinner', name: 'Guests', detail: 'Invitations out, RSVPs in, seating settled', sort: 1, due: addDays(T, 12), status: 'open' },
+      { id: 'ms_dinner_night', projectId: 'pr_dinner', name: 'On the night', detail: 'Run sheet, AV, speakers', sort: 2, due: addDays(T, 24), status: 'open' },
+    ],
     tasks: [
       // Today / P0
-      { id: 't1', title: 'Confirm caterer numbers for the dinner', type: 'call', areaId: 'a_shul', projectId: 'pr_dinner', personId: 'p_caterer', vendorId: 'v_caterer', categoryIds: ['c_events'], priority: 'P0', status: 'in-progress', due: T, source: 'whatsapp', callAbout: 'Final headcount and dietary list', created: daysAgo(3) },
+      { id: 't1', title: 'Confirm caterer numbers for the dinner', type: 'call', areaId: 'a_shul', projectId: 'pr_dinner', milestoneId: 'ms_dinner_guests', personId: 'p_caterer', vendorId: 'v_caterer', categoryIds: ['c_events'], priority: 'P0', status: 'in-progress', due: T, source: 'whatsapp', callAbout: 'Final headcount and dietary list', created: daysAgo(3) },
+      // The rest of the dinner board, phase by phase. t66 waits on the caterer count
+      // and t67 waits on t66 — a two-step chain, so the dependency chips have
+      // something real to show.
+      { id: 't64', title: 'Confirm the hall booking and pay the deposit', type: 'todo', areaId: 'a_shul', projectId: 'pr_dinner', milestoneId: 'ms_dinner_book', personId: 'p_rabbi', categoryIds: ['c_events'], priority: 'P1', status: 'done', source: 'manual', created: daysAgo(30), completedAt: daysAgo(22) },
+      { id: 't65', title: 'Sign the budget off with the treasurer', type: 'todo', areaId: 'a_shul', projectId: 'pr_dinner', personId: 'p_gold', milestoneId: 'ms_dinner_book', categoryIds: ['c_events'], priority: 'P1', status: 'done', source: 'manual', created: daysAgo(28), completedAt: daysAgo(20) },
+      { id: 't66', title: 'Finalise the seating plan', type: 'todo', areaId: 'a_shul', projectId: 'pr_dinner', milestoneId: 'ms_dinner_guests', categoryIds: ['c_events'], priority: 'P1', status: 'next', due: addDays(T, 9), blockedBy: ['t1'], source: 'manual', created: daysAgo(5) },
+      { id: 't67', title: 'Write the run sheet for the night', type: 'todo', areaId: 'a_shul', projectId: 'pr_dinner', milestoneId: 'ms_dinner_night', categoryIds: ['c_events'], priority: 'P2', status: 'next', due: addDays(T, 20), blockedBy: ['t66'], source: 'manual', created: daysAgo(2) },
       { id: 't2', title: 'Send Acme the renewal proposal', type: 'todo', areaId: 'a_work', projectId: 'pr_acme', categoryIds: ['c_admin'], priority: 'P0', status: 'next', due: T, source: 'manual', created: daysAgo(2), notes: 'Use last year’s deck as base; update rates page.' },
       { id: 't3', title: 'Pay gas bill before late fee', type: 'todo', areaId: 'a_family', categoryIds: ['c_money_bills'], priority: 'P0', status: 'next', due: daysAgo(1), source: 'email', created: daysAgo(5) },
       // Dinner parent + subtasks
-      { id: 't10', title: 'Run the shul dinner', type: 'todo', areaId: 'a_shul', projectId: 'pr_dinner', categoryIds: ['c_events'], priority: 'P1', status: 'in-progress', due: addDays(T, 24), source: 'manual', created: daysAgo(20), notes: 'Umbrella task — see subtasks.' },
+      { id: 't10', title: 'Run the shul dinner', type: 'todo', areaId: 'a_shul', projectId: 'pr_dinner', milestoneId: 'ms_dinner_night', categoryIds: ['c_events'], priority: 'P1', status: 'in-progress', due: addDays(T, 24), source: 'manual', created: daysAgo(20), notes: 'Umbrella task — see subtasks.' },
       { id: 't11', title: 'Book the hall', type: 'todo', parentId: 't10', areaId: 'a_shul', projectId: 'pr_dinner', categoryIds: ['c_events'], priority: 'P1', status: 'done', source: 'manual', created: daysAgo(20), completedAt: daysAgo(14) },
       { id: 't12', title: 'Print and send invitations', type: 'todo', parentId: 't10', areaId: 'a_shul', projectId: 'pr_dinner', categoryIds: ['c_events'], priority: 'P1', status: 'done', source: 'manual', created: daysAgo(20), completedAt: daysAgo(7) },
       { id: 't13', title: 'Chase RSVPs from committee list', type: 'followup', parentId: 't10', areaId: 'a_shul', projectId: 'pr_dinner', categoryIds: ['c_events'], actionIds: ['a_followup'], priority: 'P1', status: 'next', due: addDays(T, 2), source: 'manual', created: daysAgo(10) },
@@ -263,6 +278,7 @@ export function emptyState(userName: string): AppState {
   return {
     ...s,
     projects: [],
+    milestones: [],
     tasks: [],
     people: [],
     interactions: [],
