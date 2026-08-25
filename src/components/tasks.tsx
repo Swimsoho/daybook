@@ -962,8 +962,12 @@ function TaskAttachments({ task }: { task: Task }) {
 
 function TaskShare({ task }: { task: Task }) {
   const cloud = useCloud()
-  const { updateTask } = useStore()
+  const { state, updateTask } = useStore()
   const [creating, setCreating] = useState(false)
+  // Prefilled from the contact the task is already against, if there is one.
+  const [recipient, setRecipient] = useState(
+    () => task.shared?.sharedWith ?? state.people.find(p => p.id === task.personId)?.name ?? '',
+  )
 
   // A share is only useful while the task isn't done yet; once it's confirmed via the link (or
   // finished any other way), there's nothing left to share.
@@ -975,12 +979,31 @@ function TaskShare({ task }: { task: Task }) {
 
   async function createLink() {
     if (!cloud) return
+    const name = recipient.trim()
+    if (!name) { toast.error('Who are you sharing this with?'); return }
     setCreating(true)
     const { token, error } = await cloud.shareTask({ id: task.id, title: task.title, notes: task.notes, due: task.due })
     setCreating(false)
     if (error || !token) { toast.error(error ?? 'Could not create a share link'); return }
-    updateTask(task.id, { shared: { token, status: 'pending', createdAt: new Date().toISOString() } }, 'shared via link')
-    toast.success('Link created — copy it to whoever you’re handing this to')
+    // Match the name against People so the share links to a real contact where one exists —
+    // that's what lets their card show what's outstanding with them.
+    const match = state.people.find(p => p.name.toLowerCase() === name.toLowerCase())
+    updateTask(
+      task.id,
+      {
+        shared: {
+          token,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          sharedWith: name,
+          sharedPersonId: match?.id,
+        },
+        // link the task to the contact too, so it shows on their card
+        personId: task.personId ?? match?.id,
+      },
+      `shared with ${name}`,
+    )
+    toast.success(`Link created for ${name} — copy it across`)
   }
 
   async function copyLink() {
@@ -999,6 +1022,18 @@ function TaskShare({ task }: { task: Task }) {
           <p className="text-[12px] text-muted-foreground mb-1.5">
             Get a link you can text, email, or WhatsApp to anyone — no Daybook account needed on their end. They see just this task, with a "Mark as done" button; when they click it, it comes back here as done automatically.
           </p>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Input
+              value={recipient}
+              onChange={e => setRecipient(e.target.value)}
+              placeholder="Who are you sharing it with?"
+              list="daybook-share-people"
+              className="h-7 text-[12px]"
+            />
+            <datalist id="daybook-share-people">
+              {state.people.map(p => <option key={p.id} value={p.name} />)}
+            </datalist>
+          </div>
           <Button size="sm" className="h-7 px-2.5 text-[12px]" disabled={creating} onClick={createLink}>
             {creating ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Send className="h-3.5 w-3.5 mr-1" />}
             {creating ? 'Creating…' : 'Create share link'}
@@ -1006,11 +1041,17 @@ function TaskShare({ task }: { task: Task }) {
         </>
       ) : shared.status === 'done' ? (
         <p className="text-[12.5px] text-[hsl(152_35%_30%)]">
-          <Check className="h-3.5 w-3.5 inline mr-1" />Confirmed done via shared link{shared.respondedAt ? ` on ${fmtDate(shared.respondedAt.slice(0, 10))}` : ''}.
+          <Check className="h-3.5 w-3.5 inline mr-1" />
+          {shared.sharedWith ? `${shared.sharedWith} marked it done` : 'Confirmed done via shared link'}
+          {shared.respondedAt ? ` on ${fmtDate(shared.respondedAt.slice(0, 10))}` : ''}.
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-1.5">
-          <p className="text-[12px] text-muted-foreground">Sent — waiting for them to mark it done.</p>
+          <p className="text-[12px] text-muted-foreground">
+            {shared.sharedWith
+              ? `Sent to ${shared.sharedWith} — waiting for them to mark it done.`
+              : 'Sent — waiting for them to mark it done.'}
+          </p>
           <div className="flex items-center gap-1.5">
             <code className="flex-1 min-w-0 truncate border border-border bg-card rounded-sm px-2 py-1 text-[11.5px]">{shareUrl}</code>
             <Button size="sm" variant="outline" className="h-7 px-2 shrink-0" onClick={copyLink} title="Copy link"><Copy className="h-3.5 w-3.5" /></Button>

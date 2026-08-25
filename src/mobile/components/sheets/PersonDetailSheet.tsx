@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { daysSinceContact, overdueBy, tierColor, tierName, tiersOf } from '@/mobile/lib/select';
 import { useStore } from '@/lib/store';
-import { today, type Person } from '@/lib/model';
+import { STATUS_LABELS, fmtDate, today, type Person } from '@/lib/model';
 import { BottomSheet, SheetTitle } from '@/mobile/components/BottomSheet';
 import {
   Avatar,
@@ -160,10 +160,12 @@ export function PersonDetailSheet({
           ) : null}
 
           {person.notes ? (
-            <p className="m-0 mb-5 whitespace-pre-wrap text-[12.5px] leading-[1.5]" style={{ color: 'hsl(75 8% 30%)' }}>
+            <p className="m-0 mb-4 whitespace-pre-wrap text-[12.5px] leading-[1.5]" style={{ color: 'hsl(75 8% 30%)' }}>
               {person.notes}
             </p>
           ) : null}
+
+          <PersonHistory person={person} />
 
           {person.phone ? <CallButton phone={person.phone} label={`Call ${person.name}`} full /> : null}
 
@@ -271,4 +273,113 @@ function LogCall({
       </div>
     </div>
   );
+}
+
+/**
+ * Everything on record with this person: what's outstanding, what you've handed them, and
+ * every touch you've logged.
+ *
+ * The contact card used to show a phone number and some notes — which tells you nothing about
+ * the relationship. This is the answer to "where are we up to with them?", which is the only
+ * reason to open a contact mid-day.
+ */
+function PersonHistory({ person }: { person: Person }) {
+  const { state } = useStore();
+
+  const openTasks = state.tasks.filter(
+    (t) => t.personId === person.id && t.status !== 'done' && t.status !== 'dropped',
+  );
+  const doneTasks = state.tasks
+    .filter((t) => t.personId === person.id && t.status === 'done')
+    .slice(0, 5);
+  const shared = state.tasks.filter(
+    (t) => t.shared?.sharedPersonId === person.id || (t.shared && t.personId === person.id),
+  );
+  const timeline = state.interactions
+    .filter((i) => i.personId === person.id)
+    .sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
+
+  return (
+    <div className="mb-5 grid gap-4">
+      <Group title={`Open · ${openTasks.length}`}>
+        {openTasks.length ? (
+          openTasks.map((t) => (
+            <Row key={t.id} left={t.title} right={t.due ? fmtDate(t.due) : STATUS_LABELS[t.status]} />
+          ))
+        ) : (
+          <Empty>Nothing outstanding.</Empty>
+        )}
+      </Group>
+
+      {shared.length ? (
+        <Group title={`Shared with them · ${shared.length}`}>
+          {shared.map((t) => (
+            <Row
+              key={t.id}
+              left={t.title}
+              right={t.shared?.status === 'done' ? 'done' : 'waiting'}
+            />
+          ))}
+        </Group>
+      ) : null}
+
+      <Group title={`Calls & touches · ${timeline.length}`}>
+        {timeline.length ? (
+          timeline.slice(0, 12).map((i) => (
+            <div key={i.id} className="py-[6px]" style={{ borderBottom: '1px solid hsl(var(--border))' }}>
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-[12.5px] font-semibold">{i.purpose || i.channel}</span>
+                <span className="shrink-0 text-[10.5px] text-muted-foreground">{fmtDate(i.date)}</span>
+              </div>
+              {i.outcome ? (
+                <p className="m-0 mt-[2px] text-[11.5px] leading-[1.45] text-muted-foreground">
+                  {i.outcome}
+                </p>
+              ) : null}
+              <span className="text-[10px] uppercase tracking-[0.05em] text-muted-foreground">
+                {i.channel}
+              </span>
+            </div>
+          ))
+        ) : (
+          <Empty>No touches logged yet.</Empty>
+        )}
+      </Group>
+
+      {doneTasks.length ? (
+        <Group title="Recently completed">
+          {doneTasks.map((t) => (
+            <Row key={t.id} left={t.title} right={t.completedAt ? fmtDate(t.completedAt.slice(0, 10)) : ''} muted />
+          ))}
+        </Group>
+      ) : null}
+    </div>
+  );
+}
+
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="mb-1 text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Row({ left, right, muted }: { left: string; right?: string; muted?: boolean }) {
+  return (
+    <div
+      className="flex items-baseline justify-between gap-2 py-[6px]"
+      style={{ borderBottom: '1px solid hsl(var(--border))', opacity: muted ? 0.6 : 1 }}
+    >
+      <span className="min-w-0 flex-1 text-[12.5px]">{left}</span>
+      {right ? <span className="shrink-0 text-[10.5px] text-muted-foreground">{right}</span> : null}
+    </div>
+  );
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="m-0 py-1 text-[12px] italic opacity-55">{children}</p>;
 }

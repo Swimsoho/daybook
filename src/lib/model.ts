@@ -79,7 +79,17 @@ export interface Task {
   // status flips to 'done' the moment the recipient clicks "Mark as done" on their end, which
   // is also what sets the task's own `status`/`completedAt` — this field just remembers it
   // came back via a shared link rather than Craig checking it off himself.
-  shared?: { token: string; status: 'pending' | 'done'; createdAt: string; respondedAt?: string }
+  // `sharedWith` is who you handed it to. Without it a share was anonymous: the task showed
+  // "shared, pending" with no record of who owed you the answer, which made chasing it
+  // impossible. `sharedPersonId` links it to a contact when they're already in People.
+  shared?: {
+    token: string
+    status: 'pending' | 'done'
+    createdAt: string
+    respondedAt?: string
+    sharedWith?: string
+    sharedPersonId?: string
+  }
 }
 
 export interface Person {
