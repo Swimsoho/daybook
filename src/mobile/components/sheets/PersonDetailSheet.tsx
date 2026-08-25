@@ -1,8 +1,9 @@
 import { Pencil } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { daysSinceContact, overdueBy, tierColor, tierName, tiersOf } from '@/mobile/lib/select';
 import { useStore } from '@/lib/store';
-import type { Person } from '@/lib/model';
+import { today, type Person } from '@/lib/model';
 import { BottomSheet, SheetTitle } from '@/mobile/components/BottomSheet';
 import {
   Avatar,
@@ -27,8 +28,9 @@ export function PersonDetailSheet({
   onClose: () => void;
   onSave: (id: string, patch: Partial<Person>) => void;
 }) {
-  const { state } = useStore();
+  const { state, logInteraction } = useStore();
   const [editing, setEditing] = useState(false);
+  const [logging, setLogging] = useState(false);
   const [draft, setDraft] = useState<Draft>({ phone: '', tier: '', notes: '' });
 
   useEffect(() => {
@@ -164,8 +166,109 @@ export function PersonDetailSheet({
           ) : null}
 
           {person.phone ? <CallButton phone={person.phone} label={`Call ${person.name}`} full /> : null}
+
+          {logging ? (
+            <LogCall
+              person={person}
+              onCancel={() => setLogging(false)}
+              onSave={(closeTaskIds) => {
+                logInteraction(
+                  {
+                    date: today(),
+                    personId: person.id,
+                    channel: 'call',
+                    purpose: 'Call',
+                    outcome: 'Spoke — logged from mobile',
+                    sentiment: 'positive',
+                  },
+                  { closeTaskIds },
+                );
+                const n = closeTaskIds.length;
+                toast.success(n ? `Logged — ${n} ${n === 1 ? 'task' : 'tasks'} closed` : 'Logged');
+                setLogging(false);
+                onClose();
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setLogging(true)}
+              className="mt-2 w-full rounded-lg border border-border py-[11px] text-[13px] font-semibold active:opacity-70"
+            >
+              Log a call
+            </button>
+          )}
         </>
       )}
     </BottomSheet>
+  );
+}
+
+/**
+ * Logging a call from the phone.
+ *
+ * The point of this is the tick-list: a call used to update the contact but leave the task
+ * that asked for the call sitting open, so the thing you'd just done still looked outstanding.
+ * Everything open for that person is pre-ticked; untick whatever the call didn't cover.
+ */
+function LogCall({
+  person,
+  onCancel,
+  onSave,
+}: {
+  person: Person;
+  onCancel: () => void;
+  onSave: (closeTaskIds: string[]) => void;
+}) {
+  const { state } = useStore();
+  const open = useMemo(
+    () =>
+      state.tasks.filter(
+        (t) =>
+          t.personId === person.id &&
+          (t.type === 'call' || t.type === 'followup') &&
+          t.status !== 'done' &&
+          t.status !== 'dropped',
+      ),
+    [state.tasks, person.id],
+  );
+  const [closeIds, setCloseIds] = useState<string[]>(() => open.map((t) => t.id));
+
+  return (
+    <div className="mt-3 rounded-[10px] border border-border p-3">
+      {open.length ? (
+        <>
+          <div className="mb-2 text-[12px] font-semibold">
+            Close {open.length === 1 ? 'this task' : 'these tasks'}?
+          </div>
+          <div className="grid gap-[6px]">
+            {open.map((t) => (
+              <label key={t.id} className="flex cursor-pointer items-start gap-2 text-[12.5px]">
+                <input
+                  type="checkbox"
+                  className="mt-[3px] h-[15px] w-[15px] accent-[hsl(var(--primary))]"
+                  checked={closeIds.includes(t.id)}
+                  onChange={(e) =>
+                    setCloseIds((ids) =>
+                      e.target.checked ? [...ids, t.id] : ids.filter((x) => x !== t.id),
+                    )
+                  }
+                />
+                <span className="min-w-0">{t.title}</span>
+              </label>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p className="m-0 mb-2 text-[12px] text-muted-foreground">
+          No open call tasks for {person.name} — this just records the touch.
+        </p>
+      )}
+
+      <div className="mt-3 flex gap-[10px]">
+        <OutlineButton onClick={onCancel}>Cancel</OutlineButton>
+        <PrimaryButton onClick={() => onSave(closeIds)}>Log it</PrimaryButton>
+      </div>
+    </div>
   );
 }

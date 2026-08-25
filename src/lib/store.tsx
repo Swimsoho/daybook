@@ -103,7 +103,10 @@ export interface Store {
   addTier: (name: string) => void
   updateTier: (id: string, patch: Partial<TierDef>) => void
   deleteTier: (id: string) => void
-  logInteraction: (i: Omit<Interaction, 'id'>, opts?: { followUpTitle?: string }) => void
+  // `closeTaskIds` are the person's open call/follow-up tasks this touch resolves. Logging a
+  // call used to update lastContact and clear the call flag but leave the task that prompted
+  // the call sitting open forever — so the thing you just did still looked outstanding.
+  logInteraction: (i: Omit<Interaction, 'id'>, opts?: { followUpTitle?: string; closeTaskIds?: string[] }) => void
   capture: (text: string, source: Capture['source']) => Capture
   // `trackerId` lets the Inbox redirect a pending capture to a different destination than
   // whatever the router guessed, regardless of its original proposal.kind: '' forces it to file
@@ -115,6 +118,10 @@ export interface Store {
   dismissCapture: (id: string) => void
   addEntry: (trackerId: string, values: Entry['values']) => void
   updateEntry: (id: string, values: Entry['values']) => void
+  // Multi-select actions in Collections. `patchEntries` merges a partial value map into every
+  // listed entry (bulk "mark Watched", bulk rating, bulk set any single-choice field).
+  patchEntries: (ids: string[], patch: Entry['values']) => void
+  deleteEntries: (ids: string[]) => void
   addCategory: (c: Partial<Category> & { name: string }) => void
   updateCategory: (id: string, patch: Partial<Category>) => void
   // force=true deletes even if tasks/captures/subcategories still reference it — those
@@ -606,14 +613,31 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
           type: 'followup', personId: i.personId, categoryIds: [], actionIds: ['a_followup'], priority: 'P1', status: 'next',
           due: i.followUpDate, source: 'manual', created: today(),
         } : null
+        const closeIds = new Set(opts?.closeTaskIds ?? [])
+        const closedTitles = state.tasks.filter(t => closeIds.has(t.id)).map(t => t.title)
         withAudit(
           s => ({
             ...s,
             interactions: [inter, ...s.interactions],
             people: s.people.map(p => p.id === i.personId ? { ...p, lastContact: i.date, flaggedForCall: false } : p),
-            tasks: followTask ? [...s.tasks, followTask] : s.tasks,
+            tasks: [
+              // the call happened, so the tasks that asked for it are done
+              ...s.tasks.map(t =>
+                closeIds.has(t.id) ? { ...t, status: 'done' as const, completedAt: i.date } : t,
+              ),
+              ...(followTask ? [followTask] : []),
+            ],
           }),
-          auditEvent('logged ' + i.channel, 'person', i.personId, `${i.purpose} · ${i.sentiment}${followTask ? ' · follow-up task created' : ''}`),
+          auditEvent(
+            'logged ' + i.channel,
+            'person',
+            i.personId,
+            [
+              `${i.purpose} · ${i.sentiment}`,
+              closedTitles.length ? `closed: ${closedTitles.join(', ')}` : '',
+              followTask ? 'follow-up task created' : '',
+            ].filter(Boolean).join(' · '),
+          ),
         )
       },
       capture(text, source) {
@@ -689,6 +713,47 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
         withAudit(
           s => ({ ...s, entries: s.entries.map(e => e.id === id ? { ...e, values: { ...e.values, ...values } } : e) }),
           auditEvent('updated', 'entry', id, Object.keys(values).join(', ') + ' changed'),
+        )
+      },
+      /**
+       * Multi-select bulk edit. One audit line for the whole action rather than one per entry —
+       * "12 entries → Watched" is what happened; twelve identical lines is noise.
+       */
+      patchEntries(ids, patch) {
+        if (!ids.length) return
+        const set = new Set(ids)
+        const tracker = state.trackers.find(t => t.id === state.entries.find(e => set.has(e.id))?.trackerId)
+        withAudit(
+          s => ({
+            ...s,
+            entries: s.entries.map(e => (set.has(e.id) ? { ...e, values: { ...e.values, ...patch } } : e)),
+          }),
+          auditEvent(
+            'updated',
+            'entry',
+            ids[0],
+            `${ids.length} ${ids.length === 1 ? 'entry' : 'entries'} in ${tracker?.name ?? 'a tracker'} — ${Object.entries(patch).map(([k, v]) => `${k}: ${String(v)}`).join(', ')}`,
+          ),
+        )
+      },
+      deleteEntries(ids) {
+        if (!ids.length) return
+        const set = new Set(ids)
+        const going = state.entries.filter(e => set.has(e.id))
+        const tracker = state.trackers.find(t => t.id === going[0]?.trackerId)
+        const titleKey = tracker?.columns.find(c => c.isTitle)?.key
+        const names = going
+          .map(e => (titleKey ? String(e.values[titleKey] ?? '') : ''))
+          .filter(Boolean)
+          .slice(0, 5)
+        withAudit(
+          s => ({ ...s, entries: s.entries.filter(e => !set.has(e.id)) }),
+          auditEvent(
+            'deleted',
+            'entry',
+            ids[0],
+            `${ids.length} from ${tracker?.name ?? 'a tracker'}${names.length ? ` — ${names.join(', ')}${going.length > names.length ? '…' : ''}` : ''}`,
+          ),
         )
       },
       addCategory(c) {

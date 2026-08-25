@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Cake, Mail, MessageCircle, Phone, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -37,6 +37,31 @@ export function LogCallDialog({ person, open, onClose }: { person: Person | null
   const [followUp, setFollowUp] = useState(false)
   const [followDate, setFollowDate] = useState(addDays(today(), state.settings.followUpDays))
 
+  // The open tasks this touch would resolve: that person's call / follow-up items that are
+  // still live. Pre-ticked, because logging a call almost always means you did the thing the
+  // task was asking for — but untickable, since one person can have several unrelated reasons
+  // to call and this touch may only have covered one of them.
+  const openCallTasks = useMemo(
+    () =>
+      person
+        ? state.tasks.filter(
+            t =>
+              t.personId === person.id &&
+              (t.type === 'call' || t.type === 'followup') &&
+              t.status !== 'done' &&
+              t.status !== 'dropped',
+          )
+        : [],
+    [state.tasks, person],
+  )
+  const [closeIds, setCloseIds] = useState<string[]>([])
+
+  // re-tick everything whenever the dialog opens on a different person
+  useEffect(() => {
+    setCloseIds(openCallTasks.map(t => t.id))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [person?.id, open])
+
   if (!person) return null
   const last = state.interactions.filter(i => i.personId === person.id)[0]
 
@@ -45,8 +70,18 @@ export function LogCallDialog({ person, open, onClose }: { person: Person | null
     logInteraction({
       date: today(), personId: person.id, channel, purpose: purpose || 'Catch-up', outcome, sentiment,
       followUpDate: followUp ? followDate : undefined,
-    }, { followUpTitle: followUp ? `Follow up with ${person.name}` : undefined })
-    toast.success(followUp ? `Logged — follow-up task created for ${fmtDate(followDate)}` : 'Logged — last-contact date updated')
+    }, {
+      followUpTitle: followUp ? `Follow up with ${person.name}` : undefined,
+      closeTaskIds: closeIds,
+    })
+    const closed = closeIds.length
+    toast.success(
+      [
+        'Logged',
+        closed ? `${closed} ${closed === 1 ? 'task' : 'tasks'} closed` : 'last-contact date updated',
+        followUp ? `follow-up set for ${fmtDate(followDate)}` : '',
+      ].filter(Boolean).join(' — '),
+    )
     setPurpose(''); setOutcome(''); setFollowUp(false)
     onClose()
   }
@@ -60,6 +95,36 @@ export function LogCallDialog({ person, open, onClose }: { person: Person | null
         {last && (
           <div className="text-[12.5px] border-l-2 border-[hsl(17_63%_47%)] pl-3 text-muted-foreground italic">
             Last time ({fmtDate(last.date)}): {last.purpose} — {last.outcome}
+          </div>
+        )}
+        {openCallTasks.length > 0 && (
+          <div className="rounded-md border border-border p-3">
+            <div className="text-xs font-semibold mb-2">
+              Close {openCallTasks.length === 1 ? 'this task' : 'these tasks'}?
+            </div>
+            <div className="grid gap-1.5">
+              {openCallTasks.map(t => (
+                <label key={t.id} className="flex items-start gap-2 text-[12.5px] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-[3px] h-3.5 w-3.5 accent-[hsl(var(--primary))]"
+                    checked={closeIds.includes(t.id)}
+                    onChange={e =>
+                      setCloseIds(ids =>
+                        e.target.checked ? [...ids, t.id] : ids.filter(x => x !== t.id),
+                      )
+                    }
+                  />
+                  <span className="min-w-0">
+                    {t.title}
+                    {t.due && <span className="text-muted-foreground"> · due {fmtDate(t.due)}</span>}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-2 mb-0">
+              Ticked tasks are marked done when you log this. Untick anything this call didn't cover.
+            </p>
           </div>
         )}
         <div className="grid grid-cols-1 gap-3">
@@ -143,7 +208,16 @@ export function PersonDetail({ person, onClose, onLog }: { person: Person | null
             <Phone className="h-3 w-3 mr-1" />Log a touch
           </Button>
           <Button size="sm" variant="outline" className="h-7 px-2.5 text-[12px]" onClick={() => {
-            logInteraction({ date: today(), personId: person.id, channel: 'call', purpose: 'Quick call', outcome: 'Caught up — nothing to action', sentiment: 'positive' })
+            logInteraction(
+              { date: today(), personId: person.id, channel: 'call', purpose: 'Quick call', outcome: 'Caught up — nothing to action', sentiment: 'positive' },
+              {
+                // the quick path closes every open call/follow-up for that person — there's no
+                // dialog to choose in, and leaving them open is the bug this fixes
+                closeTaskIds: state.tasks
+                  .filter(t => t.personId === person.id && (t.type === 'call' || t.type === 'followup') && t.status !== 'done' && t.status !== 'dropped')
+                  .map(t => t.id),
+              },
+            )
             toast.success('Logged — last-contact reset to today')
           }}>
             Called — nothing to log

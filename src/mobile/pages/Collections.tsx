@@ -104,10 +104,22 @@ function TrackerScreen({
   tracker: Tracker;
   onBack: () => void;
 }) {
-  const { state, addEntry, updateEntry } = useStore();
+  const { state, addEntry, updateEntry, patchEntries, deleteEntries } = useStore();
   const { entries } = state;
   const [view, setView] = useState<TrackerView>(tracker.defaultView);
   const [editing, setEditing] = useState<Entry | 'new' | null>(null);
+  /** multi-select — off by default so a reading view stays a reading view */
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const toggleSelected = (id: string) =>
+    setSelected((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  const clearSelection = () => {
+    setSelected([]);
+    setSelectMode(false);
+  };
+
+  /** while selecting, a tap toggles the entry instead of opening it */
+  const onRowTap = (entry: Entry) => (selectMode ? toggleSelected(entry.id) : setEditing(entry));
 
   const rows = useMemo(
     () => entries.filter((e) => e.trackerId === tracker.id),
@@ -150,20 +162,59 @@ function TrackerScreen({
 
       <div className="mb-3 flex items-baseline justify-between gap-2">
         <h2 className="font-display m-0 text-[19px] font-semibold">{tracker.name}</h2>
-        <button
-          type="button"
-          onClick={() => setEditing('new')}
-          className="shrink-0 rounded-[14px] border-none bg-primary px-3 py-[6px] text-[12px] font-semibold text-primary-foreground active:opacity-80"
-        >
-          + Entry
-        </button>
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            onClick={() => (selectMode ? clearSelection() : setSelectMode(true))}
+            className="rounded-[14px] border px-3 py-[6px] text-[12px] font-semibold"
+            style={{
+              borderColor: selectMode ? 'hsl(var(--primary))' : 'hsl(var(--border))',
+              background: selectMode ? 'hsl(var(--primary))' : 'transparent',
+              color: selectMode ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))',
+            }}
+          >
+            {selectMode ? 'Done' : 'Select'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setEditing('new')}
+            className="rounded-[14px] border-none bg-primary px-3 py-[6px] text-[12px] font-semibold text-primary-foreground active:opacity-80"
+          >
+            + Entry
+          </button>
+        </div>
       </div>
 
       {rows.length === 0 ? <EmptyState>Nothing in here yet.</EmptyState> : null}
 
-      {view === 'table' ? <TableView tracker={tracker} rows={rows} onOpen={setEditing} /> : null}
-      {view === 'board' ? <BoardView tracker={tracker} rows={rows} onOpen={setEditing} /> : null}
-      {view === 'gallery' ? <GalleryView tracker={tracker} rows={rows} onOpen={setEditing} /> : null}
+      {selectMode ? (
+        <BulkBar
+          tracker={tracker}
+          selected={selected}
+          allIds={rows.map((e) => e.id)}
+          onSelectAll={() => setSelected(rows.map((e) => e.id))}
+          onApply={(patch, label) => {
+            patchEntries(selected, patch);
+            toast.success(`${selected.length} → ${label}`);
+          }}
+          onDelete={() => {
+            const n = selected.length;
+            deleteEntries(selected);
+            toast.success(`Deleted ${n} ${n === 1 ? 'entry' : 'entries'}`);
+            clearSelection();
+          }}
+        />
+      ) : null}
+
+      {view === 'table' ? (
+        <TableView tracker={tracker} rows={rows} onOpen={onRowTap} selectMode={selectMode} selected={selected} />
+      ) : null}
+      {view === 'board' ? (
+        <BoardView tracker={tracker} rows={rows} onOpen={onRowTap} selectMode={selectMode} selected={selected} />
+      ) : null}
+      {view === 'gallery' ? (
+        <GalleryView tracker={tracker} rows={rows} onOpen={onRowTap} selectMode={selectMode} selected={selected} />
+      ) : null}
 
       {editing ? (
         <EntrySheet
@@ -192,10 +243,14 @@ function TableView({
   tracker,
   rows,
   onOpen,
+  selectMode = false,
+  selected = [],
 }: {
   tracker: Tracker;
   rows: Entry[];
   onOpen: (entry: Entry) => void;
+  selectMode?: boolean;
+  selected?: string[];
 }) {
   const title = titleColumn(tracker);
   return (
@@ -209,7 +264,10 @@ function TableView({
             onClick={() => onOpen(entry)}
             className="mb-[10px] block w-full rounded-[10px] border border-border bg-card p-3 text-left active:opacity-70"
           >
-            <div className="mb-[6px] text-[13.5px] font-semibold">{entryTitle(tracker, entry)}</div>
+            <div className="mb-[6px] text-[13.5px] font-semibold">
+              {selectMode ? <Tick on={selected.includes(entry.id)} /> : null}
+              {entryTitle(tracker, entry)}
+            </div>
             <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
               {cols.map((c) => (
                 <div key={c.key} className="contents">
@@ -232,10 +290,14 @@ function BoardView({
   tracker,
   rows,
   onOpen,
+  selectMode = false,
+  selected = [],
 }: {
   tracker: Tracker;
   rows: Entry[];
   onOpen: (entry: Entry) => void;
+  selectMode?: boolean;
+  selected?: string[];
 }) {
   const status = statusColumn(tracker);
 
@@ -265,9 +327,15 @@ function BoardView({
                 key={entry.id}
                 type="button"
                 onClick={() => onOpen(entry)}
-                className="mb-2 block w-full rounded-[10px] border border-border bg-card p-[10px] text-left text-[12.5px] font-semibold active:opacity-70"
+                className="mb-2 block w-full rounded-[10px] border border-border bg-card p-[10px] text-left active:opacity-70"
               >
-                {entryTitle(tracker, entry)}
+                <div className="text-[12.5px] font-semibold">
+                  {selectMode ? <Tick on={selected.includes(entry.id)} /> : null}
+                  {entryTitle(tracker, entry)}
+                </div>
+                {/* for a watch list this is Starring and Release date — what makes a card
+                    recognisable at a glance instead of a bare title */}
+                <SecondaryFields tracker={tracker} entry={entry} limit={2} />
               </button>
             ))}
             {inLane.length === 0 ? (
@@ -284,18 +352,18 @@ function GalleryView({
   tracker,
   rows,
   onOpen,
+  selectMode = false,
+  selected = [],
 }: {
   tracker: Tracker;
   rows: Entry[];
   onOpen: (entry: Entry) => void;
+  selectMode?: boolean;
+  selected?: string[];
 }) {
-  const title = titleColumn(tracker);
   return (
     <div className="grid grid-cols-2 gap-[10px]">
       {rows.map((entry) => {
-        const secondary = visibleColumns(tracker, entry.values)
-          .filter((c) => c.key !== title?.key && c.type !== 'longtext')
-          .slice(0, 2);
         return (
           <button
             key={entry.id}
@@ -304,13 +372,10 @@ function GalleryView({
             className="rounded-[10px] border border-border bg-card p-3 text-left active:opacity-70"
           >
             <div className="mb-2 text-[13px] font-semibold leading-tight">
+              {selectMode ? <Tick on={selected.includes(entry.id)} /> : null}
               {entryTitle(tracker, entry)}
             </div>
-            {secondary.map((c) => (
-              <div key={c.key} className="truncate text-[11px] text-muted-foreground">
-                {formatValue(c, entry.values[c.key])}
-              </div>
-            ))}
+            <SecondaryFields tracker={tracker} entry={entry} limit={2} />
           </button>
         );
       })}
@@ -537,4 +602,202 @@ function ColumnInput({
         </Field>
       );
   }
+}
+
+/**
+ * The fields worth showing under a title on a card — the tracker's own, in its own order,
+ * skipping the title, the status (already the lane/badge), long text (never fits) and empties.
+ */
+function SecondaryFields({
+  tracker,
+  entry,
+  limit,
+}: {
+  tracker: Tracker;
+  entry: Entry;
+  limit: number;
+}) {
+  const title = titleColumn(tracker);
+  const fields = visibleColumns(tracker, entry.values)
+    .filter(
+      (c) =>
+        c.key !== title?.key &&
+        c.type !== 'status' &&
+        c.type !== 'longtext' &&
+        c.type !== 'rating',
+    )
+    .filter((c) => {
+      const v = entry.values[c.key];
+      return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length);
+    })
+    .slice(0, limit);
+
+  if (!fields.length) return null;
+
+  return (
+    <div className="mt-[3px] grid gap-[1px]">
+      {fields.map((c) => (
+        <span key={c.key} className="truncate text-[11px] text-muted-foreground">
+          {formatValue(c, entry.values[c.key])}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** the selection tick that appears on a card while multi-select is on */
+function Tick({ on }: { on: boolean }) {
+  return (
+    <span
+      className="mr-[6px] inline-flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-[4px] align-middle text-[10px] font-bold"
+      style={{
+        border: `1.5px solid ${on ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
+        background: on ? 'hsl(var(--primary))' : 'transparent',
+        color: 'hsl(var(--primary-foreground))',
+      }}
+      aria-hidden
+    >
+      {on ? '✓' : ''}
+    </span>
+  );
+}
+
+/**
+ * Multi-select action bar. Offers exactly what the tracker defines — its status options, a
+ * rating if it has one, and any other single-choice field — so this works for Subscriptions
+ * or Learning just as well as for Movies.
+ */
+function BulkBar({
+  tracker,
+  selected,
+  allIds,
+  onSelectAll,
+  onApply,
+  onDelete,
+}: {
+  tracker: Tracker;
+  selected: string[];
+  allIds: string[];
+  onSelectAll: () => void;
+  onApply: (patch: Entry['values'], label: string) => void;
+  onDelete: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const statusCol = tracker.columns.find((c) => c.type === 'status');
+  const ratingCol = tracker.columns.find((c) => c.type === 'rating');
+  const choiceCols = tracker.columns.filter((c) => c.type === 'select' && c.options?.length);
+  const n = selected.length;
+
+  return (
+    <div className="sticky top-0 z-20 mb-3 rounded-[10px] border border-border bg-card p-[10px] shadow-sm">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="text-[12.5px] font-semibold">{n} selected</span>
+        <button
+          type="button"
+          onClick={onSelectAll}
+          className="text-[11.5px] font-semibold text-muted-foreground underline"
+        >
+          Select all {allIds.length}
+        </button>
+      </div>
+
+      {n > 0 ? (
+        <div className="flex flex-wrap gap-[6px]">
+          {statusCol?.options?.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => onApply({ [statusCol.key]: opt }, opt)}
+              className="rounded-[14px] border border-border px-[10px] py-[5px] text-[11.5px] font-semibold"
+            >
+              {opt}
+            </button>
+          ))}
+
+          {ratingCol ? (
+            <span className="flex items-center gap-[2px] px-1">
+              {[1, 2, 3, 4, 5].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  aria-label={`${r} star${r === 1 ? '' : 's'}`}
+                  onClick={() => onApply({ [ratingCol.key]: r }, `${r}★`)}
+                  className="text-[17px] leading-none"
+                  style={{ color: 'hsl(40 80% 45%)' }}
+                >
+                  ★
+                </button>
+              ))}
+            </span>
+          ) : null}
+
+          {choiceCols.map((c) => (
+            <select
+              key={c.key}
+              value=""
+              onChange={(e) => {
+                if (!e.target.value) return;
+                onApply({ [c.key]: e.target.value }, `${c.name}: ${e.target.value}`);
+                e.target.value = '';
+              }}
+              className="rounded-[14px] border border-border bg-card px-2 py-[5px] text-[11.5px] font-semibold"
+            >
+              <option value="">{c.name}…</option>
+              {c.options?.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+          ))}
+
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="rounded-[14px] px-[10px] py-[5px] text-[11.5px] font-semibold"
+            style={{
+              background: 'hsl(8 60% 47% / 0.08)',
+              border: '1px solid hsl(8 40% 60%)',
+              color: 'hsl(8 60% 40%)',
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      ) : (
+        <p className="m-0 text-[11.5px] text-muted-foreground">
+          Tap entries to select them.
+        </p>
+      )}
+
+      {confirming ? (
+        <BottomSheet
+          open
+          onClose={() => setConfirming(false)}
+          height="40%"
+          title={<SheetTitle>Delete {n} {n === 1 ? 'entry' : 'entries'}?</SheetTitle>}
+        >
+          <p className="m-0 mb-4 text-[12.5px] leading-[1.55]">
+            This removes {n} {n === 1 ? 'entry' : 'entries'} from <b>{tracker.name}</b>. It
+            can&rsquo;t be undone — the deletion is recorded in History, but the entries
+            themselves are gone.
+          </p>
+          <div className="flex gap-[10px]">
+            <OutlineButton onClick={() => setConfirming(false)}>Cancel</OutlineButton>
+            <button
+              type="button"
+              onClick={() => {
+                onDelete();
+                setConfirming(false);
+              }}
+              className="flex-1 rounded-lg py-[11px] text-[13px] font-semibold text-white"
+              style={{ background: 'hsl(8 60% 41%)' }}
+            >
+              Delete
+            </button>
+          </div>
+        </BottomSheet>
+      ) : null}
+    </div>
+  );
 }

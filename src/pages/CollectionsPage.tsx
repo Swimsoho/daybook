@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowUpDown, CalendarPlus, ChevronDown, ChevronUp, Download, Loader2, Plus, Search, Tv, Upload } from 'lucide-react'
+import { ArrowUpDown, CalendarPlus, CheckSquare, ChevronDown, ChevronUp, Download, Loader2, Plus, Search, Trash2, Tv, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -92,6 +92,15 @@ export default function CollectionsPage() {
   const { state, updateEntry } = useStore()
   const cloud = useCloud()
   const [bulkLookup, setBulkLookup] = useState(false)
+  /**
+   * Multi-select. Off by default: checkboxes on every row all the time make a reading view
+   * feel like a form. Turning Select on reveals them and the action bar.
+   */
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<string[]>([])
+  const toggleSelected = (id: string) =>
+    setSelected(ids => (ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]))
+  const clearSelection = () => { setSelected([]); setSelectMode(false) }
   const trackers = state.trackers.filter(t => t.active)
   const grp = (t: Tracker) => collectionGroup(state, t.collectionId)
   const trackersByTab: Record<TopTab, Tracker[]> = {
@@ -329,6 +338,14 @@ export default function CollectionsPage() {
               {bulkLookup ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Tv className="h-3.5 w-3.5 mr-1" />}Where to watch (US)
             </Button>
           )}
+          <Button
+            size="sm"
+            variant={selectMode ? 'default' : 'outline'}
+            className="h-7"
+            onClick={() => (selectMode ? clearSelection() : setSelectMode(true))}
+          >
+            <CheckSquare className="h-3.5 w-3.5 mr-1" />{selectMode ? 'Done' : 'Select'}
+          </Button>
           <Button size="sm" variant="outline" className="h-7" onClick={() => setImporting(true)}><Upload className="h-3.5 w-3.5 mr-1" />Import</Button>
           <Button size="sm" className="h-7" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5 mr-1" />Entry</Button>
         </div>
@@ -397,6 +414,7 @@ export default function CollectionsPage() {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-border text-left text-[10.5px] uppercase tracking-[0.1em] text-muted-foreground">
+                {selectMode && <th className="w-[28px]" />}
                 {tracker.columns.map(c => (
                   <th
                     key={c.key}
@@ -435,7 +453,25 @@ export default function CollectionsPage() {
               {displayEntries.map(e => {
                 const vis = visibleColumns(tracker, e.values)
                 return (
-                  <tr key={e.id} className="border-b border-border/60 last:border-0 hover:bg-accent/50 cursor-pointer" onClick={() => setEditEntry(e)}>
+                  <tr
+                    key={e.id}
+                    className={cn(
+                      'border-b border-border/60 last:border-0 hover:bg-accent/50 cursor-pointer',
+                      selected.includes(e.id) && 'bg-accent',
+                    )}
+                    onClick={() => (selectMode ? toggleSelected(e.id) : setEditEntry(e))}
+                  >
+                    {selectMode && (
+                      <td className="pl-3 pr-0 py-2 w-[28px]">
+                        <input
+                          type="checkbox"
+                          className="h-3.5 w-3.5 accent-[hsl(var(--primary))]"
+                          checked={selected.includes(e.id)}
+                          onChange={() => toggleSelected(e.id)}
+                          onClick={ev => ev.stopPropagation()}
+                        />
+                      </td>
+                    )}
                     {tracker.columns.map(c => {
                       const hidden = !vis.includes(c)
                       const v = e.values[c.key]
@@ -454,6 +490,16 @@ export default function CollectionsPage() {
           {entries.length > 0 && displayEntries.length === 0 && <EmptyNote>No entries match your search or filters.</EmptyNote>}
           {tracker.columns.some(c => c.showWhen) && <p className="px-3 py-1.5 text-[10.5px] text-muted-foreground">* conditional column — appears once its status rule is met</p>}
         </section>
+      )}
+
+      {selectMode && (
+        <BulkBar
+          tracker={tracker}
+          selected={selected}
+          allIds={displayEntries.map(e => e.id)}
+          onSelectAll={ids => setSelected(ids)}
+          onClear={clearSelection}
+        />
       )}
 
       {/* BOARD — needs a Status column with options; otherwise explain rather than render blank */}
@@ -497,10 +543,20 @@ export default function CollectionsPage() {
                     className="border border-border bg-background px-3 py-2 text-left hover:border-input transition-colors cursor-grab active:cursor-grabbing"
                   >
                     <div className="text-[13px] font-medium">{titleOf(tracker, e)}</div>
-                    <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-2">
-                      {tracker.columns.filter(c => !c.isTitle && c.type !== 'status' && visibleColumns(tracker, e.values).includes(c)).slice(0, 2).map(c => (
-                        <span key={c.key}><CellValue col={c} value={e.values[c.key]} small /></span>
-                      ))}
+                    {/* Secondary fields — for a watch list this is Starring and Release date,
+                        which is what makes a card recognisable at a glance rather than a
+                        bare title. Long text is excluded; it never fits on a card. */}
+                    <div className="text-[11px] text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      {tracker.columns
+                        .filter(c => !c.isTitle && c.type !== 'status' && c.type !== 'longtext' && visibleColumns(tracker, e.values).includes(c))
+                        .filter(c => {
+                          const v = e.values[c.key]
+                          return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length)
+                        })
+                        .slice(0, 3)
+                        .map(c => (
+                          <span key={c.key}><CellValue col={c} value={e.values[c.key]} small /></span>
+                        ))}
                     </div>
                   </button>
                 ))}
@@ -523,7 +579,21 @@ export default function CollectionsPage() {
                 </div>
                 <div className="px-3 py-2">
                   <div className="text-[13px] font-medium truncate">{titleOf(tracker, e)}</div>
-                  <div className="text-[11px] text-muted-foreground flex items-center justify-between mt-0.5">
+                  {/* the same secondary fields the board shows — a poster tile with only a
+                      first initial and a status isn't enough to pick a film from */}
+                  <div className="text-[11px] text-muted-foreground mt-0.5 grid gap-0.5">
+                    {tracker.columns
+                      .filter(c => !c.isTitle && c.type !== 'status' && c.type !== 'longtext' && c.type !== 'rating' && visibleColumns(tracker, e.values).includes(c))
+                      .filter(c => {
+                        const v = e.values[c.key]
+                        return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length)
+                      })
+                      .slice(0, 2)
+                      .map(c => (
+                        <span key={c.key} className="truncate"><CellValue col={c} value={e.values[c.key]} small /></span>
+                      ))}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground flex items-center justify-between mt-1">
                     <span>{stage}</span>
                     {typeof rating === 'number' && <Stars n={rating} />}
                   </div>
@@ -706,6 +776,148 @@ function ColumnInput({ col, value, onChange }: { col: TrackerColumn; value: Entr
     default:
       return <Input value={String(value ?? '')} onChange={e => onChange(e.target.value)} />
   }
+}
+
+/**
+ * Multi-select action bar.
+ *
+ * Offers exactly what the tracker itself defines: its status options, a rating if it has a
+ * rating column, and any other single-choice field. Nothing is hardcoded to Movies — a
+ * Subscriptions or Learning tracker gets its own fields for free.
+ *
+ * Delete asks first and names the count, because a bulk delete is the one action here with
+ * no undo.
+ */
+function BulkBar({
+  tracker,
+  selected,
+  allIds,
+  onSelectAll,
+  onClear,
+}: {
+  tracker: Tracker
+  selected: string[]
+  allIds: string[]
+  onSelectAll: (ids: string[]) => void
+  onClear: () => void
+}) {
+  const { patchEntries, deleteEntries } = useStore()
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const statusCol = tracker.columns.find(c => c.type === 'status')
+  const ratingCol = tracker.columns.find(c => c.type === 'rating')
+  const choiceCols = tracker.columns.filter(c => c.type === 'select' && c.options?.length)
+  const n = selected.length
+
+  const apply = (patch: Record<string, string | number>, label: string) => {
+    patchEntries(selected, patch)
+    toast.success(`${n} ${n === 1 ? 'entry' : 'entries'} → ${label}`)
+  }
+
+  return (
+    <div className="sticky top-2 z-20 mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 shadow-sm">
+      <span className="text-[12.5px] font-semibold">
+        {n} selected
+      </span>
+      <Button size="sm" variant="ghost" className="h-7 text-[12px]" onClick={() => onSelectAll(allIds)}>
+        Select all {allIds.length}
+      </Button>
+
+      {n > 0 && (
+        <>
+          <span className="mx-1 h-4 w-px bg-border" />
+
+          {statusCol?.options?.map(opt => (
+            <Button
+              key={opt}
+              size="sm"
+              variant="outline"
+              className="h-7 text-[12px]"
+              onClick={() => apply({ [statusCol.key]: opt }, opt)}
+            >
+              {opt}
+            </Button>
+          ))}
+
+          {ratingCol && (
+            <span className="flex items-center gap-1">
+              <span className="text-[11px] text-muted-foreground">Rate</span>
+              {[1, 2, 3, 4, 5].map(r => (
+                <button
+                  key={r}
+                  type="button"
+                  className="text-[15px] leading-none text-[hsl(40_80%_45%)] hover:scale-110 transition-transform"
+                  title={`${r} star${r === 1 ? '' : 's'}`}
+                  onClick={() => apply({ [ratingCol.key]: r }, `${r}★`)}
+                >
+                  ★
+                </button>
+              ))}
+            </span>
+          )}
+
+          {choiceCols.map(c => (
+            <select
+              key={c.key}
+              className="h-7 rounded-sm border border-border bg-card px-2 text-[12px]"
+              value=""
+              onChange={ev => {
+                if (!ev.target.value) return
+                apply({ [c.key]: ev.target.value }, `${c.name}: ${ev.target.value}`)
+                ev.target.value = ''
+              }}
+            >
+              <option value="">{c.name}…</option>
+              {c.options?.map(o => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          ))}
+
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-[12px] text-[hsl(8_60%_40%)] border-[hsl(8_40%_60%)]"
+            onClick={() => setConfirmDelete(true)}
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
+          </Button>
+        </>
+      )}
+
+      <Button size="sm" variant="ghost" className="h-7 text-[12px] ml-auto" onClick={onClear}>
+        Cancel
+      </Button>
+
+      <Dialog open={confirmDelete} onOpenChange={o => !o && setConfirmDelete(false)}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="font-display text-lg">
+              Delete {n} {n === 1 ? 'entry' : 'entries'}?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-[12.5px] leading-relaxed">
+            This removes {n} {n === 1 ? 'entry' : 'entries'} from <b>{tracker.name}</b>. It can&rsquo;t
+            be undone — the deletion is recorded in History, but the entries themselves are gone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+            <Button
+              className="bg-[hsl(8_60%_41%)] hover:bg-[hsl(8_60%_36%)] text-[hsl(45_50%_96%)]"
+              onClick={() => {
+                deleteEntries(selected)
+                toast.success(`Deleted ${n} ${n === 1 ? 'entry' : 'entries'}`)
+                setConfirmDelete(false)
+                onClear()
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
 }
 
 // ---------- Collections bulk import: per-tracker template + preview ----------

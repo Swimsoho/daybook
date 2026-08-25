@@ -298,11 +298,31 @@ function normalizeWatchTrackers(trackers: Tracker[]): Tracker[] {
   const isWatchList = (name: string) => /movie|film|tv|show|series|watch|cinema/i.test(name)
   return trackers.map(t => {
     if (!isWatchList(t.name)) return t
-    const cols: TrackerColumn[] = t.columns.map(c => ({ ...c }))
+    let cols: TrackerColumn[] = t.columns.map(c => ({ ...c }))
+
+    // A watch list is much more useful showing who's in it and when it came out, and the
+    // shipped Movies tracker has had both since it was seeded. A list built by hand — or
+    // created before those fields existed — has neither, so the cards show a bare title.
+    // Add them once, only when genuinely absent, matching by key OR name so a hand-made
+    // "Cast" or "Released" column isn't duplicated. Never reorders or edits what's there.
+    const hasCol = (key: string, re: RegExp) =>
+      cols.some(c => c.key === key || re.test(c.name))
+    const titleIndex = Math.max(0, cols.findIndex(c => c.isTitle))
+    const additions: TrackerColumn[] = []
+    if (!hasCol('starring', /star|cast|actor|lead/i)) {
+      additions.push({ key: 'starring', name: 'Starring', type: 'text' })
+    }
+    if (!hasCol('release', /release|aired|year|premier/i)) {
+      additions.push({ key: 'release', name: 'Release date', type: 'date' })
+    }
+    if (additions.length) {
+      // straight after the title, so they read as part of the entry's identity
+      cols = [...cols.slice(0, titleIndex + 1), ...additions, ...cols.slice(titleIndex + 1)]
+    }
     // The watch-status column: a status/select field named like Watch / Status / Seen / Progress
     // that has no options defined yet. (A checkbox "Watched" is left alone — it's a different shape.)
     const wc = cols.find(c => (c.type === 'status' || c.type === 'select') && /watch|status|seen|progress/i.test(c.name) && !(c.options?.length))
-    if (!wc) return t
+    if (!wc) return additions.length ? { ...t, columns: cols } : t
     wc.type = 'status' // so the Board view (which groups by a Status column) can render it
     wc.options = [...WATCH_STATUS_DEFAULTS]
     // A dependent column (e.g. Rating "appears when Watched reaches ___") left with a blank target
