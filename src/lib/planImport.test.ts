@@ -10,7 +10,7 @@ import {
  */
 
 describe('detecting columns', () => {
-  it('reads the MaterialFaire tracker header', () => {
+  it('reads a typical execution-tracker header', () => {
     const m = detectPlanColumns(['ID', 'TASK', 'STATUS', 'OWNER', 'PRIORITY', 'TARGET', 'PHASE', 'NOTES'])
     expect(m).toMatchObject({ ref: 0, title: 1, status: 2, owner: 3, priority: 4, due: 5, phase: 6, notes: 7 })
   })
@@ -98,28 +98,28 @@ describe('building a plan', () => {
   const header = ['ID', 'Task', 'Status', 'Owner', 'Priority', 'Target', 'Phase', 'Waiting on']
   const rows = [
     header,
-    ['F1', 'Incorporate in Delaware', 'Not started', 'Craig', 'P1', '2026-03-01', 'Foundation', ''],
-    ['F2', 'Assign core areas', 'Not started', '', 'P1', '', 'Foundation', ''],
-    ['F3', 'Select focus categories', 'Not started', '', 'P1', '', 'Foundation', 'F2'],
-    ['P1', 'Build the landed-price model', 'In progress', 'Craig', 'P1', '', 'Platform', 'F3'],
-    ['P3', 'Finalize the display page', 'Not started', '', 'P1', '', 'Platform', 'P1, P2'],
+    ['B1', 'Book the hall', 'Not started', 'Craig', 'P1', '2026-03-01', 'Booked', ''],
+    ['B2', 'Agree the budget', 'Not started', '', 'P1', '', 'Booked', ''],
+    ['B3', 'Confirm the caterer', 'Not started', '', 'P1', '', 'Booked', 'B2'],
+    ['G1', 'Send the invitations', 'In progress', 'Craig', 'P1', '', 'Guests', 'B3'],
+    ['G3', 'Draw up the seating plan', 'Not started', '', 'P1', '', 'Guests', 'G1, G2'],
   ]
   const plan = buildPlan(rows, detectPlanColumns(header))
 
   it('collects phases in the order the source listed them', () => {
-    expect(plan.phases).toEqual(['Foundation', 'Platform'])
+    expect(plan.phases).toEqual(['Booked', 'Guests'])
   })
 
   it('keeps every task and its filing', () => {
     expect(plan.tasks).toHaveLength(5)
     expect(plan.tasks[0]).toMatchObject({
-      ref: 'F1', title: 'Incorporate in Delaware', status: 'next',
-      owner: 'Craig', priority: 'P1', due: '2026-03-01', phase: 'Foundation',
+      ref: 'B1', title: 'Book the hall', status: 'next',
+      owner: 'Craig', priority: 'P1', due: '2026-03-01', phase: 'Booked',
     })
   })
 
   it('splits a multi-value dependency cell', () => {
-    expect(plan.tasks[4].blockedByRefs).toEqual(['P1', 'P2'])
+    expect(plan.tasks[4].blockedByRefs).toEqual(['G1', 'G2'])
   })
 
   it('skips rows with no task name', () => {

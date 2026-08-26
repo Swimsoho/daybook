@@ -97,7 +97,7 @@ export function ImportPlanDialog({ project, open, onClose }: {
                 value={paste}
                 onChange={e => setPaste(e.target.value)}
                 rows={8}
-                placeholder={'ID\tTask\tStatus\tOwner\tPriority\tTarget\tPhase\nF1\tIncorporate in Delaware\tNot started\t\tP1\t\tFoundation'}
+                placeholder={'ID\tTask\tStatus\tOwner\tPriority\tTarget\tPhase\n1\tBook the hall\tDone\t\tP1\t\tBooked\n2\tSend the invitations\tNot started\t\tP1\t\tGuests'}
                 className="font-mono text-[11.5px]"
               />
               <Button
