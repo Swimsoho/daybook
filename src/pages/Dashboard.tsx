@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import {
-  Person, Task, addDays, daysBetween, daysSince, fmtDate, fmtDateLong, nextOccurrence, personOverdueBy, today,
+  Person, Task, TaskType, TYPE_LABELS, addDays, daysBetween, daysSince, fmtDate, fmtDateLong, nextOccurrence, personOverdueBy, today,
 } from '@/lib/model'
 import {
   buildCallList, callsMadeOn, isOverdue, openTasks, stalledProjects, useStore,
@@ -80,7 +80,7 @@ function TomorrowDash({ projectFilter }: { goTo: (p: string) => void; projectFil
 
   const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
   const callActionIds = new Set(state.actions.filter(a => a.name.trim().toLowerCase() === 'call').map(a => a.id))
-  const isCall = (t: Task) => t.type === 'call' || t.type === 'followup' || (t.actionIds ?? []).some(id => callActionIds.has(id))
+  const isCall = (t: Task) => t.type === 'call' || (t.type === 'followup' && !!t.personId) || (t.actionIds ?? []).some(id => callActionIds.has(id))
   const byPrio = (a: Task, b: Task) => a.priority.localeCompare(b.priority)
   const tasks = open.filter(t => !isCall(t) && t.due === tmrw).sort(byPrio)
   const callTasks = open.filter(t => isCall(t) && t.due === tmrw).sort(byPrio)
@@ -327,7 +327,7 @@ function DropZone({ active, onDragOver, onDrop }: { active: boolean; onDragOver:
 // ================= TODAY =================
 
 function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => void; projectFilter?: string | null; viewerName?: string }) {
-  const { state, updateSettings, completeTask } = useStore()
+  const { state, updateSettings, completeTask, updateTask } = useStore()
   const [openTask, setOpenTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [logPerson, setLogPerson] = useState<Person | null>(null)
@@ -344,7 +344,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   // home (Today's call list), so they're kept OUT of the Today task list and the capacity count —
   // no double-listing, no inflating the daily number.
   const callActionIds = new Set(state.actions.filter(a => a.name.trim().toLowerCase() === 'call').map(a => a.id))
-  const isCall = (t: Task) => t.type === 'call' || t.type === 'followup' || (t.actionIds ?? []).some(id => callActionIds.has(id))
+  const isCall = (t: Task) => t.type === 'call' || (t.type === 'followup' && !!t.personId) || (t.actionIds ?? []).some(id => callActionIds.has(id))
   // What lands on the Today TASK list (calls excluded):
   //   • anything due today or already overdue, OR
   //   • an UNDATED high-priority task (Urgent/High) — the "do it soon" work with no date of its own.
@@ -682,7 +682,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
           <KpiTile
             label="Calls" value={`${callTasks.length + personCalls.length}`} sub={made > 0 ? `${made} logged today` : 'to make today'}
             icon={<Phone className="h-4 w-4" />} accent="hsl(28 70% 48%)"
-            onClick={() => setDrill({ title: `Today's calls — ${callTasks.length + personCalls.length}`, sub: made > 0 ? `${made} already logged today` : 'tap a call to open it, or mark it done', calls: true })}
+            onClick={() => setDrill({ title: `Today's calls — ${callTasks.length + personCalls.length}`, sub: made > 0 ? `${made} already logged today` : 'tap to open · change its type if it’s not a call · or mark it done', calls: true })}
           />
           <KpiTile
             label="Inbox" value={pendingCaptures.length} sub="to confirm"
@@ -719,7 +719,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
       <Dialog open={!!drill} onOpenChange={o => !o && setDrill(null)}>
         <DialogContent className="w-[95vw] sm:max-w-[900px] max-h-[88vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
-            <DialogTitle className="font-display text-lg">{drill?.title}</DialogTitle>
+            <DialogTitle className="font-display text-lg">{drill?.calls ? `Today's calls — ${callTasks.length + personCalls.length}` : drill?.title}</DialogTitle>
             {drill?.sub && <p className="text-[12px] text-muted-foreground">{drill.sub}</p>}
           </DialogHeader>
           {drill?.tasks && (
@@ -734,13 +734,23 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
                 const person = t.personId ? state.people.find(p => p.id === t.personId) : undefined
                 return (
                   <div key={t.id} className="group w-full flex items-center gap-2.5 px-3 py-2 border-b border-border/60 last:border-0 hover:bg-accent/50">
-                    <button onClick={() => { setDrill(null); setOpenTask(t) }} className="min-w-0 flex-1 flex items-center gap-2.5 text-left">
+                    <button onClick={() => { setDrill(null); setTimeout(() => setOpenTask(t), 0) }} className="min-w-0 flex-1 flex items-center gap-2.5 text-left">
                       <Phone className="h-3.5 w-3.5 shrink-0 text-[hsl(215_45%_42%)]" />
                       <span className="min-w-0 flex-1">
                         <span className="text-[13.5px] font-medium truncate block">{t.title}</span>
                         <span className="text-[11.5px] text-muted-foreground truncate block">{person ? person.name : (t.callAbout || 'No contact attached')}</span>
                       </span>
                     </button>
+                    {/* Not a call? Re-type it right here — change it to a To-do and it leaves the call list. */}
+                    <select
+                      value={t.type}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => { const nt = e.target.value as TaskType; updateTask(t.id, { type: nt }, `type → ${TYPE_LABELS[nt]}`); toast(nt === 'todo' ? 'Now a to-do — off the call list' : `Type → ${TYPE_LABELS[nt]}`) }}
+                      title="Not a call? Change its type"
+                      className="h-7 rounded-md border border-border bg-card px-1.5 text-[11px] text-muted-foreground cursor-pointer outline-none shrink-0 hover:border-input"
+                    >
+                      {(Object.keys(TYPE_LABELS) as TaskType[]).map(tt => <option key={tt} value={tt}>{TYPE_LABELS[tt]}</option>)}
+                    </select>
                     <Button size="sm" className="h-7 px-2.5 text-[11px] shrink-0" onClick={() => { completeTask(t.id); toast.success('Call done — checked off') }}>
                       <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Done
                     </Button>

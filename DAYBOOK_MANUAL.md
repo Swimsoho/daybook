@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v102 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v103 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+88. **v103** — Understand *why* something is a call, and **re‑type it right from the calls list**.
+
+    Answering “why are these under Calls, and why can’t I change them?” **(1)** Something shows under Calls because its **Type is “To‑call”** (set when you made it, or guessed by the AI router on a capture) — *or* it’s a follow‑up **to a person**. Follow‑ups that aren’t linked to anyone no longer count as calls (that was too broad), so a plain “follow up on X” stays a normal task. **(2)** Each call in the **Today’s calls** pop‑up now has a small **Type dropdown** right on the row — switch it to **To‑do** and it immediately leaves the call list (or tap the row to open the full task, which also has the Type switcher). The pop‑up’s count is now **live**, so it updates the moment you re‑type or finish one. *(Note: the calls list can also include people you’re overdue to **contact** by relationship cadence — those show **with a name**; if you’d like those in their own “Keep in touch” section so the Calls count only reflects deliberate calls, say the word.)*
 
 87. **v102** — The **Calls** count now makes sense, follow-ups are real (completable) calls, and finishing a call makes it go away.
 
