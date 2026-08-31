@@ -475,9 +475,10 @@ export default function CollectionsPage() {
                     {tracker.columns.map(c => {
                       const hidden = !vis.includes(c)
                       const v = e.values[c.key]
+                      const flaggable = (c.type === 'status' || c.type === 'select') && (c.options?.length ?? 0) > 0
                       return (
                         <td key={c.key} className={cn('px-3 py-2', c.isTitle && 'font-medium')}>
-                          {hidden ? <span className="text-border">·</span> : <CellValue col={c} value={v} />}
+                          {hidden ? <span className="text-border">·</span> : flaggable ? <InlineFlag entryId={e.id} col={c} value={v} /> : <CellValue col={c} value={v} />}
                         </td>
                       )
                     })}
@@ -572,33 +573,38 @@ export default function CollectionsPage() {
           {displayEntries.map(e => {
             const rating = e.values['rating'] as number | undefined
             const stage = statusCol ? String(e.values[statusCol.key] ?? '') : ''
+            const flaggable = !!statusCol && (statusCol.options?.length ?? 0) > 0
             return (
-              <button key={e.id} onClick={() => setEditEntry(e)} className="border border-border bg-card shadow-sm rounded-lg text-left hover:-translate-y-0.5 transition-transform">
-                <div className="aspect-[3/2] flex items-center justify-center font-display-soft text-3xl text-[hsl(45_50%_96%)]" style={{ background: `linear-gradient(150deg, hsl(152 22% 26%), hsl(152 18% 18%))` }}>
-                  {titleOf(tracker, e).slice(0, 1)}
-                </div>
-                <div className="px-3 py-2">
-                  <div className="text-[13px] font-medium truncate">{titleOf(tracker, e)}</div>
-                  {/* the same secondary fields the board shows — a poster tile with only a
-                      first initial and a status isn't enough to pick a film from */}
-                  <div className="text-[11px] text-muted-foreground mt-0.5 grid gap-0.5">
-                    {tracker.columns
-                      .filter(c => !c.isTitle && c.type !== 'status' && c.type !== 'longtext' && c.type !== 'rating' && visibleColumns(tracker, e.values).includes(c))
-                      .filter(c => {
-                        const v = e.values[c.key]
-                        return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length)
-                      })
-                      .slice(0, 2)
-                      .map(c => (
-                        <span key={c.key} className="truncate"><CellValue col={c} value={e.values[c.key]} small /></span>
-                      ))}
+              <div key={e.id} className="border border-border bg-card shadow-sm rounded-lg text-left hover:-translate-y-0.5 transition-transform overflow-hidden">
+                <button onClick={() => (selectMode ? toggleSelected(e.id) : setEditEntry(e))} className="block w-full text-left">
+                  <div className="aspect-[3/2] flex items-center justify-center font-display-soft text-3xl text-[hsl(45_50%_96%)]" style={{ background: `linear-gradient(150deg, hsl(152 22% 26%), hsl(152 18% 18%))` }}>
+                    {titleOf(tracker, e).slice(0, 1)}
                   </div>
-                  <div className="text-[11px] text-muted-foreground flex items-center justify-between mt-1">
-                    <span>{stage}</span>
-                    {typeof rating === 'number' && <Stars n={rating} />}
+                  <div className="px-3 pt-2">
+                    <div className="text-[13px] font-medium truncate">{titleOf(tracker, e)}</div>
+                    {/* the same secondary fields the board shows — a poster tile with only a
+                        first initial and a status isn't enough to pick a film from */}
+                    <div className="text-[11px] text-muted-foreground mt-0.5 grid gap-0.5">
+                      {tracker.columns
+                        .filter(c => !c.isTitle && c.type !== 'status' && c.type !== 'longtext' && c.type !== 'rating' && visibleColumns(tracker, e.values).includes(c))
+                        .filter(c => {
+                          const v = e.values[c.key]
+                          return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length)
+                        })
+                        .slice(0, 2)
+                        .map(c => (
+                          <span key={c.key} className="truncate"><CellValue col={c} value={e.values[c.key]} small /></span>
+                        ))}
+                    </div>
                   </div>
+                </button>
+                <div className="px-3 pb-2 pt-1 flex items-center justify-between gap-2">
+                  {flaggable
+                    ? <InlineFlag entryId={e.id} col={statusCol!} value={e.values[statusCol!.key]} />
+                    : <span className="text-[11px] text-muted-foreground truncate">{stage}</span>}
+                  {typeof rating === 'number' && <Stars n={rating} />}
                 </div>
-              </button>
+              </div>
             )
           })}
         </div>
@@ -607,6 +613,34 @@ export default function CollectionsPage() {
       <EntryDialog tracker={tracker} open={adding || !!editEntry} entry={editEntry} onClose={() => { setAdding(false); setEditEntry(null) }} />
       <ImportEntriesDialog tracker={tracker} open={importing} onClose={() => setImporting(false)} />
     </div>
+  )
+}
+
+// Inline "flag" control — a compact status/select dropdown rendered right on a row or card, so you
+// can look an item up and set its status (e.g. a movie → "Watched") in one click without opening
+// the full editor. Stops click-through so it doesn't also open the entry dialog.
+function InlineFlag({ entryId, col, value }: { entryId: string; col: TrackerColumn; value: Entry['values'][string] }) {
+  const { updateEntry } = useStore()
+  const cur = value === undefined || value === null ? '' : String(value)
+  return (
+    <select
+      value={cur}
+      onClick={e => e.stopPropagation()}
+      onMouseDown={e => e.stopPropagation()}
+      onChange={e => {
+        e.stopPropagation()
+        const val = e.target.value
+        updateEntry(entryId, { [col.key]: val || undefined })
+        toast.success(val ? `${col.name} → ${val}` : `${col.name} cleared`)
+      }}
+      className={cn(
+        'max-w-[160px] h-7 rounded-md border px-2 text-[11.5px] cursor-pointer outline-none transition-colors',
+        cur ? 'border-[hsl(17_63%_47%)] bg-[hsl(17_63%_47%_/_0.08)] text-foreground font-medium' : 'border-dashed border-border bg-card text-muted-foreground hover:border-input',
+      )}
+    >
+      <option value="">— set {col.name.toLowerCase()} —</option>
+      {col.options?.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
   )
 }
 

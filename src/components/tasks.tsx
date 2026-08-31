@@ -287,9 +287,15 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
         <DueChip due={task.due} />
         <PriorityChip p={task.priority} />
 
-        {/* one-tap quick actions — reschedule / delete without opening the menu */}
+        {/* one-tap quick actions — complete / reschedule / delete without opening the menu */}
         {!done && (
           <div className="hidden sm:inline-flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+            <button title="Mark complete (undo available)" onClick={e => {
+              e.stopPropagation()
+              const prev = task.status
+              completeTask(task.id)
+              toast.success('Done — archived, never deleted', { action: { label: 'Undo', onClick: () => updateTask(task.id, { status: prev, completedAt: undefined }, 'undo complete') }, duration: 6000 })
+            }} className="h-6 px-1.5 inline-flex items-center gap-1 text-[10.5px] rounded-sm border border-primary/40 bg-primary/10 hover:bg-primary hover:text-primary-foreground text-primary"><Check className="h-3 w-3" />Done</button>
             <button title="Move to Today" onClick={e => { e.stopPropagation(); updateTask(task.id, { due: today() }, 'due → Today'); toast.success('Moved to Today') }} className="h-6 px-1.5 text-[10.5px] rounded-sm border border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground">Today</button>
             <button title="Move to Tomorrow" onClick={e => { e.stopPropagation(); updateTask(task.id, { due: addDays(today(), 1) }, 'due → Tomorrow'); toast.success('Moved to Tomorrow') }} className="h-6 px-1.5 text-[10.5px] rounded-sm border border-border bg-background hover:bg-accent text-muted-foreground hover:text-foreground">Tmrw</button>
             <button title="Delete permanently (undo available)" onClick={e => { e.stopPropagation(); doDelete() }} className="h-6 w-6 grid place-items-center rounded-sm border border-border bg-background hover:bg-[hsl(8_60%_41%_/_0.1)] text-muted-foreground hover:text-[hsl(8_60%_41%)]"><Trash2 className="h-3 w-3" /></button>
@@ -324,7 +330,15 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuLabel className="text-[10.5px] uppercase tracking-wide text-muted-foreground">Quick actions</DropdownMenuLabel>
-              {qa.done && <DropdownMenuItem onClick={() => { completeTask(task.id); toast.success('Done — archived') }}>Done / complete</DropdownMenuItem>}
+              {/* Mark complete is fundamental — always available, regardless of the quick-action toggles. */}
+              <DropdownMenuItem className="text-primary font-medium" onClick={() => {
+                const prev = task.status
+                completeTask(task.id)
+                toast.success('Done — archived, never deleted', { action: { label: 'Undo', onClick: () => updateTask(task.id, { status: prev, completedAt: undefined }, 'undo complete') }, duration: 6000 })
+              }}>
+                <Check className="h-3.5 w-3.5 mr-2" />Mark complete
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {qa.called && (task.type === 'call' || task.personId) && (
                 <DropdownMenuItem onClick={() => { calledFollowUp(task.id); toast.success(`Call logged — follow-up created for ${fmtDate(addDays(today(), state.settings.followUpDays))}`) }}>
                   Called — needs follow-up
