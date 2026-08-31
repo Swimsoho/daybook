@@ -80,7 +80,7 @@ function TomorrowDash({ projectFilter }: { goTo: (p: string) => void; projectFil
 
   const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
   const callActionIds = new Set(state.actions.filter(a => a.name.trim().toLowerCase() === 'call').map(a => a.id))
-  const isCall = (t: Task) => t.type === 'call' || (t.actionIds ?? []).some(id => callActionIds.has(id))
+  const isCall = (t: Task) => t.type === 'call' || t.type === 'followup' || (t.actionIds ?? []).some(id => callActionIds.has(id))
   const byPrio = (a: Task, b: Task) => a.priority.localeCompare(b.priority)
   const tasks = open.filter(t => !isCall(t) && t.due === tmrw).sort(byPrio)
   const callTasks = open.filter(t => isCall(t) && t.due === tmrw).sort(byPrio)
@@ -344,7 +344,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   // home (Today's call list), so they're kept OUT of the Today task list and the capacity count —
   // no double-listing, no inflating the daily number.
   const callActionIds = new Set(state.actions.filter(a => a.name.trim().toLowerCase() === 'call').map(a => a.id))
-  const isCall = (t: Task) => t.type === 'call' || (t.actionIds ?? []).some(id => callActionIds.has(id))
+  const isCall = (t: Task) => t.type === 'call' || t.type === 'followup' || (t.actionIds ?? []).some(id => callActionIds.has(id))
   // What lands on the Today TASK list (calls excluded):
   //   • anything due today or already overdue, OR
   //   • an UNDATED high-priority task (Urgent/High) — the "do it soon" work with no date of its own.
@@ -536,7 +536,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
         <section className="rise-in border border-border bg-card shadow-sm" style={{ animationDelay: '90ms' }}>
           <div className="px-4 pt-3.5 pb-2 flex items-baseline justify-between">
             <SectionTitle className="mb-0">Today’s call list</SectionTitle>
-            <span className="text-[11px] tabular text-muted-foreground">{made}/{state.settings.callGoal} made</span>
+            <span className="text-[11px] tabular text-muted-foreground">{callTasks.length + personCalls.length} to make{made > 0 ? ` · ${made} logged` : ''}</span>
           </div>
           <div className="px-2 pb-2">
             {/* Call-type tasks first — the specific calls you set for today, contact or not. */}
@@ -680,9 +680,9 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
             onClick={() => setDrill({ title: `Overdue — ${overdue.length} task${overdue.length === 1 ? '' : 's'}`, sub: 'Past their due date (calls are shown under Calls)', tasks: overdue })}
           />
           <KpiTile
-            label="Calls" value={`${made}/${state.settings.callGoal}`} sub="made today"
+            label="Calls" value={`${callTasks.length + personCalls.length}`} sub={made > 0 ? `${made} logged today` : 'to make today'}
             icon={<Phone className="h-4 w-4" />} accent="hsl(28 70% 48%)"
-            onClick={() => setDrill({ title: `Today's calls — ${callTasks.length + personCalls.length}`, sub: `${made} of ${state.settings.callGoal} logged today`, calls: true })}
+            onClick={() => setDrill({ title: `Today's calls — ${callTasks.length + personCalls.length}`, sub: made > 0 ? `${made} already logged today` : 'tap a call to open it, or mark it done', calls: true })}
           />
           <KpiTile
             label="Inbox" value={pendingCaptures.length} sub="to confirm"
@@ -733,13 +733,18 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
               {callTasks.map(t => {
                 const person = t.personId ? state.people.find(p => p.id === t.personId) : undefined
                 return (
-                  <button key={t.id} onClick={() => { setDrill(null); setOpenTask(t) }} className="w-full flex items-center gap-2.5 px-3 py-2 border-b border-border/60 last:border-0 hover:bg-accent/50 text-left">
-                    <Phone className="h-3.5 w-3.5 shrink-0 text-[hsl(215_45%_42%)]" />
-                    <span className="min-w-0 flex-1">
-                      <span className="text-[13.5px] font-medium truncate block">{t.title}</span>
-                      <span className="text-[11.5px] text-muted-foreground truncate block">{person ? person.name : (t.callAbout || 'No contact attached')}</span>
-                    </span>
-                  </button>
+                  <div key={t.id} className="group w-full flex items-center gap-2.5 px-3 py-2 border-b border-border/60 last:border-0 hover:bg-accent/50">
+                    <button onClick={() => { setDrill(null); setOpenTask(t) }} className="min-w-0 flex-1 flex items-center gap-2.5 text-left">
+                      <Phone className="h-3.5 w-3.5 shrink-0 text-[hsl(215_45%_42%)]" />
+                      <span className="min-w-0 flex-1">
+                        <span className="text-[13.5px] font-medium truncate block">{t.title}</span>
+                        <span className="text-[11.5px] text-muted-foreground truncate block">{person ? person.name : (t.callAbout || 'No contact attached')}</span>
+                      </span>
+                    </button>
+                    <Button size="sm" className="h-7 px-2.5 text-[11px] shrink-0" onClick={() => { completeTask(t.id); toast.success('Call done — checked off') }}>
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1" />Done
+                    </Button>
+                  </div>
                 )
               })}
               {personCalls.map(c => (

@@ -499,12 +499,16 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
         // Completing a call/follow-up to a person means that person's call is handled — so clear
         // any "⚑ Call this week" flag on them. Otherwise the flag keeps surfacing them on the
         // call list and the Telegram/Slack digest forever, even though the call is done.
-        const clearFlagFor = done && (done.type === 'call' || done.type === 'followup') ? done.personId : undefined
+        // Completing a call/follow-up to a person means the call is handled — so we treat the
+        // person as contacted today: clear any "⚑ Call this week" flag AND reset their contact
+        // cadence (lastContact). Otherwise they keep resurfacing on the call list forever — via
+        // the flag, or as a "days since contact" cadence suggestion — even though you just called.
+        const callPersonId = done && (done.type === 'call' || done.type === 'followup') ? done.personId : undefined
         withAudit(
           s => ({
             ...s,
             tasks: s.tasks.map(t => t.id === id ? { ...t, status: 'done' as TaskStatus, completedAt: today() } : t),
-            people: clearFlagFor ? s.people.map(p => p.id === clearFlagFor ? { ...p, flaggedForCall: false } : p) : s.people,
+            people: callPersonId ? s.people.map(p => p.id === callPersonId ? { ...p, flaggedForCall: false, lastContact: today() } : p) : s.people,
           }),
           auditEvent('completed', 'task', id, (state.tasks.find(t => t.id === id)?.title ?? '') + ' → Done (archived, never deleted)'),
         )

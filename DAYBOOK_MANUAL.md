@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v101 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v102 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+87. **v102** — The **Calls** count now makes sense, follow-ups are real (completable) calls, and finishing a call makes it go away.
+
+    Fixes the “tile says 0/4, but clicking shows 2, and Ari keeps coming back.” Three things: **(1) Coherent count** — the Calls tile no longer shows *made / an arbitrary daily goal* (the “0/4”); it now shows **the actual number of calls on today’s list**, the exact same number the drill‑down shows when you click it. **(2) Follow‑ups are calls** — a follow‑up to a person (e.g. “Follow up with Ari Zwick”) is now treated as a proper call: it appears in the calls list/drill with a **Done** button, so you can complete it right there instead of it looking like a stray relationship suggestion you can’t action. **(3) Finishing a call clears it** — completing a call or follow‑up now **marks that person as contacted today** (resets their cadence) **and clears any “call this week” flag**, so a handled call drops off the list, the flag, and the cadence prompt at once — no more reappearing. *(The calls list can still include people you’re simply overdue to **contact** by relationship cadence — a separate, softer prompt; tell me if you’d rather those live in their own section so the headline only counts deliberate calls.)*
 
 86. **v101** — Completing a **call** now clears its **“⚑ Call this week”** flag — so a handled call stops nagging.
 
