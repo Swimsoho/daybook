@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v100 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v101 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+86. **v101** — Completing a **call** now clears its **“⚑ Call this week”** flag — so a handled call stops nagging.
+
+    The bug behind “I marked Ari's call done but he kept showing on my Telegram brief.” A person can be flagged **“Call this week,”** and the morning/midday digest lists *anyone* flagged — separately from tasks. Completing the call task marked the **task** done but never touched the **person's flag**, so they kept appearing forever. Now **completing a call or follow‑up (Done / Mark complete, or “Called — follow‑up”) clears that person's call‑this‑week flag** (and “Called — follow‑up” already logs the contact). A completed call correctly **may have no follow‑up** (plain Done) **or one** (“Called — follow‑up” / “Log & follow up”) — either way it's off the call list and the digest. *(One‑time: anyone flagged before this fix is still flagged — open them in People and hit Unflag once; from now on it clears itself.)*
 
 85. **v100** — **Flag collection items in one click** — search a list, then set its status (e.g. a movie → *Watched*) without opening it.
 

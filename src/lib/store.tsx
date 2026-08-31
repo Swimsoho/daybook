@@ -495,8 +495,17 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
         withAudit(s => s, auditEvent('noted', 'task', id, t))
       },
       completeTask(id) {
+        const done = state.tasks.find(t => t.id === id)
+        // Completing a call/follow-up to a person means that person's call is handled — so clear
+        // any "⚑ Call this week" flag on them. Otherwise the flag keeps surfacing them on the
+        // call list and the Telegram/Slack digest forever, even though the call is done.
+        const clearFlagFor = done && (done.type === 'call' || done.type === 'followup') ? done.personId : undefined
         withAudit(
-          s => ({ ...s, tasks: s.tasks.map(t => t.id === id ? { ...t, status: 'done' as TaskStatus, completedAt: today() } : t) }),
+          s => ({
+            ...s,
+            tasks: s.tasks.map(t => t.id === id ? { ...t, status: 'done' as TaskStatus, completedAt: today() } : t),
+            people: clearFlagFor ? s.people.map(p => p.id === clearFlagFor ? { ...p, flaggedForCall: false } : p) : s.people,
+          }),
           auditEvent('completed', 'task', id, (state.tasks.find(t => t.id === id)?.title ?? '') + ' → Done (archived, never deleted)'),
         )
       },
@@ -553,7 +562,9 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
           s => ({
             ...s,
             tasks: [...s.tasks.map(x => x.id === id ? { ...x, status: 'done' as TaskStatus, completedAt: today() } : x), fu],
-            people: t.personId ? s.people.map(p => p.id === t.personId ? { ...p, lastContact: today() } : p) : s.people,
+            // Logged the call → record the contact AND clear any "call this week" flag, so a handled
+            // call stops nagging on the call list and the digest.
+            people: t.personId ? s.people.map(p => p.id === t.personId ? { ...p, lastContact: today(), flaggedForCall: false } : p) : s.people,
           }),
           auditEvent('called', 'task', id, `logged call, auto-created follow-up due in ${state.settings.followUpDays} days`),
         )
