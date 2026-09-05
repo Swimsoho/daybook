@@ -16,6 +16,10 @@ import { ViewExport } from '@/lib/exportView'
 import { EmptyNote, Stars } from '@/components/bits'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 
+// Sentinel sort key for "When added" — sorts by the entry's own `created` stamp (+ insertion
+// order) rather than any tracker column, so it can't collide with a real column key.
+const CREATED_KEY = '__created'
+
 // A "watch list" tracker (Movies, TV Shows, Watchlist…) — the ones the live "where to watch"
 // lookup applies to. Detected by the tracker's own name so it works for any list the user made.
 function isWatchTracker(t: Tracker): boolean {
@@ -189,12 +193,23 @@ export default function CollectionsPage() {
       list = list.filter(e => cellText(col, e.values[k]).toLowerCase().includes(needle))
     }
     if (sort) {
-      const col = tracker.columns.find(c => c.key === sort.key)
-      list = [...list].sort((a, b) => {
-        const av = sortVal(col, a.values[sort.key]), bv = sortVal(col, b.values[sort.key])
-        const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
-        return sort.dir === 'asc' ? cmp : -cmp
-      })
+      if (sort.key === CREATED_KEY) {
+        // "When added" — by the entry's created date, with its position in the tracker's own
+        // entry list (insertion order) as the tiebreaker, since `created` is day-granular and
+        // several entries can share a date. asc = oldest first, desc = newest first.
+        const order = new Map(entries.map((e, i) => [e.id, i]))
+        list = [...list].sort((a, b) => {
+          const cmp = String(a.created).localeCompare(String(b.created)) || ((order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+          return sort.dir === 'asc' ? cmp : -cmp
+        })
+      } else {
+        const col = tracker.columns.find(c => c.key === sort.key)
+        list = [...list].sort((a, b) => {
+          const av = sortVal(col, a.values[sort.key]), bv = sortVal(col, b.values[sort.key])
+          const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
+          return sort.dir === 'asc' ? cmp : -cmp
+        })
+      }
     }
     return list
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -391,25 +406,32 @@ export default function CollectionsPage() {
               {c.options?.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           ))}
-          {activeView !== 'table' && (
-            <select
-              value={sort ? `${sort.key}:${sort.dir}` : ''}
-              onChange={e => {
-                if (!e.target.value) { setSort(null); return }
-                const [key, dir] = e.target.value.split(':')
-                setSort({ key, dir: dir as 'asc' | 'desc' })
-              }}
-              className="h-8 rounded-md border border-border bg-card px-2 text-[12px] text-muted-foreground cursor-pointer outline-none"
-            >
-              <option value="">Sort…</option>
-              {tracker.columns.map(c => (
-                <React.Fragment key={c.key}>
-                  <option value={`${c.key}:asc`}>{c.name} ↑</option>
-                  <option value={`${c.key}:desc`}>{c.name} ↓</option>
-                </React.Fragment>
-              ))}
-            </select>
-          )}
+          {/* Explicit sort — available in every view (in Table you can also click a header). Leads
+              with "When added" (which no column header can give you), then every column both ways. */}
+          <select
+            value={sort ? `${sort.key}:${sort.dir}` : ''}
+            onChange={e => {
+              if (!e.target.value) { setSort(null); return }
+              const idx = e.target.value.lastIndexOf(':')
+              const key = e.target.value.slice(0, idx)
+              const dir = e.target.value.slice(idx + 1)
+              setSort({ key, dir: dir as 'asc' | 'desc' })
+            }}
+            className={cn(
+              'h-8 rounded-md border bg-card px-2 text-[12px] cursor-pointer outline-none max-w-[190px]',
+              sort ? 'border-[hsl(17_63%_47%)] text-foreground' : 'border-border text-muted-foreground',
+            )}
+          >
+            <option value="">Sort…</option>
+            <option value={`${CREATED_KEY}:desc`}>When added (newest first)</option>
+            <option value={`${CREATED_KEY}:asc`}>When added (oldest first)</option>
+            {tracker.columns.map(c => (
+              <React.Fragment key={c.key}>
+                <option value={`${c.key}:asc`}>{c.name} ↑</option>
+                <option value={`${c.key}:desc`}>{c.name} ↓</option>
+              </React.Fragment>
+            ))}
+          </select>
           <span className="text-[11.5px] text-muted-foreground tabular">{displayEntries.length}{displayEntries.length !== entries.length && ` of ${entries.length}`}</span>
           {filtersActive && (
             <button onClick={clearControls} className="text-[12px] text-[hsl(17_63%_47%)] hover:underline">Clear</button>
