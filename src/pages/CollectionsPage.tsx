@@ -339,8 +339,11 @@ export default function CollectionsPage() {
               {bulkLookup ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Tv className="h-3.5 w-3.5 mr-1" />}Where to watch (US)
             </Button>
           )}
-          {isWatchTracker(tracker) && entries.length > 0 && (
-            <Button size="sm" variant="outline" className="h-7 border-[hsl(40_65%_55%)] text-[hsl(40_65%_35%)]" onClick={() => setSuggesting(true)} title="Personalised recommendations based on what's already on your list">
+          {/* Suggestions work for any collection: watch-lists use TMDB, everything else (books,
+              subscriptions, custom trackers) uses the LLM path. Shown on the Collections tab and on
+              any watch-list; hidden on the free-form Notes/Ideas tabs where picks make no sense. */}
+          {(topTab === 'collections' || isWatchTracker(tracker)) && (
+            <Button size="sm" variant="outline" className="h-7 border-[hsl(40_65%_55%)] text-[hsl(40_65%_35%)]" onClick={() => setSuggesting(true)} title="Personalised recommendations based on this list and what's already on it">
               <Sparkles className="h-3.5 w-3.5 mr-1" />Suggest
             </Button>
           )}
@@ -623,9 +626,10 @@ export default function CollectionsPage() {
   )
 }
 
-// Personalised "what to add next" recommendations for a watch-list, based on what's already on it.
-// Real titles come from TMDB (the suggest-entries Edge Function), and each can be Added to the list
-// or Ignored (dismissed for good). It reuses the same TMDB setup as "Where to watch".
+// Personalised "what to add next" recommendations for a collection, based on the list and what's
+// already on it. Watch-lists (Movies/TV) get real titles from TMDB; every other list (books,
+// subscriptions, restaurants, custom trackers) gets real items from the LLM path — both via the
+// suggest-entries Edge Function. Each suggestion can be Added to the list or Ignored (for good).
 function SuggestionsDialog({ tracker, entries, open, onClose }: { tracker: Tracker; entries: Entry[]; open: boolean; onClose: () => void }) {
   const { state, addEntry, updateSettings } = useStore()
   const cloud = useCloud()
@@ -633,6 +637,7 @@ function SuggestionsDialog({ tracker, entries, open, onClose }: { tracker: Track
   const [error, setError] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<EntrySuggestion[]>([])
   const dismissed = state.settings.dismissedSuggestions ?? []
+  const isWatch = isWatchTracker(tracker)
   const titleCol = tracker.columns.find(c => c.isTitle) ?? tracker.columns[0]
   const yearCol = yearColumn(tracker)
   const statusCol = tracker.columns.find(c => c.type === 'status')
@@ -653,13 +658,26 @@ function SuggestionsDialog({ tracker, entries, open, onClose }: { tracker: Track
         rating: typeof e.values['rating'] === 'number' ? (e.values['rating'] as number) : undefined,
       }))
       .filter(t => t.title)
-    cloud.suggestEntries({ titles, count: 12 }).then(r => {
+    cloud.suggestEntries({
+      titles,
+      count: 12,
+      kind: isWatch ? 'watch' : 'generic',
+      context: { name: tracker.name, description: tracker.description },
+    }).then(r => {
       if (cancelled) return
       setLoading(false)
-      if (r.error) { setError(r.error.includes('not configured') || r.error.includes('Function not found') ? 'Recommendations aren’t set up yet — deploy the suggest-entries Edge Function (uses your existing TMDB key). See claude/daybook-movie-streaming-setup.md.' : r.error); return }
+      if (r.error) {
+        const setup = isWatch
+          ? 'Recommendations aren’t set up yet — deploy the suggest-entries Edge Function (uses your existing TMDB key). See claude/daybook-movie-streaming-setup.md.'
+          : 'Recommendations for this list need the suggest-entries Edge Function with an Anthropic API key. See claude/daybook-movie-streaming-setup.md (step 6b).'
+        setError(r.error.includes('not configured') || r.error.includes('Function not found') ? setup : r.error)
+        return
+      }
       const list = (r.suggestions ?? []).filter(s => !owned.has(nrm(s.title)) && !dismissed.includes(dkey(s.title)))
       setSuggestions(list)
-      if (!list.length) setError('No fresh picks right now — add a few more titles (especially ones you’ve rated) and try again.')
+      if (!list.length) setError(isWatch
+        ? 'No fresh picks right now — add a few more titles (especially ones you’ve rated) and try again.'
+        : 'No fresh picks right now — add a few items so it can read your taste, or try again.')
     }).catch(e => { if (!cancelled) { setLoading(false); setError(String(e?.message ?? e)) } })
     return () => { cancelled = true }
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -701,7 +719,7 @@ function SuggestionsDialog({ tracker, entries, open, onClose }: { tracker: Track
                 </div>
               </div>
             ))}
-            <p className="text-[11px] text-muted-foreground text-center pt-1">Real titles from TMDB, tuned to your list. Ignored picks are remembered.</p>
+            <p className="text-[11px] text-muted-foreground text-center pt-1">Real {isWatch ? 'titles from TMDB' : 'picks'}, tuned to your list. Ignored picks are remembered.</p>
           </div>
         )}
       </DialogContent>

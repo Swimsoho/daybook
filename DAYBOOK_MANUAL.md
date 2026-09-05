@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v105 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v106 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+91. **v106** — **✨ Suggestions now work for *every* collection**, not just movies/TV.
+
+    v105 gave watch‑lists a **✨ Suggest** button; v106 extends it to **any** collection — books, subscriptions, restaurants, gadgets, any custom tracker you've built. The button now decides its engine automatically: a **movie/TV watch‑list** still uses **TMDB** (real titles *similar to* the ones you have, weighted by your ratings), while **every other list** uses an **LLM** that reads the list's **name, description and existing items** and suggests new, real, on‑theme items — each with a year where it makes sense, a one‑line reason, and a short description. Add / Ignore behave exactly as before (Add drops it on the list at your first status; Ignore dismisses it for good, per‑list). The Suggest button now shows on the whole **Collections** tab (hidden only on the free‑form **Notes/Ideas** tabs, where picks make no sense). The LLM path needs a one‑time **`ANTHROPIC_API_KEY`** Supabase secret (see `claude/daybook-movie-streaming-setup.md` **step 6b**); until it's set, non‑watch lists show a short "add the key" note and **watch‑lists are unaffected**. And because the phone runs the real desktop Collections page (v104), **this works identically on mobile**, automatically.
 
 90. **v105** — **✨ Suggestions** for your collections — personalised “what to add next,” with Add / Ignore.
 

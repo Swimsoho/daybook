@@ -13,6 +13,10 @@
 const TMDB = 'https://api.themoviedb.org/3'
 const KEY = Deno.env.get('TMDB_API_KEY') ?? ''
 const TOKEN = Deno.env.get('TMDB_ACCESS_TOKEN') ?? ''
+// For NON-movie lists (books, subscriptions, restaurants, anything you track), recommendations
+// come from an LLM instead of TMDB. Set an ANTHROPIC_API_KEY secret to enable them.
+const ANTHROPIC_KEY = Deno.env.get('ANTHROPIC_API_KEY') ?? ''
+const LLM_MODEL = Deno.env.get('SUGGEST_MODEL') || 'claude-3-5-haiku-latest'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -58,17 +62,70 @@ async function resolveId(title: string, year: string): Promise<{ id: number; kin
   return { id: hit.id, kind, name: hit.title ?? hit.name ?? title }
 }
 
+// ---- Generic (any list type) recommendations via an LLM -----------------------------------------
+async function suggestViaLLM(body: any, count: number) {
+  if (!ANTHROPIC_KEY) {
+    return json({ error: 'Recommendations for non-movie lists need an Anthropic API key. Set the ANTHROPIC_API_KEY Edge Function secret (see claude/daybook-movie-streaming-setup.md, step 6b).' }, 200)
+  }
+  const ctx = body.context ?? {}
+  const listName = String(ctx.name ?? 'this list').slice(0, 80)
+  const desc = String(ctx.description ?? '').slice(0, 300)
+  const existing: string[] = Array.isArray(body.titles) ? body.titles.map((t: any) => String(t.title ?? '')).filter(Boolean).slice(0, 60) : []
+  const prompt = `You recommend new items to add to a person's personal tracking list.
+
+List name: "${listName}"
+${desc ? `List description: ${desc}\n` : ''}Items already on the list (do NOT repeat any of these): ${existing.length ? existing.join('; ') : '(the list is empty — suggest popular, high-quality starting picks that fit the list name)'}
+
+Suggest ${count} NEW, real, specific, verifiable items that fit this list and, where the existing items reveal a taste or theme, match that taste. Avoid obscure or made-up items. For each item give: a concise title, an optional year (only where it makes sense — books, films, albums, games), a one-sentence reason tailored to THIS list, and a one-sentence description.
+
+Return ONLY a JSON array (no prose, no code fences) of objects with exactly these keys: {"title": string, "year": string, "why": string, "overview": string}. Use "" for year when not applicable.`
+  let resp: any
+  try {
+    resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: LLM_MODEL, max_tokens: 1200, messages: [{ role: 'user', content: prompt }] }),
+    }).then(r => r.json())
+  } catch (e) {
+    return json({ error: `Suggestion service unreachable: ${String((e as Error).message ?? e)}` }, 200)
+  }
+  if (resp?.error) return json({ error: `Suggestion service error: ${resp.error?.message ?? JSON.stringify(resp.error)}` }, 200)
+  const text = String(resp?.content?.[0]?.text ?? '').trim()
+  let arr: any[] = []
+  try {
+    arr = JSON.parse(text.replace(/^```(json)?/i, '').replace(/```$/, '').trim())
+  } catch {
+    const m = text.match(/\[[\s\S]*\]/)
+    if (m) { try { arr = JSON.parse(m[0]) } catch { /* give up */ } }
+  }
+  const owned = new Set(existing.map(t => norm(t)))
+  const suggestions = (Array.isArray(arr) ? arr : [])
+    .filter(o => o && o.title && !owned.has(norm(String(o.title))))
+    .slice(0, count)
+    .map(o => ({
+      title: String(o.title).slice(0, 140),
+      year: String(o.year ?? '').replace(/[^0-9]/g, '').slice(0, 4),
+      why: String(o.why ?? '').slice(0, 180),
+      overview: String(o.overview ?? '').slice(0, 260),
+    }))
+  if (!suggestions.length) return json({ ok: false, error: 'No fresh suggestions came back — try again, or add a few items so it can read your taste.' }, 200)
+  return json({ ok: true, suggestions })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
-  if (!KEY && !TOKEN) return json({ error: 'TMDB key not configured. Set the TMDB_API_KEY Edge Function secret (same one as Where-to-watch).' }, 200)
 
-  let seeds: SeedTitle[] = []
-  let count = 8
-  try {
-    const body = await req.json()
-    seeds = Array.isArray(body.titles) ? body.titles.slice(0, 12) : []
-    if (typeof body.count === 'number') count = Math.max(1, Math.min(20, body.count))
-  } catch { /* fall through */ }
+  let body: any = {}
+  try { body = await req.json() } catch { /* empty body */ }
+  const count = typeof body.count === 'number' ? Math.max(1, Math.min(20, body.count)) : 8
+  // 'watch' → TMDB (movies/TV); anything else → the LLM path (books, subscriptions, custom lists…).
+  const kind: 'watch' | 'generic' = body.kind === 'generic' ? 'generic' : 'watch'
+
+  if (kind === 'generic') return await suggestViaLLM(body, count)
+
+  // ---- Watch-list path (TMDB) --------------------------------------------------------------------
+  if (!KEY && !TOKEN) return json({ error: 'TMDB key not configured. Set the TMDB_API_KEY Edge Function secret (same one as Where-to-watch).' }, 200)
+  const seeds: SeedTitle[] = Array.isArray(body.titles) ? body.titles.slice(0, 12) : []
   if (!seeds.length) return json({ ok: false, error: 'No titles to base suggestions on. Add a few films/shows first.' }, 200)
 
   // Weight seeds you rated highly more heavily (a 5★ film says more about taste than an unrated one).

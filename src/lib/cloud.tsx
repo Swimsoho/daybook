@@ -69,9 +69,16 @@ export interface Cloud {
   // which returns current US streaming/rent/buy providers from TMDB. Returns a result object,
   // or { error } if the function isn't deployed / the TMDB key isn't set.
   lookupMovie: (title: string, year?: string) => Promise<MovieLookupResult>
-  // Personalised "what to add next" for movie/TV watch-lists — calls the suggest-entries Edge
-  // Function (TMDB recommendations from the titles you already have). Same TMDB key as lookupMovie.
-  suggestEntries: (payload: { titles: { title: string; year?: string; rating?: number }[]; count?: number }) => Promise<SuggestEntriesResult>
+  // Personalised "what to add next" for any collection — calls the suggest-entries Edge Function.
+  // `kind: 'watch'` uses TMDB recommendations from the titles you already have (same TMDB key as
+  // lookupMovie); anything else ('generic') uses an LLM over the list's name/description + items,
+  // so books, subscriptions, restaurants and custom trackers get real recommendations too.
+  suggestEntries: (payload: {
+    titles: { title: string; year?: string; rating?: number }[]
+    count?: number
+    kind?: 'watch' | 'generic'
+    context?: { name?: string; description?: string }
+  }) => Promise<SuggestEntriesResult>
   admin: {
     listUsers: () => Promise<AdminUser[]>
     invite: (u: { name: string; email: string; role: Role }) => Promise<string | null>
