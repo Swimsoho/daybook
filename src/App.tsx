@@ -255,6 +255,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
         {!cloud && <DemoModeBanner fixed />}
         <MobileShell
           demoMode={!cloud}
+          cloud={cloud ?? undefined}
           onSwitchToDesktop={() => setLayoutOverride('desktop')}
         />
       </>

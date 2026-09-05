@@ -9,17 +9,21 @@ import { QuickCaptureSheet } from '@/mobile/components/sheets/QuickCaptureSheet'
 import { TaskDetailSheet } from '@/mobile/components/sheets/TaskDetailSheet'
 import { formatHeaderDate } from '@/mobile/lib/dates'
 import type { SubPage, TabId, TaskFilter } from '@/mobile/lib/types'
-import { Collections } from '@/mobile/pages/Collections'
-import { History } from '@/mobile/pages/History'
 import { Inbox } from '@/mobile/pages/Inbox'
 import { More } from '@/mobile/pages/More'
 import { Overall } from '@/mobile/pages/Overall'
-import { People } from '@/mobile/pages/People'
-import { Projects } from '@/mobile/pages/Projects'
-import { Reports } from '@/mobile/pages/Reports'
-import { Settings } from '@/mobile/pages/Settings'
-import { Tasks } from '@/mobile/pages/Tasks'
 import { Today } from '@/mobile/pages/Today'
+// Full parity: the feature-rich pages render the actual desktop pages (they're already responsive
+// and work well at phone width), so mobile never lacks a desktop feature and there's one code path
+// to maintain per page. The daily-loop pages (Today / Inbox) keep their touch-optimized versions.
+import CollectionsPage from '@/pages/CollectionsPage'
+import HistoryPage from '@/pages/HistoryPage'
+import PeoplePage from '@/pages/PeoplePage'
+import ProjectsPage from '@/pages/ProjectsPage'
+import ReportsPage from '@/pages/ReportsPage'
+import SettingsPage from '@/pages/SettingsPage'
+import TasksPage from '@/pages/TasksPage'
+import type { Cloud } from '@/lib/cloud'
 
 /**
  * The phone layout.
@@ -54,10 +58,13 @@ const SUB_TITLES: Record<SubPage, [string, string]> = {
 export function MobileShell({
   onSwitchToDesktop,
   demoMode = false,
+  cloud,
 }: {
   onSwitchToDesktop?: () => void
   /** running without a database connection — a fixed warning bar sits above us */
   demoMode?: boolean
+  /** cloud handle, passed through to the (desktop) Settings page for admin/messaging */
+  cloud?: Cloud
 }) {
   const store = useStore()
   const { state } = store
@@ -153,24 +160,18 @@ export function MobileShell({
           <Today onOpenTask={setTaskDetailId} onToggleTask={toggleTask} />
         ) : null}
         {tab === 'inbox' && !sub ? <Inbox /> : null}
-        {tab === 'tasks' && !sub ? (
-          <Tasks
-            filter={taskFilter}
-            onFilterChange={setTaskFilter}
-            onOpenTask={setTaskDetailId}
-            onNewTask={() => setNewTaskOpen(true)}
-            onToggleTask={toggleTask}
-          />
-        ) : null}
-        {tab === 'people' && !sub ? <People onOpenPerson={setPersonDetailId} /> : null}
+        {/* Full desktop task manager — every view, filter, bulk action and detail dialog. */}
+        {tab === 'tasks' && !sub ? <TasksPage /> : null}
+        {tab === 'people' && !sub ? <PeoplePage /> : null}
         {tab === 'more' && !sub ? <More onOpen={setSub} /> : null}
 
+        {/* The "More" sections render the real desktop pages for complete parity. */}
         {sub === 'overall' ? <Overall onOpenProjects={() => setSub('projects')} /> : null}
-        {sub === 'projects' ? <Projects onOpenTask={setTaskDetailId} /> : null}
-        {sub === 'collections' ? <Collections /> : null}
-        {sub === 'reports' ? <Reports /> : null}
-        {sub === 'history' ? <History /> : null}
-        {sub === 'settings' ? <Settings onSwitchToDesktop={onSwitchToDesktop} /> : null}
+        {sub === 'projects' ? <ProjectsPage /> : null}
+        {sub === 'collections' ? <CollectionsPage /> : null}
+        {sub === 'reports' ? <ReportsPage /> : null}
+        {sub === 'history' ? <HistoryPage /> : null}
+        {sub === 'settings' ? <SettingsPage cloud={cloud} /> : null}
       </main>
 
       <Fab onClick={() => setCaptureOpen(true)} />

@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v103 (August 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v104 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+89. **v104** — The **mobile app now has everything the desktop has** — same pages, same features.
+
+    The phone layout used to carry trimmed-down versions of several pages (a tiny Settings, a thin Tasks/People, a Collections without *Where to watch*, board/gallery, import/export, etc.), so features quietly went missing on mobile. Now the feature-rich sections — **Collections, Tasks, People, Projects, Reports, History and Settings** — render the **actual desktop pages**, which are already fully responsive, inside the phone shell. So a phone gets **every** view, filter, dialog and button the laptop does (all of Settings, the full task manager, the whole Collections toolbar including *Where to watch*, board & gallery, search, inline status flags, Add-to-Calendar, Excel import/export), with the mobile tab bar and quick-capture still on top. The daily‑loop screens (**Today, Inbox**) keep their touch‑optimized design. One big side‑benefit: there’s now **one code path per page**, so mobile can never fall behind desktop again — anything built for desktop shows up on the phone automatically.
 
 88. **v103** — Understand *why* something is a call, and **re‑type it right from the calls list**.
 
