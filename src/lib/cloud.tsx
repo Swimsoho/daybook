@@ -35,6 +35,18 @@ export interface MovieLookupResult {
   link?: string
 }
 
+export interface EntrySuggestion {
+  title: string
+  year: string
+  overview: string
+  why: string
+}
+export interface SuggestEntriesResult {
+  ok?: boolean
+  error?: string
+  suggestions?: EntrySuggestion[]
+}
+
 export interface Cloud {
   profile: CloudProfile
   mode: 'real' | 'sample'
@@ -57,6 +69,9 @@ export interface Cloud {
   // which returns current US streaming/rent/buy providers from TMDB. Returns a result object,
   // or { error } if the function isn't deployed / the TMDB key isn't set.
   lookupMovie: (title: string, year?: string) => Promise<MovieLookupResult>
+  // Personalised "what to add next" for movie/TV watch-lists — calls the suggest-entries Edge
+  // Function (TMDB recommendations from the titles you already have). Same TMDB key as lookupMovie.
+  suggestEntries: (payload: { titles: { title: string; year?: string; rating?: number }[]; count?: number }) => Promise<SuggestEntriesResult>
   admin: {
     listUsers: () => Promise<AdminUser[]>
     invite: (u: { name: string; email: string; role: Role }) => Promise<string | null>
@@ -634,6 +649,11 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
       const { data, error } = await supabase!.functions.invoke('movie-lookup', { body: { title, year } })
       if (error) return { error: error.message }
       return (data ?? { error: 'No response' }) as MovieLookupResult
+    },
+    suggestEntries: async (payload) => {
+      const { data, error } = await supabase!.functions.invoke('suggest-entries', { body: payload })
+      if (error) return { error: error.message }
+      return (data ?? { error: 'No response' }) as SuggestEntriesResult
     },
     admin: {
       async listUsers() {

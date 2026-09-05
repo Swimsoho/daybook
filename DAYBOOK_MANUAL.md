@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v104 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v105 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+90. **v105** — **✨ Suggestions** for your collections — personalised “what to add next,” with Add / Ignore.
+
+    A new **✨ Suggest** button on any movie/TV watch‑list. It reads the titles already on your list — leaning on the ones you’ve **rated highly** — asks TMDB for films/shows *similar to yours*, drops anything you already have, and shows a ranked list of **fresh picks**: real title, year, a one‑line reason (“Because you have *Oppenheimer* & *Dune*”), and a short synopsis. Each pick has **Add** (drops it onto your list, set to your first status like *Want to watch*) or **Ignore** (dismissed for good — it won’t come back). It reuses the **same TMDB key** as *Where to watch*, so enabling it is just deploying one more edge function (`suggest-entries`) — see `claude/daybook-movie-streaming-setup.md` step 6. Suggestions cover movie/TV lists today (that’s TMDB’s domain); other collection types can follow. And because the phone now runs the real desktop Collections page (v104), **Suggest works on mobile too**, automatically.
 
 89. **v104** — The **mobile app now has everything the desktop has** — same pages, same features.
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowUpDown, CalendarPlus, CheckSquare, ChevronDown, ChevronUp, Download, Loader2, Plus, Search, Trash2, Tv, Upload } from 'lucide-react'
+import { ArrowUpDown, CalendarPlus, CheckSquare, ChevronDown, ChevronUp, Download, Loader2, Plus, Search, Sparkles, Trash2, Tv, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { Entry, Tracker, TrackerColumn, today } from '@/lib/model'
 import { useStore } from '@/lib/store'
-import { useCloud } from '@/lib/cloud'
+import { useCloud, type EntrySuggestion } from '@/lib/cloud'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ViewExport } from '@/lib/exportView'
 import { EmptyNote, Stars } from '@/components/bits'
@@ -92,6 +92,7 @@ export default function CollectionsPage() {
   const { state, updateEntry } = useStore()
   const cloud = useCloud()
   const [bulkLookup, setBulkLookup] = useState(false)
+  const [suggesting, setSuggesting] = useState(false)
   /**
    * Multi-select. Off by default: checkboxes on every row all the time make a reading view
    * feel like a form. Turning Select on reveals them and the action bar.
@@ -336,6 +337,11 @@ export default function CollectionsPage() {
           {isWatchTracker(tracker) && (
             <Button size="sm" variant="outline" className="h-7" onClick={bulkStreamingLookup} disabled={bulkLookup} title="Fill 'where to watch' (US) for entries that don't have it yet">
               {bulkLookup ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Tv className="h-3.5 w-3.5 mr-1" />}Where to watch (US)
+            </Button>
+          )}
+          {isWatchTracker(tracker) && entries.length > 0 && (
+            <Button size="sm" variant="outline" className="h-7 border-[hsl(40_65%_55%)] text-[hsl(40_65%_35%)]" onClick={() => setSuggesting(true)} title="Personalised recommendations based on what's already on your list">
+              <Sparkles className="h-3.5 w-3.5 mr-1" />Suggest
             </Button>
           )}
           <Button
@@ -612,7 +618,94 @@ export default function CollectionsPage() {
 
       <EntryDialog tracker={tracker} open={adding || !!editEntry} entry={editEntry} onClose={() => { setAdding(false); setEditEntry(null) }} />
       <ImportEntriesDialog tracker={tracker} open={importing} onClose={() => setImporting(false)} />
+      <SuggestionsDialog tracker={tracker} entries={entries} open={suggesting} onClose={() => setSuggesting(false)} />
     </div>
+  )
+}
+
+// Personalised "what to add next" recommendations for a watch-list, based on what's already on it.
+// Real titles come from TMDB (the suggest-entries Edge Function), and each can be Added to the list
+// or Ignored (dismissed for good). It reuses the same TMDB setup as "Where to watch".
+function SuggestionsDialog({ tracker, entries, open, onClose }: { tracker: Tracker; entries: Entry[]; open: boolean; onClose: () => void }) {
+  const { state, addEntry, updateSettings } = useStore()
+  const cloud = useCloud()
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [suggestions, setSuggestions] = useState<EntrySuggestion[]>([])
+  const dismissed = state.settings.dismissedSuggestions ?? []
+  const titleCol = tracker.columns.find(c => c.isTitle) ?? tracker.columns[0]
+  const yearCol = yearColumn(tracker)
+  const statusCol = tracker.columns.find(c => c.type === 'status')
+  const nrm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const dkey = (title: string) => `${tracker.id}::${nrm(title)}`
+
+  useEffect(() => {
+    if (!open) return
+    setSuggestions([]); setError(null)
+    if (!cloud) { setError('Recommendations need your real (signed-in) account — the demo has no cloud connection.'); return }
+    let cancelled = false
+    setLoading(true)
+    const owned = new Set(entries.map(e => nrm(titleOf(tracker, e))))
+    const titles = entries
+      .map(e => ({
+        title: titleOf(tracker, e),
+        year: yearCol ? String(e.values[yearCol.key] ?? '').slice(0, 4) : undefined,
+        rating: typeof e.values['rating'] === 'number' ? (e.values['rating'] as number) : undefined,
+      }))
+      .filter(t => t.title)
+    cloud.suggestEntries({ titles, count: 12 }).then(r => {
+      if (cancelled) return
+      setLoading(false)
+      if (r.error) { setError(r.error.includes('not configured') || r.error.includes('Function not found') ? 'Recommendations aren’t set up yet — deploy the suggest-entries Edge Function (uses your existing TMDB key). See claude/daybook-movie-streaming-setup.md.' : r.error); return }
+      const list = (r.suggestions ?? []).filter(s => !owned.has(nrm(s.title)) && !dismissed.includes(dkey(s.title)))
+      setSuggestions(list)
+      if (!list.length) setError('No fresh picks right now — add a few more titles (especially ones you’ve rated) and try again.')
+    }).catch(e => { if (!cancelled) { setLoading(false); setError(String(e?.message ?? e)) } })
+    return () => { cancelled = true }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const add = (s: EntrySuggestion) => {
+    const values: Entry['values'] = { [titleCol.key]: s.title }
+    if (yearCol && s.year) values[yearCol.key] = s.year
+    if (statusCol) values[statusCol.key] = statusCol.options?.[0] ?? ''
+    addEntry(tracker.id, values)
+    setSuggestions(list => list.filter(x => x.title !== s.title))
+    toast.success(`Added “${s.title}” to ${tracker.name}`)
+  }
+  const ignore = (s: EntrySuggestion) => {
+    updateSettings({ dismissedSuggestions: [...dismissed, dkey(s.title)] })
+    setSuggestions(list => list.filter(x => x.title !== s.title))
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={o => !o && onClose()}>
+      <DialogContent className="sm:max-w-[580px] max-h-[86vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl flex items-center gap-2"><Sparkles className="h-5 w-5 text-[hsl(40_65%_45%)]" />Suggestions for {tracker.name}</DialogTitle>
+          <p className="text-[12.5px] text-muted-foreground">Personalised picks based on what’s already on your list. Add the ones you like — ignore the rest and they won’t come back.</p>
+        </DialogHeader>
+        {loading && <div className="py-10 text-center text-[13px] text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin inline mr-2" />Finding recommendations from your list…</div>}
+        {error && !loading && <div className="py-4 text-[13px] text-muted-foreground leading-relaxed">{error}</div>}
+        {!loading && suggestions.length > 0 && (
+          <div className="grid grid-cols-1 gap-2">
+            {suggestions.map(s => (
+              <div key={s.title} className="flex items-start gap-3 border border-border rounded-lg p-3 bg-card">
+                <div className="min-w-0 flex-1">
+                  <div className="text-[14px] font-medium">{s.title}{s.year && <span className="text-muted-foreground font-normal"> · {s.year}</span>}</div>
+                  {s.why && <div className="text-[11px] text-[hsl(17_63%_47%)] font-medium mt-0.5">{s.why}</div>}
+                  {s.overview && <p className="text-[12px] text-muted-foreground mt-1 line-clamp-3">{s.overview}</p>}
+                </div>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <Button size="sm" className="h-7 px-3 text-[12px]" onClick={() => add(s)}><Plus className="h-3.5 w-3.5 mr-1" />Add</Button>
+                  <Button size="sm" variant="ghost" className="h-7 px-3 text-[12px] text-muted-foreground" onClick={() => ignore(s)}>Ignore</Button>
+                </div>
+              </div>
+            ))}
+            <p className="text-[11px] text-muted-foreground text-center pt-1">Real titles from TMDB, tuned to your list. Ignored picks are remembered.</p>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 

@@ -333,6 +333,9 @@ export interface Settings {
   // it's the source of truth; when absent, the four built-ins are used. See resolveTiers().
   tiers?: TierDef[]
   quickActions: { done: boolean; called: boolean; snooze: boolean; reassign: boolean }
+  // Collection suggestions you've dismissed ("Ignore") — keyed "<trackerId>::<normalized title>"
+  // so an ignored recommendation never comes back on that list. Optional/backfilled to [].
+  dismissedSuggestions?: string[]
   features: {
     whatsapp: boolean
     emailForward: boolean
