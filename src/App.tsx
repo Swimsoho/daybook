@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { Toaster, toast } from 'sonner'
 import {
   Archive, CalendarDays, CalendarRange, Eye, FolderKanban, History, Inbox as InboxIcon,
-  LayoutDashboard, ListChecks, Menu, Mic, Send, Settings as SettingsIcon, ShieldCheck, Sparkles, Users, X, TriangleAlert } from 'lucide-react'
+  LayoutDashboard, ListChecks, Menu, Mic, Send, Settings as SettingsIcon, ShieldCheck, Smartphone, Sparkles, Users, X, TriangleAlert } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AdminUser, fmtDateLong, today } from '@/lib/model'
 import { StoreProvider, useStore } from '@/lib/store'
@@ -171,7 +171,7 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
   const [projectFilter, setProjectFilter] = useState<string | null>(null)
   const [navW, setNavW] = useState(200)
   const [navOpen, setNavOpen] = useState(false)
-  const { isMobile, setOverride: setLayoutOverride } = useIsMobile()
+  const { isMobile, override: layoutOverride, setOverride: setLayoutOverride } = useIsMobile()
   const scaleRef = React.useRef<HTMLDivElement>(null)
   const compactNav = navW < 168
   const viewerFirstName = (impersonation ? impersonation.user.name : cloud ? (cloud.profile.name || cloud.profile.email) : 'Craig').split(' ')[0]
@@ -363,6 +363,22 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
               )}
             >
               <Mic className="h-4 w-4" />
+            </button>
+            {/* Switch to the phone layout — the mirror of the mobile shell's “Desktop” button, so
+                the choice is reversible from either side (before this, tapping “Desktop” on a phone
+                left no way back). Emphasised when you’re on a narrow screen but forced to desktop. */}
+            <button
+              onClick={() => setLayoutOverride('mobile')}
+              title="Switch to the phone layout"
+              className={cn(
+                'shrink-0 inline-flex items-center gap-1 h-9 rounded-sm border px-2 text-[11.5px] font-medium transition-colors',
+                layoutOverride === 'desktop'
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-input bg-card text-muted-foreground hover:text-foreground hover:border-primary',
+              )}
+            >
+              <Smartphone className="h-4 w-4" />
+              <span className="hidden sm:inline">Phone</span>
             </button>
           </div>
         </header>

@@ -34,11 +34,32 @@ export function writeOverride(v: LayoutOverride) {
   }
 }
 
+/**
+ * A recovery / preview escape hatch via the URL: `?layout=mobile`, `?layout=desktop`,
+ * or `?layout=auto` (clear the override and go back to following the screen width).
+ * Typed into the address bar, it works on any device — the point being that if someone
+ * forces a layout and can't find the button back, a link always gets them out.
+ * Returns `undefined` when no (recognised) param is present, distinct from `null` = reset.
+ */
+function layoutFromUrl(): LayoutOverride | undefined {
+  try {
+    const p = new URLSearchParams(window.location.search).get('layout')
+    if (p === 'mobile' || p === 'desktop') return p
+    if (p === 'auto' || p === 'clear' || p === 'reset') return null
+  } catch { /* no URL / blocked — ignore */ }
+  return undefined
+}
+
 export function useIsMobile(): { isMobile: boolean; override: LayoutOverride; setOverride: (v: LayoutOverride) => void } {
   const [narrow, setNarrow] = useState(
     () => typeof window !== 'undefined' && window.innerWidth < BREAKPOINT,
   )
-  const [override, setOverrideState] = useState<LayoutOverride>(readOverride)
+  // A `?layout=` param wins on load and is persisted, so a recovery link sticks after reload.
+  const [override, setOverrideState] = useState<LayoutOverride>(() => {
+    const fromUrl = layoutFromUrl()
+    if (fromUrl !== undefined) { writeOverride(fromUrl); return fromUrl }
+    return readOverride()
+  })
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${BREAKPOINT - 1}px)`)

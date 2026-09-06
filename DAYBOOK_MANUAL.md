@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v107 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v108 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+93. **v108** — **The layout switch now works both ways** — a "Phone" button on desktop (and a recovery link).
+
+    The phone shell always had a **Desktop** button to jump to the full layout, but the desktop layout had **no way back** — so tapping Desktop on a phone left you stuck in the desktop view with no button to return. Desktop now carries a matching **Phone** button in the top bar (next to the mic), the mirror of the mobile "Desktop" button, so the choice is reversible from either side; it's emphasised when you're on a narrow screen that's been forced to desktop. As a belt‑and‑braces recovery, the layout can also be set from the URL — **`?layout=mobile`**, `?layout=desktop`, or `?layout=auto` (go back to following screen width) — which sticks after reload, so a link always gets you out even if you can't find the button. Under the hood the choice still lives in `daybook.layout` (localStorage); the override wins over screen width, which is also how you preview the phone layout on a laptop.
 
 92. **v107** — **Sort any collection by "When added"** (and every field), from any view.
 
