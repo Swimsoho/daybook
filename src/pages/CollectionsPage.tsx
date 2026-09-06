@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { Entry, Tracker, TrackerColumn, today } from '@/lib/model'
 import { useStore } from '@/lib/store'
+import { useIsMobile } from '@/mobile/lib/useIsMobile'
 import { useCloud, type EntrySuggestion } from '@/lib/cloud'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ViewExport } from '@/lib/exportView'
@@ -95,6 +96,7 @@ function collectionGroup(state: { collections: { id: string; name: string }[] },
 export default function CollectionsPage() {
   const { state, updateEntry } = useStore()
   const cloud = useCloud()
+  const isMobile = useIsMobile().isMobile
   const [bulkLookup, setBulkLookup] = useState(false)
   const [suggesting, setSuggesting] = useState(false)
   /**
@@ -150,7 +152,9 @@ export default function CollectionsPage() {
   }
   const TAB_LABEL: Record<TopTab, string> = { collections: 'Collections', notes: 'Notes', ideas: 'Ideas', dates: 'Dates' }
 
-  const activeView = view ?? tracker?.defaultView ?? 'table'
+  // On a phone the wide table and the multi-column board don't read well; the stacked "table"
+  // (rendered as cards below) is the most legible default. Honour an explicit choice either way.
+  const activeView = view ?? (isMobile ? 'table' : (tracker?.defaultView ?? 'table'))
   const entries = useMemo(() => state.entries.filter(e => e.trackerId === tracker?.id), [state.entries, tracker])
   const statusCol = tracker?.columns.find(c => c.type === 'status')
   // The board groups entries into one column per Status option, so it can only draw itself when the
@@ -286,7 +290,7 @@ export default function CollectionsPage() {
       {/* Collection / tracker picker — each collection is its own clearly-labelled group so you
           can tell at a glance where one ends and the next begins. The label carries the
           collection's own colour as a solid chip; its trackers sit in a card beside it. */}
-      <div className="flex flex-wrap items-stretch gap-2.5">
+      <div className={cn('items-stretch', isMobile ? 'flex gap-2 overflow-x-auto pb-1 [&>*]:shrink-0' : 'flex flex-wrap gap-2.5')}>
         {groupCollections.map(col => {
           const trks = groupTrackers.filter(t => t.collectionId === col.id)
           if (!trks.length) return null
@@ -319,9 +323,11 @@ export default function CollectionsPage() {
         })}
       </div>
 
-      {/* View switch + row of actions, on their own line so the group picker stays uncluttered */}
-      <div className="flex flex-wrap items-center gap-2 -mt-1">
-        <div className="flex border border-border rounded-md overflow-hidden shadow-sm">
+      {/* View switch + row of actions. On desktop they share a line (actions pushed right); on a
+          phone they stack, and the actions become a single horizontally-scrolling strip instead of
+          wrapping into several cramped rows. */}
+      <div className={cn('-mt-1', isMobile ? 'flex flex-col gap-2' : 'flex flex-wrap items-center gap-2')}>
+        <div className={cn('flex border border-border rounded-md overflow-hidden shadow-sm', isMobile && 'self-start')}>
           {(['table', 'board', 'gallery'] as const).map(v => (
             <button
               key={v}
@@ -335,7 +341,7 @@ export default function CollectionsPage() {
             </button>
           ))}
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-1.5">
+        <div className={cn('items-center gap-1.5', isMobile ? 'flex overflow-x-auto pb-1 [&>*]:shrink-0' : 'ml-auto flex flex-wrap')}>
           <ExportMenu className="h-7" getData={(): ViewExport => ({
             title: tracker.name,
             subtitle: [topTab !== 'collections' ? TAB_LABEL[topTab] : '', filtersActive ? 'filtered view' : ''].filter(Boolean).join(' · ') || undefined,
@@ -440,7 +446,24 @@ export default function CollectionsPage() {
       )}
 
       {/* TABLE */}
-      {activeView === 'table' && (
+      {/* On a phone the wide table becomes a stacked list of cards — each entry reads top-to-bottom
+          (title, then its filled-in fields as label/value lines, with the status control inline),
+          so nothing is cut off the side of the screen. */}
+      {activeView === 'table' && isMobile && (
+        <MobileEntryCards
+          tracker={tracker}
+          entries={displayEntries}
+          statusCol={statusCol}
+          selectMode={selectMode}
+          selected={selected}
+          onToggleSelect={toggleSelected}
+          onOpen={setEditEntry}
+        />
+      )}
+      {entries.length === 0 && isMobile && activeView === 'table' && <EmptyNote>Nothing here yet.</EmptyNote>}
+      {entries.length > 0 && displayEntries.length === 0 && isMobile && activeView === 'table' && <EmptyNote>No entries match your search or filters.</EmptyNote>}
+
+      {activeView === 'table' && !isMobile && (
         <section className="border border-border bg-card shadow-sm rounded-lg overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
@@ -544,7 +567,7 @@ export default function CollectionsPage() {
         </section>
       )}
       {activeView === 'board' && boardReady && statusCol && (
-        <div className="grid grid-cols-1 gap-3" style={{ gridTemplateColumns: `repeat(${statusCol.options?.length ?? 3}, minmax(0,1fr))` }}>
+        <div className="grid grid-cols-1 gap-3" style={{ gridTemplateColumns: isMobile ? '1fr' : `repeat(${statusCol.options?.length ?? 3}, minmax(0,1fr))` }}>
           {statusCol.options?.map(stage => (
             <div
               key={stage}
@@ -763,7 +786,7 @@ function InlineFlag({ entryId, col, value }: { entryId: string; col: TrackerColu
       onChange={e => {
         e.stopPropagation()
         const val = e.target.value
-        updateEntry(entryId, { [col.key]: val || undefined })
+        updateEntry(entryId, { [col.key]: val })
         toast.success(val ? `${col.name} → ${val}` : `${col.name} cleared`)
       }}
       className={cn(
@@ -789,6 +812,72 @@ function CellValue({ col, value, small }: { col: TrackerColumn; value: Entry['va
       return <span className={cn('inline-block border border-border rounded-sm px-1.5 py-px bg-background', small ? 'text-[10.5px]' : 'text-[11.5px]')}>{String(value)}</span>
     default: return <span className={cn(small && 'text-[11px]')}>{String(value)}</span>
   }
+}
+
+// The phone rendering of the "table" view: one card per entry, reading top-to-bottom. Title first,
+// then every filled-in field as a "Label: value" line, a rating as stars, and the status as an
+// inline dropdown you can change in place — so a watch-list is legible on a narrow screen without
+// horizontal scrolling. Tapping a card opens the full editor (or toggles it when selecting).
+function MobileEntryCards({ tracker, entries, statusCol, selectMode, selected, onToggleSelect, onOpen }: {
+  tracker: Tracker
+  entries: Entry[]
+  statusCol: TrackerColumn | undefined
+  selectMode: boolean
+  selected: string[]
+  onToggleSelect: (id: string) => void
+  onOpen: (e: Entry) => void
+}) {
+  const flaggable = !!statusCol && (statusCol.options?.length ?? 0) > 0
+  return (
+    <div className="grid grid-cols-1 gap-2">
+      {entries.map(e => {
+        const vis = visibleColumns(tracker, e.values)
+        const rating = typeof e.values['rating'] === 'number' ? (e.values['rating'] as number) : undefined
+        const fields = vis
+          .filter(c => !c.isTitle && !(flaggable && statusCol && c.key === statusCol.key) && c.type !== 'rating')
+          .filter(c => {
+            const v = e.values[c.key]
+            return v !== undefined && v !== null && v !== '' && !(Array.isArray(v) && !v.length)
+          })
+        return (
+          <div key={e.id} className={cn('border border-border rounded-lg bg-card shadow-sm p-3', selected.includes(e.id) && 'ring-2 ring-[hsl(17_63%_47%)]')}>
+            <div className="flex items-start gap-2.5">
+              {selectMode && (
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                  checked={selected.includes(e.id)}
+                  onChange={() => onToggleSelect(e.id)}
+                  onClick={ev => ev.stopPropagation()}
+                />
+              )}
+              <button type="button" onClick={() => (selectMode ? onToggleSelect(e.id) : onOpen(e))} className="min-w-0 flex-1 text-left">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="text-[15px] font-semibold leading-snug break-words">{titleOf(tracker, e)}</div>
+                  {typeof rating === 'number' && <span className="shrink-0"><Stars n={rating} /></span>}
+                </div>
+                {fields.length > 0 && (
+                  <div className="mt-1.5 grid gap-1">
+                    {fields.map(c => (
+                      <div key={c.key} className="flex gap-1.5 text-[12.5px] leading-snug">
+                        <span className="shrink-0 text-muted-foreground">{c.name}:</span>
+                        <span className="min-w-0 break-words"><CellValue col={c} value={e.values[c.key]} small /></span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </button>
+            </div>
+            {flaggable && statusCol && (
+              <div className="mt-2.5 border-t border-border/60 pt-2.5">
+                <InlineFlag entryId={e.id} col={statusCol} value={e.values[statusCol.key]} />
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
 }
 
 // Live "where to watch (US)" lookup — hits the movie-lookup Edge Function (TMDB) and shows the
@@ -862,8 +951,44 @@ function StreamingLookup({ tracker, title, year, onFill }: {
   )
 }
 
+// A grouped "move this entry to another list" picker: every active tracker except the current one,
+// grouped under its collection's name. Purely presentational — it reports the chosen target and the
+// caller performs the move (so it can also close a dialog / clear a selection and show a toast).
+function MoveToControl({ currentTrackerId, label = 'Move to another list', className, onMove }: {
+  currentTrackerId: string
+  label?: string
+  className?: string
+  onMove: (targetTrackerId: string, targetName: string) => void
+}) {
+  const { state } = useStore()
+  const groups = state.collections
+    .filter(c => c.active)
+    .map(col => ({ col, trks: state.trackers.filter(t => t.active && t.collectionId === col.id && t.id !== currentTrackerId) }))
+    .filter(g => g.trks.length)
+  if (!groups.length) return null
+  return (
+    <select
+      value=""
+      onChange={e => {
+        const id = e.target.value
+        if (!id) return
+        onMove(id, state.trackers.find(t => t.id === id)?.name ?? 'the list')
+        e.target.value = ''
+      }}
+      className={cn('h-8 rounded-md border border-border bg-card px-2 text-[12px] text-muted-foreground cursor-pointer outline-none max-w-[220px]', className)}
+    >
+      <option value="">{label}…</option>
+      {groups.map(g => (
+        <optgroup key={g.col.id} label={g.col.name}>
+          {g.trks.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </optgroup>
+      ))}
+    </select>
+  )
+}
+
 function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open: boolean; entry: Entry | null; onClose: () => void }) {
-  const { addEntry, updateEntry } = useStore()
+  const { addEntry, updateEntry, moveEntries } = useStore()
   const [form, setForm] = useState<Entry['values']>({})
   const base: Entry['values'] = { ...(entry?.values ?? {}), ...form }
   // default status for new entries
@@ -908,6 +1033,23 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
               year={yrCol ? String(base[yrCol.key] ?? '') : ''}
               onFill={(col, value) => set(col.key, value)}
             />
+          )}
+          {/* Filed in the wrong list? Move this entry to another tracker/collection — e.g. a film
+              added to Movies by mistake → TV Series. Only when editing an existing entry. */}
+          {entry && (
+            <div className="grid gap-1.5 border-t border-border pt-3">
+              <Label className="text-xs">Wrong list? Move this entry</Label>
+              <MoveToControl
+                currentTrackerId={tracker.id}
+                className="w-full max-w-full"
+                onMove={(targetId, targetName) => {
+                  moveEntries([entry.id], targetId)
+                  toast.success(`Moved “${titleOf(tracker, entry)}” to ${targetName}`)
+                  setForm({}); onClose()
+                }}
+              />
+              <p className="text-[11px] text-muted-foreground">Its details come along; the title is kept.</p>
+            </div>
           )}
         </div>
         <DialogFooter>
@@ -968,7 +1110,7 @@ function BulkBar({
   onSelectAll: (ids: string[]) => void
   onClear: () => void
 }) {
-  const { patchEntries, deleteEntries } = useStore()
+  const { patchEntries, deleteEntries, moveEntries } = useStore()
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   const statusCol = tracker.columns.find(c => c.type === 'status')
@@ -1040,6 +1182,17 @@ function BulkBar({
               ))}
             </select>
           ))}
+
+          <MoveToControl
+            currentTrackerId={tracker.id}
+            label="Move to"
+            className="h-7"
+            onMove={(targetId, targetName) => {
+              moveEntries(selected, targetId)
+              toast.success(`Moved ${n} ${n === 1 ? 'entry' : 'entries'} to ${targetName}`)
+              onClear()
+            }}
+          />
 
           <Button
             size="sm"

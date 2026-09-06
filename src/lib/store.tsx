@@ -123,6 +123,10 @@ export interface Store {
   // listed entry (bulk "mark Watched", bulk rating, bulk set any single-choice field).
   patchEntries: (ids: string[], patch: Entry['values']) => void
   deleteEntries: (ids: string[]) => void
+  // Move entries to a different tracker/collection (e.g. a film added to Movies by mistake → TV
+  // Series, or a book filed under the wrong list). Non-destructive: all values are kept, and the
+  // title is copied into the target list's title column when the column keys differ.
+  moveEntries: (ids: string[], targetTrackerId: string) => void
   addCategory: (c: Partial<Category> & { name: string }) => void
   updateCategory: (id: string, patch: Partial<Category>) => void
   // force=true deletes even if tasks/captures/subcategories still reference it — those
@@ -792,6 +796,34 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
             ids[0],
             `${ids.length} from ${tracker?.name ?? 'a tracker'}${names.length ? ` — ${names.join(', ')}${going.length > names.length ? '…' : ''}` : ''}`,
           ),
+        )
+      },
+      moveEntries(ids, targetTrackerId) {
+        if (!ids.length) return
+        const set = new Set(ids)
+        const target = state.trackers.find(t => t.id === targetTrackerId)
+        if (!target) return
+        const targetTitleKey = (target.columns.find(c => c.isTitle) ?? target.columns[0])?.key
+        const moving = state.entries.filter(e => set.has(e.id))
+        const fromTracker = state.trackers.find(t => t.id === moving[0]?.trackerId)
+        withAudit(
+          s => ({
+            ...s,
+            entries: s.entries.map(e => {
+              if (!set.has(e.id)) return e
+              const src = s.trackers.find(t => t.id === e.trackerId)
+              const srcTitleKey = (src?.columns.find(c => c.isTitle) ?? src?.columns[0])?.key
+              let values = e.values
+              // Carry the title across when the two lists key their title column differently, so the
+              // moved item never lands showing a blank name in its new list.
+              if (targetTitleKey && srcTitleKey && targetTitleKey !== srcTitleKey
+                && values[srcTitleKey] !== undefined && values[targetTitleKey] === undefined) {
+                values = { ...values, [targetTitleKey]: values[srcTitleKey] }
+              }
+              return { ...e, trackerId: targetTrackerId, values }
+            }),
+          }),
+          auditEvent('updated', 'entry', ids[0], `moved ${ids.length} ${ids.length === 1 ? 'entry' : 'entries'} from ${fromTracker?.name ?? 'a list'} to ${target.name}`),
         )
       },
       addCategory(c) {

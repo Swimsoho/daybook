@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v108 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v109 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+94. **v109** — **Collections read properly on a phone**, and you can **move an entry to the right list**.
+
+    Two Collections fixes. **(a) A real mobile layout.** On a phone the wide table and multi‑column board were cramped and spilled off the screen; now the list defaults to a **stacked card** per entry — title, then each filled‑in field as a "Label: value" line, a rating as stars, and the status as an inline dropdown you can change in place — so a watch‑list is legible top‑to‑bottom with no sideways scrolling. The collection picker and the toolbar actions became **single horizontal scroll strips** instead of wrapping into several rows, and the board stacks its status columns vertically. You can still switch to Board/Gallery; the change only affects the default and the table's phone rendering. Desktop is untouched (full table as before). **(b) Move an entry to another list.** Added something to the wrong collection — a film into Movies that's really a TV series, or a book under the wrong list? Open the entry and use **"Wrong list? Move this entry"** to send it to any other collection/tracker; for several at once, turn on **Select** and use **Move to…** in the action bar. The move is non‑destructive — all the entry's details come along and the title is carried into the destination list's title column, so it never lands blank. (Recorded in History like any change.)
 
 93. **v108** — **The layout switch now works both ways** — a "Phone" button on desktop (and a recovery link).
 
