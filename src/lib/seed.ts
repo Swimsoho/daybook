@@ -185,6 +185,7 @@ export function seedState(): AppState {
           { key: 'name', name: 'Name', type: 'text', isTitle: true, required: true },
           { key: 'starring', name: 'Starring', type: 'text' },
           { key: 'release', name: 'Release date', type: 'date' },
+          { key: 'watched_on', name: 'Date watched', type: 'date' },
           { key: 'platform', name: 'Platform', type: 'select', options: ['Netflix', 'Prime', 'Disney+', 'Cinema'] },
           { key: 'status', name: 'Status', type: 'status', options: ['Want to watch', 'Watching', 'Watched'] },
           { key: 'rating', name: 'Rating', type: 'rating', showWhen: { columnKey: 'status', equals: 'Watched' } },
@@ -213,7 +214,7 @@ export function seedState(): AppState {
     ],
     entries: [
       { id: 'e1', trackerId: 'trk_movies', created: daysAgo(30), values: { name: 'The Zone of Interest', starring: 'Christian Friedel', platform: 'Prime', status: 'Want to watch' } },
-      { id: 'e2', trackerId: 'trk_movies', created: daysAgo(60), values: { name: 'Oppenheimer', starring: 'Cillian Murphy', platform: 'Prime', status: 'Watched', rating: 5 } },
+      { id: 'e2', trackerId: 'trk_movies', created: daysAgo(60), values: { name: 'Oppenheimer', starring: 'Cillian Murphy', platform: 'Prime', status: 'Watched', rating: 5, watched_on: daysAgo(52) } },
       { id: 'e3', trackerId: 'trk_movies', created: daysAgo(10), values: { name: 'A Real Pain', starring: 'Jesse Eisenberg', platform: 'Cinema', status: 'Want to watch' } },
       { id: 'e4', trackerId: 'trk_movies', created: daysAgo(20), values: { name: 'Shtisel S3', starring: 'Michael Aloni', platform: 'Netflix', status: 'Watching' } },
       { id: 'e5', trackerId: 'trk_books', created: daysAgo(50), values: { title: 'Deep Work', author: 'Cal Newport', status: 'Finished', finished: daysAgo(12), rating: 4 } },

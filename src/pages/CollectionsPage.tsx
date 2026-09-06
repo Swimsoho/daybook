@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowUpDown, CalendarPlus, CheckSquare, ChevronDown, ChevronUp, Download, Loader2, Plus, Search, Sparkles, Trash2, Tv, Upload } from 'lucide-react'
+import { ArrowUpDown, Calendar, CalendarPlus, CheckSquare, ChevronDown, ChevronUp, Download, Loader2, Plus, Search, Sparkles, Trash2, Tv, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -994,6 +994,10 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
   // default status for new entries
   const statusCol = tracker.columns.find(c => c.type === 'status')
   if (!entry && statusCol && base[statusCol.key] === undefined) base[statusCol.key] = statusCol.options?.[0] ?? ''
+  // "Date watched" (and any date column named like it) defaults to today — i.e. the day you add the
+  // entry — for a new entry. Fully editable below; blank it out if you're only adding to a watchlist.
+  const watchedCol = tracker.columns.find(c => c.type === 'date' && (c.key === 'watched_on' || /watch(ed)?\s*(on|date)|date\s*watch|seen\s*(on|date)/i.test(c.name)))
+  if (!entry && watchedCol && base[watchedCol.key] === undefined) base[watchedCol.key] = today()
   const vis = visibleColumns(tracker, base)
   const set = (k: string, v: Entry['values'][string]) => setForm(f => ({ ...f, [k]: v }))
   const titleCol = tracker.columns.find(c => c.isTitle) ?? tracker.columns[0]
@@ -1061,6 +1065,79 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
   )
 }
 
+// ---- Date entry -------------------------------------------------------------------------------
+// Dates are stored canonically as ISO `YYYY-MM-DD` (so they sort and format consistently), but
+// people think in `m/d/yyyy`. These convert between the two.
+function isoToUS(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '')
+  return m ? `${Number(m[2])}/${Number(m[3])}/${m[1]}` : ''
+}
+function toIsoDate(y: number, mo: number, da: number): string | null {
+  if (mo < 1 || mo > 12 || da < 1 || da > 31) return null
+  const dt = new Date(y, mo - 1, da)
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== da) return null
+  return `${y}-${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}`
+}
+// Parse what a person typed. Accepts m/d/yyyy (and - or . separators), 2-digit years, and also a
+// pasted ISO yyyy-mm-dd. Returns ISO, or '' for an empty box, or null when it can't be understood.
+function parseTypedDate(s: string): string | null | '' {
+  const t = s.trim()
+  if (!t) return ''
+  let m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(t)
+  if (m) return toIsoDate(Number(m[1]), Number(m[2]), Number(m[3]))
+  m = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/.exec(t)
+  if (m) {
+    const yr = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3])
+    return toIsoDate(yr, Number(m[1]), Number(m[2]))
+  }
+  return null
+}
+
+/**
+ * A robust date field: type the date freely as m/d/yyyy (or m-d-yyyy), or tap the calendar to pick
+ * it. The typed box and the native picker stay in sync; the value is stored as ISO YYYY-MM-DD.
+ * An unparseable entry snaps back to the last good value on blur rather than silently saving junk.
+ */
+function DateField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : ''
+  const [text, setText] = useState(() => isoToUS(iso))
+  // keep the box in step when the value changes from elsewhere (e.g. a default, or a reset)
+  useEffect(() => { setText(isoToUS(iso)) }, [iso])
+  const commit = () => {
+    const parsed = parseTypedDate(text)
+    if (parsed === null) { setText(isoToUS(iso)); return } // couldn't read it — restore last good
+    onChange(parsed) // '' clears, otherwise ISO
+    setText(parsed ? isoToUS(parsed) : '')
+  }
+  return (
+    <div className="flex items-center gap-1.5">
+      <Input
+        value={text}
+        inputMode="numeric"
+        placeholder="m/d/yyyy"
+        onChange={e => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit() } }}
+        className="flex-1"
+      />
+      {/* The native date input sits invisibly over the button, so a tap/click opens the OS calendar
+          on every platform without relying on showPicker(). */}
+      <div className="relative h-9 w-9 shrink-0">
+        <span className="pointer-events-none grid h-9 w-9 place-items-center rounded-md border border-input bg-card text-muted-foreground">
+          <Calendar className="h-4 w-4" />
+        </span>
+        <input
+          type="date"
+          aria-label="Pick a date"
+          value={iso}
+          onChange={e => onChange(e.target.value)}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+        />
+      </div>
+    </div>
+  )
+}
+
 function ColumnInput({ col, value, onChange }: { col: TrackerColumn; value: Entry['values'][string]; onChange: (v: Entry['values'][string]) => void }) {
   switch (col.type) {
     case 'longtext':
@@ -1069,7 +1146,7 @@ function ColumnInput({ col, value, onChange }: { col: TrackerColumn; value: Entr
     case 'currency':
       return <Input type="number" step="0.01" value={value === undefined ? '' : String(value)} onChange={e => onChange(e.target.value === '' ? '' : Number(e.target.value))} />
     case 'date':
-      return <Input type="date" value={String(value ?? '')} onChange={e => onChange(e.target.value)} />
+      return <DateField value={String(value ?? '')} onChange={v => onChange(v)} />
     case 'checkbox':
       return <input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} className="h-4 w-4 accent-[hsl(var(--primary))]" />
     case 'rating':

@@ -337,6 +337,11 @@ function normalizeWatchTrackers(trackers: Tracker[]): Tracker[] {
     if (!hasCol('release', /release|aired|year|premier/i)) {
       additions.push({ key: 'release', name: 'Release date', type: 'date' })
     }
+    // When you actually watched it. Defaults to the day you add the entry (see the New-entry dialog)
+    // but is fully editable. Matched loosely so a hand-made "Watched on" / "Seen date" isn't doubled.
+    if (!hasCol('watched_on', /watch(ed)?\s*(on|date)|date\s*watch|seen\s*(on|date)/i)) {
+      additions.push({ key: 'watched_on', name: 'Date watched', type: 'date' })
+    }
     if (additions.length) {
       // straight after the title, so they read as part of the entry's identity
       cols = [...cols.slice(0, titleIndex + 1), ...additions, ...cols.slice(titleIndex + 1)]

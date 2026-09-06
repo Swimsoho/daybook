@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v109 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v110 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+95. **v110** — **"Date watched" on watch‑lists**, plus a much better date input everywhere.
+
+    Every watch‑list (Movies / TV / …) now has a **Date watched** column. When you add an entry it **defaults to that day** (the entry date), and it's fully editable — so the common case needs no typing, but you can set the real date you saw something whenever it differs. Existing Movies lists get the column added automatically; nothing you'd set up by hand is touched. The bigger change is the **date input itself**, now used for *every* date field in Collections (Date watched, Release date, Dates‑to‑Remember, and any custom date column): you can **type the date straight in as `m/d/yyyy`** (it also accepts `-`/`.` separators and 2‑digit years) **or tap the calendar** button to pick it. Dates are still stored in the canonical ISO form under the hood, so sorting and formatting stay consistent, and a typo that can't be read snaps back to the last good value instead of saving junk.
 
 94. **v109** — **Collections read properly on a phone**, and you can **move an entry to the right list**.
 
