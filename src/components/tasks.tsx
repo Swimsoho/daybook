@@ -119,7 +119,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
 
 // ---------- Task row with quick actions ----------
 
-export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, selected, onToggleSelect, note }: {
+export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, selected, onToggleSelect, note, wrapTitle }: {
   task: Task
   showArea?: boolean
   depth?: number
@@ -130,6 +130,9 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
   // Optional "why is this here" chip — used by the Attention list to say, on the row itself,
   // exactly why the task is flagged (e.g. "overdue 3d" or "waiting 7d").
   note?: { text: string; tone: 'overdue' | 'waiting' }
+  // When true the title wraps to up to two lines instead of truncating to one — used where the row
+  // is the whole point (e.g. the Attention list) so the full description is readable at a glance.
+  wrapTitle?: boolean
 }) {
   const { state, completeTask, snoozeTask, calledFollowUp, updateTask, dropTask, deleteTask, reinsertTasks } = useStore()
   const [localExp, setLocalExp] = useState<boolean | null>(null)
@@ -244,11 +247,11 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
         ) : depth === 0 ? <span className="w-3.5 shrink-0" /> : null}
 
         {/* title + meta */}
-        <button onClick={() => onOpen(task)} className="min-w-0 flex-1 text-left">
+        <button onClick={() => onOpen(task)} className="min-w-0 flex-1 text-left overflow-hidden">
           <div className="flex items-center gap-2 min-w-0">
             {task.type === 'call' && <Phone className="h-3 w-3 shrink-0 text-[hsl(215_45%_42%)]" />}
             {task.type === 'followup' && <Clock className="h-3 w-3 shrink-0 text-[hsl(17_63%_47%)]" />}
-            <span className={cn('truncate text-[13.5px]', done && 'line-through text-muted-foreground')}>{task.title}</span>
+            <span title={task.title} className={cn('min-w-0 text-[13.5px]', wrapTitle ? 'line-clamp-2' : 'truncate', done && 'line-through text-muted-foreground')}>{task.title}</span>
             {task.shared?.status === 'pending' && <Send className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="Shared — awaiting response" />}
             {roll && (
               <span className="shrink-0 text-[10.5px] tabular text-muted-foreground border border-border rounded-sm px-1 py-px">
@@ -256,18 +259,20 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            {showArea && <AreaDot areaId={task.areaId} withName />}
+          {/* Meta line — kept to a single row that truncates as a unit so nothing (a long project or
+              assignee name) can spill out and collide with the badges to its right. */}
+          <div className="flex items-center gap-2 mt-0.5 min-w-0 overflow-hidden flex-nowrap">
+            {showArea && <span className="shrink-0"><AreaDot areaId={task.areaId} withName /></span>}
             {category && (
-              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap">
+              <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
                 <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: category.color || 'hsl(215 20% 65%)' }} />
                 {category.name}
               </span>
             )}
-            {project && <span className="text-[11px] text-muted-foreground truncate">› {project.name}</span>}
-            {person && <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5"><User className="h-2.5 w-2.5" />{person.name}</span>}
+            {project && <span className="text-[11px] text-muted-foreground truncate min-w-0">› {project.name}</span>}
+            {person && <span className="text-[11px] text-muted-foreground inline-flex items-center gap-0.5 truncate min-w-0 shrink-0 max-w-[9rem]"><User className="h-2.5 w-2.5 shrink-0" /><span className="truncate">{person.name}</span></span>}
             {task.status === 'waiting' && task.waitingOn && (
-              <span className="text-[11px] text-[hsl(28_60%_32%)]">waiting on {task.waitingOn} · {daysSince(task.waitingSince ?? task.created)}d</span>
+              <span className="text-[11px] text-[hsl(28_60%_32%)] truncate min-w-0">waiting on {task.waitingOn} · {daysSince(task.waitingSince ?? task.created)}d</span>
             )}
           </div>
         </button>

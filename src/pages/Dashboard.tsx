@@ -540,7 +540,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
             <p className="text-[11px] text-muted-foreground mt-0.5">Overdue, or waiting on someone too long — each row shows why.</p>
           </div>
           {attention.length === 0 && <EmptyNote>Nothing slipping. That’s the goal.</EmptyNote>}
-          {attention.map(({ task, note }) => <TaskRow key={task.id} task={task} onOpen={setOpenTask} note={note} />)}
+          {attention.map(({ task, note }) => <TaskRow key={task.id} task={task} onOpen={setOpenTask} note={note} wrapTitle />)}
         </section>
     ),
     calls: (
