@@ -112,11 +112,14 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
               </Select>
             </Field>
             <Field label="Owner">
-              <Select value={project.ownerPersonId ?? 'none'} onValueChange={v => updateProject(project.id, { ownerPersonId: v === 'none' ? undefined : v })}>
+              {/* Owner is chosen from the project's OWN users (set up in Overview → Team), not the
+                  global contacts list. Add people on the Team panel first, then pick one here. */}
+              <Select value={project.ownerMemberId ?? 'none'} onValueChange={v => updateProject(project.id, { ownerMemberId: v === 'none' ? undefined : v })}>
                 <SelectTrigger className="h-8 w-full bg-card text-[12px]"><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No owner</SelectItem>
-                  {state.people.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  {(project.members ?? []).map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                  {(project.members ?? []).length === 0 && <div className="px-2 py-1.5 text-[11.5px] text-muted-foreground">Add users on the Team panel first</div>}
                 </SelectContent>
               </Select>
             </Field>

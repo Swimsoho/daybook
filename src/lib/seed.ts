@@ -1,11 +1,12 @@
 import {
   AppState, addDays, daysAgo, today,
 } from './model'
+import { migrateProjectMembers } from './projects'
 
 const T = today()
 
 export function seedState(): AppState {
-  return {
+  const base: AppState = {
     areas: [
       { id: 'a_family', name: 'Family / Home', description: 'Home maintenance, kids, simchas, household finances, errands', color: 'hsl(17 63% 47%)', sort: 0, active: true, inBrief: true, reviewDay: 'Sunday' },
       { id: 'a_shul', name: 'Shul', description: 'Committee roles, learning schedule, chesed, events', color: 'hsl(215 45% 42%)', sort: 1, active: true, inBrief: true, reviewDay: 'Thursday' },
@@ -278,6 +279,11 @@ export function seedState(): AppState {
       },
     },
   }
+  // Give the demo projects their own team rosters (v118) — derived from the seeded owners/assignees —
+  // so the project workspace shows project-scoped users instead of the global contacts list. This is
+  // the same pass the cloud runs once on upgrade, kept here because demo mode never runs migrations.
+  const { projects, tasks } = migrateProjectMembers(base.projects, base.tasks, base.people)
+  return { ...base, projects, tasks, settings: { ...base.settings, projectMembersMigratedV118: true } }
 }
 
 // A freshly provisioned "real" account: defaults seeded, no data yet.

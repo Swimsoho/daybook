@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 import { AdminUser, AppState, Role, Task, Tracker, TrackerColumn, daysSince } from './model'
 import { mergeStates, saveWorkspaceState } from './sync'
 import { emptyState, seedState } from './seed'
+import { migrateProjectMembers } from './projects'
 
 // ---------- Types ----------
 
@@ -421,15 +422,26 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
     // this flag is absent, so active project tasks are surfaced so nothing drops off the lists.
     const runProjectTodoMigration = !loaded.settings?.projectTodoMigratedV111
     const runLabelMigration = !loaded.settings?.labelMigratedV114
+    const runMemberMigration = !loaded.settings?.projectMembersMigratedV118
+    // Order matters: classify labels first (so the member migration skips labels), then seed each
+    // real project's own team roster from its legacy People-based owner/assignees.
+    let migratedProjects = runLabelMigration ? classifyProjectKinds(loaded.projects, loaded.milestones) : (loaded.projects ?? [])
+    let migratedTasks = runProjectTodoMigration ? surfaceActiveProjectTasks(loaded.tasks ?? []) : (loaded.tasks ?? [])
+    if (runMemberMigration) {
+      const m = migrateProjectMembers(migratedProjects, migratedTasks, loaded.people ?? [])
+      migratedProjects = m.projects
+      migratedTasks = m.tasks
+    }
     const normalised: AppState = {
       ...loaded,
-      tasks: runProjectTodoMigration ? surfaceActiveProjectTasks(loaded.tasks ?? []) : loaded.tasks,
-      projects: runLabelMigration ? classifyProjectKinds(loaded.projects, loaded.milestones) : loaded.projects,
+      tasks: migratedTasks,
+      projects: migratedProjects,
       settings: {
         ...SETTINGS_BACKFILL,
         ...loaded.settings,
         projectTodoMigratedV111: true,
         labelMigratedV114: true,
+        projectMembersMigratedV118: true,
         // `features` is a nested object — the shallow spread above would otherwise let an
         // existing account's saved `features` blob (from before `lunchReminder` existed)
         // silently drop the new key, since object spread doesn't merge nested objects. The

@@ -40,14 +40,35 @@ export interface Project {
   // Optional project start date (ISO). Used by the Projects timeline/Gantt to place the project and
   // its phases on a scale; absent projects start at their earliest task/milestone date.
   start?: string
-  // The person accountable for the project (a People contact id). Distinct from per-task assignees.
+  // The project's own team (v118). These are **project users set up under the project itself** — a
+  // roster you build right on the project, deliberately separate from the global People/contacts
+  // list (which is a personal relationship book, not a list of who works on a project). Only these
+  // are offered when assigning a task on this project, so the assignee picker is short and relevant.
+  members?: ProjectMember[]
+  // The accountable project member (a ProjectMember id — see `members`). Replaces the old
+  // ownerPersonId for real projects; kept distinct from per-task assignees.
+  ownerMemberId?: string
+  // ---- Legacy (pre-v118) ----
+  // Old owner/team model that referenced global People contacts. Retained only so the one-time
+  // v118 migration can seed `members` from what an existing account already had; the UI no longer
+  // reads or writes these. See migrateProjectMembers().
   ownerPersonId?: string
-  // The project's team — People contact ids explicitly added to the project (in the Overview → Team
-  // panel). These are the people surfaced first when assigning a task on this project, so a project
-  // effectively has a roster. The owner and anyone assigned to a task also count as team members.
   memberPersonIds?: string[]
   notes?: string
   lastActivity: string // ISO date, for stall detection
+}
+
+/**
+ * A **project user** — someone on a single project's team, set up under the project itself. This is
+ * intentionally NOT a People/contacts record: a project's team is the handful of people doing the
+ * work, defined right there on the project, so assigning a task offers a short list instead of the
+ * whole address book. Lightweight by design — a name, and optionally an email and a role.
+ */
+export interface ProjectMember {
+  id: string
+  name: string
+  email?: string
+  role?: string
 }
 
 /**
@@ -101,6 +122,11 @@ export interface Task {
    */
   showInTodo?: boolean
   parentId?: string
+  // Who on the project's team owns this task (a ProjectMember id — see Project.members). This is the
+  // project-scoped assignee, set on the board's "Assign…" column; it draws only from the project's
+  // own users, never the global contacts list. Distinct from `personId`, which links an optional
+  // personal *contact* (for calls/follow-ups) and is unrelated to project team assignment.
+  assigneeMemberId?: string
   /**
    * Other tasks that have to finish first. This is a real dependency between two
    * pieces of work — distinct from `waitingOn`, which is free text for waiting on
@@ -353,6 +379,10 @@ export interface Settings {
   // One-time migration marker (v114): guards the pass that classified pre-existing projects as real
   // projects vs. lightweight labels (bare task-groupings became labels). Set true after it runs.
   labelMigratedV114?: boolean
+  // One-time migration marker (v118): guards the pass that seeds each real project's own `members`
+  // roster from its legacy People-based owner/team/assignees, so project assignment stops drawing
+  // from the global contacts list without losing existing assignments. Set true after it runs.
+  projectMembersMigratedV118?: boolean
   stallDays: number
   projectWipLimit: number
   tierCadence: Record<Tier, number>

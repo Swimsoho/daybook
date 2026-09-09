@@ -61,7 +61,7 @@ export function ProjectBoard({ project, onOpenTask, onAddTask }: {
 
   const filtered = useMemo(() => all.filter(t => {
     if (phase && (phase === NO_PHASE ? !!t.milestoneId : t.milestoneId !== phase)) return false
-    if (owner && (owner === NO_PHASE ? !!t.personId : t.personId !== owner)) return false
+    if (owner && (owner === NO_PHASE ? !!t.assigneeMemberId : t.assigneeMemberId !== owner)) return false
     if (status && t.status !== status) return false
     if (priority && t.priority !== priority) return false
     if (hideDone && (t.status === 'done' || t.status === 'dropped')) return false
@@ -73,12 +73,9 @@ export function ProjectBoard({ project, onOpenTask, onAddTask }: {
     [state, project.id, filtered],
   )
 
-  // Only people who actually own something here — a dropdown of the whole address
-  // book would be unusable, and every name in it but a handful would match nothing.
-  const owners = useMemo(() => {
-    const ids = new Set(all.map(t => t.personId).filter(Boolean) as string[])
-    return state.people.filter(p => ids.has(p.id))
-  }, [all, state.people])
+  // The owner filter offers this project's own users — the roster set up under the project — so it's
+  // a short, relevant list rather than the whole address book.
+  const owners = project.members ?? []
 
   const anyFilter = !!(phase || owner || status || priority || hideDone)
   const phases = state.milestones.filter(m => m.projectId === project.id)
@@ -360,35 +357,27 @@ function TargetDate({ due, finished }: { due?: string; finished: boolean }) {
 }
 
 /**
- * Inline assignee (owner) picker on a board row — set who owns a task without opening it. The
- * project's own people (its owner + anyone already on one of its tasks) are surfaced at the top, so
- * a project effectively has a working team you pick from first; anyone in People is still available,
- * and typing a new name adds them to People and assigns them in one go.
+ * Inline assignee picker on a board row — set who owns a task without opening it. It offers ONLY this
+ * project's own users (project.members — the roster set up under the project), never the global
+ * contacts list. Typing a new name creates a user on this project and assigns them in one step.
  */
 function AssigneePicker({ task }: { task: Task }) {
-  const { state, updateTask, addPerson } = useStore()
+  const { state, updateTask, addProjectMember } = useStore()
   const project = task.projectId ? state.projects.find(p => p.id === task.projectId) : undefined
-  const memberIds = new Set<string>()
-  if (project?.ownerPersonId) memberIds.add(project.ownerPersonId)
-  for (const id of project?.memberPersonIds ?? []) memberIds.add(id)
-  if (project) for (const t of state.tasks) if (t.projectId === project.id && t.personId) memberIds.add(t.personId)
-  const members = state.people.filter(p => memberIds.has(p.id))
-  const others = state.people.filter(p => !memberIds.has(p.id)).sort((a, b) => a.name.localeCompare(b.name))
-  const ordered = [...members, ...others]
+  const members = project?.members ?? []
   return (
     <SearchableSelect
-      value={task.personId ?? '__none__'}
+      value={task.assigneeMemberId ?? '__none__'}
       onValueChange={v => {
-        const p = state.people.find(x => x.id === v)
-        updateTask(task.id, { personId: v === '__none__' ? undefined : v }, p ? `assigned to ${p.name}` : 'unassigned')
-        toast(p ? `Assigned to ${p.name}` : 'Unassigned')
+        const m = members.find(x => x.id === v)
+        updateTask(task.id, { assigneeMemberId: v === '__none__' ? undefined : v }, m ? `assigned to ${m.name}` : 'unassigned')
+        toast(m ? `Assigned to ${m.name}` : 'Unassigned')
       }}
-      options={[{ value: '__none__', label: 'Unassigned' }, ...ordered.map(p => ({ value: p.id, label: p.name }))]}
-      popularCount={members.length ? members.length + 1 : 0}
+      options={[{ value: '__none__', label: 'Unassigned' }, ...members.map(m => ({ value: m.id, label: m.name }))]}
       placeholder="Assign…"
-      searchPlaceholder="Search people, or type to add…"
-      onCreate={name => { const p = addPerson({ name }); updateTask(task.id, { personId: p.id }, `assigned to ${p.name}`); toast.success(`Added ${p.name} & assigned`) }}
-      createLabel={q => `Add person “${q}”`}
+      searchPlaceholder={members.length ? 'Search team, or type to add…' : 'Type a name to add a user…'}
+      onCreate={project ? name => { const m = addProjectMember(project.id, { name }); updateTask(task.id, { assigneeMemberId: m.id }, `assigned to ${m.name}`); toast.success(`Added ${m.name} & assigned`) } : undefined}
+      createLabel={q => `Add “${q}” to this project`}
       className="h-7 w-full text-[11.5px] bg-card"
     />
   )

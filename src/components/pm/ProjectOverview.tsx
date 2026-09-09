@@ -1,17 +1,17 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Clock, CheckCircle2, Circle, Users, Pencil, ArrowRight, Layers, X } from 'lucide-react'
+import { AlertTriangle, Clock, CheckCircle2, Circle, Users, Pencil, ArrowRight, Layers, X, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { Task, Person, Priority, fmtDate, daysSince } from '@/lib/model'
+import { Task, ProjectMember, Priority, fmtDate, daysSince } from '@/lib/model'
 import { useStore } from '@/lib/store'
 import {
-  projectStats, projectHealth, HEALTH_META, projectTeam, projectOwner,
+  projectStats, projectHealth, HEALTH_META, projectMembers, projectOwnerMember,
 } from '@/lib/projects'
 import { projectMilestones } from '@/lib/milestones'
 import { PriorityChip, DueChip } from '@/components/bits'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
-import { SearchableSelect } from '@/components/ui/searchable-select'
+import { Input } from '@/components/ui/input'
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -46,7 +46,7 @@ export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGoto }: 
       from the metric tiles and the phase rows. */
   onGoto: (tab: string) => void
 }) {
-  const { state, updateProject, addPerson } = useStore()
+  const { state, updateProject, addProjectMember, removeProjectMember } = useStore()
   const project = state.projects.find(p => p.id === projectId)
 
   const [notes, setNotes] = useState(project?.notes ?? '')
@@ -60,8 +60,8 @@ export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGoto }: 
   const stats = projectStats(state, projectId)
   const health = projectHealth(state, project)
   const meta = HEALTH_META[health]
-  const owner = projectOwner(state, project)
-  const team = projectTeam(state, projectId)
+  const owner = projectOwnerMember(project)
+  const members = projectMembers(state, projectId)
   const phases = projectMilestones(state, projectId)
 
   // Every open task on the project (incl. subtasks) — the pool the two lists draw from.
@@ -193,13 +193,12 @@ export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGoto }: 
 
       {/* 5 · TEAM --------------------------------------------------------- */}
       <TeamPanel
-        project={project}
         owner={owner}
-        team={team}
-        people={state.people}
-        onAdd={id => updateProject(project.id, { memberPersonIds: [...new Set([...(project.memberPersonIds ?? []), id])] })}
-        onRemove={id => updateProject(project.id, { memberPersonIds: (project.memberPersonIds ?? []).filter(x => x !== id) })}
-        onCreatePerson={name => { const p = addPerson({ name }); updateProject(project.id, { memberPersonIds: [...new Set([...(project.memberPersonIds ?? []), p.id])] }); toast.success(`Added ${p.name} to People & the team`); return p.id }}
+        ownerId={project.ownerMemberId}
+        members={members}
+        onAdd={name => { const m = addProjectMember(project.id, { name }); toast.success(`${m.name} added to the team`) }}
+        onRemove={id => removeProjectMember(project.id, id)}
+        onSetOwner={id => updateProject(project.id, { ownerMemberId: id })}
       />
 
       {/* 6 · NOTES -------------------------------------------------------- */}
@@ -273,71 +272,81 @@ function TaskRow({ task, onOpenTask, right }: { task: Task; onOpenTask: (t: Task
   )
 }
 
-// The Team roster — owner + explicitly-added members + anyone on a task. The "+ Add teammate" box
-// is always visible so building a team is obvious; added members are surfaced first when assigning
-// a task (see the board's assignee picker). Task-only people show an "on tasks" tag (no × — remove
-// them by unassigning the task); explicit members get a × to drop them from the roster.
-function TeamPanel({ project, owner, team, people, onAdd, onRemove, onCreatePerson }: {
-  project: { id: string; memberPersonIds?: string[] }
-  owner?: Person
-  team: Person[]
-  people: Person[]
-  onAdd: (id: string) => void
+// The Team roster — the project's OWN users, set up right here under the project (not pulled from
+// the global contacts list). Type a name and press Add to create a project user; these are exactly
+// the people offered when you assign a task on this project. Click a member to make them the owner;
+// the × removes them (and clears any task they were assigned).
+function TeamPanel({ owner, ownerId, members, onAdd, onRemove, onSetOwner }: {
+  owner?: ProjectMember
+  ownerId?: string
+  members: ProjectMember[]
+  onAdd: (name: string) => void
   onRemove: (id: string) => void
-  onCreatePerson: (name: string) => string
+  onSetOwner: (id: string | undefined) => void
 }) {
-  const explicit = new Set(project.memberPersonIds ?? [])
-  const others = team.filter(p => p.id !== owner?.id)
-  const inTeam = new Set(team.map(p => p.id))
-  const candidates = people.filter(p => !inTeam.has(p.id)).sort((a, b) => a.name.localeCompare(b.name))
+  const [draft, setDraft] = useState('')
+  const add = () => {
+    const name = draft.trim()
+    if (!name) return
+    if (members.some(m => m.name.trim().toLowerCase() === name.toLowerCase())) { toast.error(`${name} is already on the team`); setDraft(''); return }
+    onAdd(name)
+    setDraft('')
+  }
+  // Owner first, then the rest by name.
+  const rest = members.filter(m => m.id !== ownerId).sort((a, b) => a.name.localeCompare(b.name))
   return (
     <section className="rounded-lg border border-border bg-card shadow-sm p-4">
-      <SectionHead icon={<Users size={13} />}>Team</SectionHead>
-      <div className="flex items-center gap-2 flex-wrap mt-1">
-        {owner && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[hsl(17_63%_47%_/_0.06)] pl-1 pr-2.5 py-1">
-            <Avatar person={owner} accent={ORANGE} />
-            <span className="text-[12.5px] font-medium leading-none">{owner.name}</span>
-            <span className="text-[9.5px] uppercase tracking-wide text-muted-foreground leading-none">owner</span>
-          </span>
-        )}
-        {others.map(p => (
-          <span key={p.id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card pl-1 pr-1.5 py-1">
-            <Avatar person={p} />
-            <span className="text-[12.5px] font-medium leading-none">{p.name}</span>
-            {explicit.has(p.id) ? (
-              <button onClick={() => onRemove(p.id)} title="Remove from team" className="grid place-items-center h-4 w-4 rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"><X size={11} /></button>
-            ) : (
-              <span className="text-[9px] uppercase tracking-wide text-muted-foreground leading-none pr-0.5" title="On the team because they're assigned to a task">on tasks</span>
-            )}
-          </span>
-        ))}
-        <div className="w-[190px]">
-          <SearchableSelect
-            value=""
-            onValueChange={id => { if (id) onAdd(id) }}
-            options={candidates.map(p => ({ value: p.id, label: p.name }))}
-            placeholder="+ Add teammate…"
-            searchPlaceholder="Search people, or type to add…"
-            onCreate={name => onCreatePerson(name)}
-            createLabel={q => `Add person “${q}”`}
-            className="h-8 text-[12.5px] bg-card"
-          />
-        </div>
+      <div className="flex items-center justify-between gap-2">
+        <SectionHead icon={<Users size={13} />} noMargin>Team</SectionHead>
+        <span className="text-[11px] text-muted-foreground">{members.length} {members.length === 1 ? 'user' : 'users'} on this project</span>
       </div>
-      {!owner && others.length === 0 && (
-        <p className="text-[11.5px] text-muted-foreground mt-2">No one on the team yet — add people above, or set an <b>Owner</b> in the header. Team members are offered first when you assign a task.</p>
+
+      {members.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap mt-3">
+          {owner && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[hsl(17_63%_47%_/_0.06)] pl-1 pr-1.5 py-1">
+              <Avatar name={owner.name} accent={ORANGE} />
+              <span className="text-[12.5px] font-medium leading-none">{owner.name}</span>
+              <span className="text-[9.5px] uppercase tracking-wide text-muted-foreground leading-none">owner</span>
+              <button onClick={() => onRemove(owner.id)} title="Remove from team" className="grid place-items-center h-4 w-4 rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"><X size={11} /></button>
+            </span>
+          )}
+          {rest.map(m => (
+            <span key={m.id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card pl-1 pr-1.5 py-1">
+              <Avatar name={m.name} />
+              <button onClick={() => onSetOwner(m.id)} title="Make owner" className="text-[12.5px] font-medium leading-none hover:text-primary">{m.name}</button>
+              <button onClick={() => onRemove(m.id)} title="Remove from team" className="grid place-items-center h-4 w-4 rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"><X size={11} /></button>
+            </span>
+          ))}
+        </div>
       )}
+
+      {/* Add a project user — type a name and press Add (or Enter). */}
+      <div className="flex items-center gap-2 mt-3 max-w-sm">
+        <Input
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add() } }}
+          placeholder="Add a person to this project…"
+          className="h-8 text-[12.5px] bg-card"
+        />
+        <Button size="sm" className="h-8 shrink-0" onClick={add} disabled={!draft.trim()}><Plus className="h-3.5 w-3.5 mr-1" />Add</Button>
+      </div>
+      <p className="text-[11.5px] text-muted-foreground mt-2">
+        {members.length === 0
+          ? 'No users on this project yet. Add the people working on it — only they are offered when you assign a task.'
+          : 'These are this project’s users — the only people offered when assigning its tasks. Click a name to make them the owner.'}
+      </p>
     </section>
   )
 }
 
-function Avatar({ person, accent }: { person: Person; accent?: string }) {
-  const initials = person.name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('') || '?'
+function Avatar({ name, accent }: { name: string; accent?: string }) {
+  const initials = name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('') || '?'
   const bg = accent ?? MUTED
   return (
     <span
-      title={person.name}
+      title={name}
       className="inline-grid place-items-center h-7 w-7 rounded-full text-white text-[11px] font-semibold shrink-0 shadow-sm"
       style={{ background: bg }}
     >

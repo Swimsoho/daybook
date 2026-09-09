@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
-import { projectStats, projectHealth, projectOwner, HEALTH_META, HEALTH_ORDER, type Health } from '@/lib/projects'
+import { projectStats, projectHealth, projectOwnerMember, HEALTH_META, HEALTH_ORDER, type Health } from '@/lib/projects'
 import { PriorityChip } from '@/components/bits'
 
 type GroupBy = 'area' | 'status' | 'health' | 'none'
@@ -47,7 +47,7 @@ export function Portfolio({ onOpenProject, right }: {
     return state.projects.filter(p => p.kind !== 'label').map(p => {
       const stats = projectStats(state, p.id)
       const health = projectHealth(state, p, stats)
-      const owner = projectOwner(state, p)
+      const owner = projectOwnerMember(p)
       const area = state.areas.find(a => a.id === p.areaId)
       return { p, stats, health, owner, area }
     })

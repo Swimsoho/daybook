@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useMemo, useState } from 'react'
 import {
   Action, AdminUser, AppState, AuditEvent, Capture, Category, Collection, Entry, Interaction, Person, Priority,
-  RoutingProposal, Settings, Task, TaskAttachment, TaskStatus, TierDef, Tracker, addDays, personCadence, personOverdueBy,
+  ProjectMember, RoutingProposal, Settings, Task, TaskAttachment, TaskStatus, TierDef, Tracker, addDays, personCadence, personOverdueBy,
   daysSince, resolveTiers, tierLabel, today, uid,
 } from './model'
 import type { Plan } from './planImport'
@@ -154,6 +154,11 @@ export interface Store {
   sortActionsByName: () => void
   addProject: (p: Partial<AppState['projects'][0]> & { name: string; areaId: string }) => AppState['projects'][0]
   updateProject: (id: string, patch: Partial<AppState['projects'][0]>) => void
+  // Project-scoped team (v118). A project's users are set up under the project itself, kept separate
+  // from the global People/contacts list. addProjectMember appends one to project.members and
+  // returns it; removeProjectMember drops it and cleans up any task assignment / ownership it held.
+  addProjectMember: (projectId: string, m: { name: string; email?: string; role?: string }) => ProjectMember
+  removeProjectMember: (projectId: string, memberId: string) => void
   /** Move every task on `fromId` to project `toId` (adopting its area), or clear the project link
    *  when `toId` is null. Used when a project is archived/removed so no task is left orphaned.
    *  Returns how many tasks were changed. */
@@ -957,6 +962,31 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
       },
       updateProject(id, patch) {
         withAudit(s => ({ ...s, projects: s.projects.map(pr => pr.id === id ? { ...pr, ...patch, lastActivity: today() } : pr) }), auditEvent('updated', 'project', id, Object.keys(patch).join(', ') + ' changed'))
+      },
+      addProjectMember(projectId, m) {
+        const member: ProjectMember = { id: uid('pm'), name: m.name.trim(), email: m.email?.trim() || undefined, role: m.role?.trim() || undefined }
+        const proj = state.projects.find(p => p.id === projectId)
+        withAudit(
+          s => ({ ...s, projects: s.projects.map(pr => pr.id === projectId ? { ...pr, members: [...(pr.members ?? []), member], lastActivity: today() } : pr) }),
+          auditEvent('created', 'project-member', member.id, `${member.name} added to ${proj?.name ?? 'project'}`),
+        )
+        return member
+      },
+      removeProjectMember(projectId, memberId) {
+        const proj = state.projects.find(p => p.id === projectId)
+        const member = proj?.members?.find(m => m.id === memberId)
+        withAudit(
+          s => ({
+            ...s,
+            // Drop the member, and clear the ownership/assignments that pointed at them so no task or
+            // header is left referencing someone who is no longer on the team.
+            projects: s.projects.map(pr => pr.id === projectId
+              ? { ...pr, members: (pr.members ?? []).filter(m => m.id !== memberId), ownerMemberId: pr.ownerMemberId === memberId ? undefined : pr.ownerMemberId, lastActivity: today() }
+              : pr),
+            tasks: s.tasks.map(t => t.projectId === projectId && t.assigneeMemberId === memberId ? { ...t, assigneeMemberId: undefined } : t),
+          }),
+          auditEvent('deleted', 'project-member', memberId, `${member?.name ?? 'member'} removed from ${proj?.name ?? 'project'}`),
+        )
       },
       addMilestone(m) {
         const siblings = (state.milestones ?? []).filter(x => x.projectId === m.projectId)

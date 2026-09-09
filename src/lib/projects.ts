@@ -4,7 +4,7 @@
 // AppState so the portfolio, the project header, the overview, the boards and the timeline all
 // read the *same* numbers — there is no second source of truth for "how far along is this".
 
-import { AppState, Milestone, Person, Project, Task, daysSince } from '@/lib/model'
+import { AppState, Milestone, Person, Project, ProjectMember, Task, daysSince, uid } from '@/lib/model'
 import { projectMilestones, openBlockers } from '@/lib/milestones'
 
 export type Health = 'on-track' | 'at-risk' | 'off-track' | 'on-hold' | 'done'
@@ -75,7 +75,7 @@ export function projectStats(s: AppState, projectId: string): ProjectStats {
     blocked,
     overdue,
     dueSoon,
-    unassigned: open.filter(t => !t.personId).length,
+    unassigned: open.filter(t => !t.assigneeMemberId).length,
     pct: all.length ? Math.round((done / all.length) * 100) : 0,
     phases: phasesArr.length,
     phasesDone: phasesArr.filter(m => m.status === 'done').length,
@@ -116,28 +116,82 @@ export const HEALTH_META: Record<Health, { label: string; dot: string; text: str
 
 export const HEALTH_ORDER: Record<Health, number> = { 'off-track': 0, 'at-risk': 1, 'on-track': 2, 'on-hold': 3, 'done': 4 }
 
+// ---- Project-scoped team (v118) ----
+// A project's team is its own list of members (project.members), set up under the project itself —
+// see the ProjectMember type. These helpers are the single source every project surface reads, so
+// the Overview team panel, the board's assignee picker, the header owner and the portfolio all
+// agree on who is on a project without ever touching the global People/contacts list.
+
+/** The project's own team roster — the users set up under the project. */
+export function projectMembers(s: AppState, projectId: string): ProjectMember[] {
+  return s.projects.find(p => p.id === projectId)?.members ?? []
+}
+export function projectMembersOf(project: Project): ProjectMember[] {
+  return project.members ?? []
+}
+/** Look up one member by id within a project. */
+export function projectMember(project: Project | undefined, memberId?: string): ProjectMember | undefined {
+  if (!project || !memberId) return undefined
+  return (project.members ?? []).find(m => m.id === memberId)
+}
+/** The accountable member for a project (its owner), resolved from ownerMemberId. */
+export function projectOwnerMember(project: Project | undefined): ProjectMember | undefined {
+  return projectMember(project, project?.ownerMemberId)
+}
+/** The member a task is assigned to, within its project. */
+export function taskAssignee(project: Project | undefined, task: Task): ProjectMember | undefined {
+  return projectMember(project, task.assigneeMemberId)
+}
+
+// --- Legacy People-based lookups, retained only where a Person record is still wanted elsewhere ---
 export function projectOwner(s: AppState, p: Project): Person | undefined {
   return p.ownerPersonId ? s.people.find(x => x.id === p.ownerPersonId) : undefined
 }
 
 /**
- * The project's team: everyone explicitly added to it (project.memberPersonIds) plus its owner and
- * anyone assigned to one of its tasks — deduped. This is the roster shown in the Overview → Team
- * panel and surfaced first when assigning a task.
+ * One-time migration (v118). Project teams used to be drawn from the global People/contacts list
+ * (project.ownerPersonId + memberPersonIds, plus whoever a task's personId pointed at). That put the
+ * whole personal address book into the assignee picker. This seeds each real project's own `members`
+ * roster from those legacy references — copying just the name/email into standalone project users —
+ * maps the owner to `ownerMemberId`, and rewrites each task's `personId` assignment to the new
+ * project-scoped `assigneeMemberId`, so nothing that was assigned looks lost. Labels are skipped
+ * (they only group tasks). Idempotent: a project that already has `members` is never re-touched.
  */
-export function projectTeam(s: AppState, projectId: string): Person[] {
-  const project = s.projects.find(p => p.id === projectId)
-  const ids = new Set<string>()
-  if (project?.ownerPersonId) ids.add(project.ownerPersonId)
-  for (const id of project?.memberPersonIds ?? []) ids.add(id)
-  for (const t of projectTasksAll(s, projectId)) if (t.personId) ids.add(t.personId)
-  // Preserve People order, but the caller (Overview) pulls the owner out and lists the rest.
-  return s.people.filter(p => ids.has(p.id))
-}
-
-/** The ids that make up a project's team — for surfacing them first in an assignee picker. */
-export function projectMemberIdSet(s: AppState, projectId: string): Set<string> {
-  return new Set(projectTeam(s, projectId).map(p => p.id))
+export function migrateProjectMembers(
+  projects: Project[], tasks: Task[], people: Person[],
+): { projects: Project[]; tasks: Task[] } {
+  const peopleById = new Map(people.map(p => [p.id, p]))
+  const taskAssign = new Map<string, string>() // taskId -> new assigneeMemberId
+  const newProjects = (projects ?? []).map(proj => {
+    if (isLabel(proj)) return proj
+    if (proj.members && proj.members.length) return proj // already migrated / set up
+    const personIds: string[] = []
+    const push = (id?: string) => { if (id && !personIds.includes(id)) personIds.push(id) }
+    push(proj.ownerPersonId)
+    for (const id of proj.memberPersonIds ?? []) push(id)
+    for (const t of tasks) if (t.projectId === proj.id) push(t.personId)
+    const personToMember = new Map<string, string>()
+    const members: ProjectMember[] = []
+    for (const pid of personIds) {
+      const person = peopleById.get(pid)
+      if (!person) continue
+      const mid = uid('pm')
+      personToMember.set(pid, mid)
+      members.push({ id: mid, name: person.name, email: person.email })
+    }
+    for (const t of tasks) {
+      if (t.projectId === proj.id && t.personId && !t.assigneeMemberId) {
+        const mid = personToMember.get(t.personId)
+        if (mid) taskAssign.set(t.id, mid)
+      }
+    }
+    const ownerMemberId = proj.ownerPersonId ? personToMember.get(proj.ownerPersonId) : undefined
+    return { ...proj, members, ownerMemberId }
+  })
+  const newTasks = taskAssign.size
+    ? (tasks ?? []).map(t => taskAssign.has(t.id) ? { ...t, assigneeMemberId: taskAssign.get(t.id) } : t)
+    : tasks
+  return { projects: newProjects, tasks: newTasks }
 }
 
 /** The project's effective start (explicit, else earliest task/milestone/created date). */

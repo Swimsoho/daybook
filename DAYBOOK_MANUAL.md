@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v117 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v118 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+102. **v118** — **Per‑project users, set up under the project — no more picking from your whole contacts list.**
+
+    Assigning project work used to open your entire **People/contacts** list (a personal relationship book — the wrong place to pick who's building a project from). Now each project has **its own team of users, set up right on the project.** Overview → **Team** is a simple roster: type a name, press **Add**, and that person becomes a *project user* (`Project.members` — a standalone `{name, email?, role?}`, not a contact). Only these people are offered anywhere you assign on that project — the board's **Assign…** column, the **owner** in the header, the board's owner filter — so the list is short and relevant. Click a member's name to make them **owner**; the ✕ removes them (and clears anything they were assigned). Under the hood the task assignee is a new project‑scoped field (`Task.assigneeMemberId`), kept separate from the personal‑contact link (`personId`) that still drives calls/follow‑ups. A one‑time migration (**v118**, `projectMembersMigratedV118`; also baked into the demo seed) seeds each real project's roster from whoever it already referenced — its old owner and task assignees — and rewrites those assignments to the new model, so nothing that was assigned is lost. New projects start with an empty team you fill in yourself.
 
 101. **v117** — **Build a project team right in the Overview, and a stray tab scrollbar is gone.**
 

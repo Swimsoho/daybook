@@ -147,7 +147,9 @@ function Card({ task, onOpen }: { task: Task; onOpen: (task: Task) => void }) {
   const { state } = useStore()
   const scheme = state.settings.priorityScheme
 
-  const person = task.personId ? state.people.find(p => p.id === task.personId) : undefined
+  // The card shows the project-scoped assignee (a project member), not the personal contact.
+  const project = task.projectId ? state.projects.find(p => p.id === task.projectId) : undefined
+  const assignee = task.assigneeMemberId ? project?.members?.find(m => m.id === task.assigneeMemberId) : undefined
   const phase = task.milestoneId ? state.milestones.find(m => m.id === task.milestoneId) : undefined
   const blocked = openBlockers(state, task).length > 0
   const done = task.status === 'done'
@@ -194,12 +196,12 @@ function Card({ task, onOpen }: { task: Task; onOpen: (task: Task) => void }) {
           </span>
         )}
 
-        {person && (
+        {assignee && (
           <span
-            title={person.name}
+            title={assignee.name}
             className="ml-auto grid place-items-center h-[18px] w-[18px] rounded-full bg-muted text-[9.5px] font-semibold uppercase text-muted-foreground shrink-0"
           >
-            {initials(person.name)}
+            {initials(assignee.name)}
           </span>
         )}
       </div>
