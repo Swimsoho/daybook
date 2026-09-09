@@ -19,6 +19,7 @@ import { ExportMenu } from '@/components/ExportMenu'
 import { ViewExport } from '@/lib/exportView'
 import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
+import { useIsMobile } from '@/mobile/lib/useIsMobile'
 
 type View = 'today' | 'tomorrow' | 'week' | 'day' | 'area' | 'waiting' | 'someday' | 'done' | 'all' | 'list'
 type SortBy = 'due' | 'priority' | 'title' | 'created' | 'area'
@@ -64,8 +65,11 @@ const VIEWS: { id: View; label: string }[] = [
 
 export default function TasksPage({ projectFilter, onClearProject }: { projectFilter?: string | null; onClearProject?: () => void }) {
   const { state, updateTask, completeTask, dropTask, deleteTask, reinsertTasks, updateSettings } = useStore()
-  // How rows are laid out: the concise column table (default) or the roomy stacked cards.
-  const viewMode = state.settings.taskViewMode ?? 'table'
+  const { isMobile } = useIsMobile()
+  // How rows are laid out: the concise column table or the roomy stacked cards. A phone can't show a
+  // wide multi-column table without side-scrolling, so cards are the default there (unless the person
+  // has explicitly chosen a mode); desktop keeps the table default.
+  const viewMode = state.settings.taskViewMode ?? (isMobile ? 'card' : 'table')
   const [view, setView] = useState<View>('today')
   const [search, setSearch] = useState('')
   const [areaFilter, setAreaFilter] = useState('all')

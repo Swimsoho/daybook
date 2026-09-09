@@ -71,7 +71,9 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
         </button>
 
         <div className="mt-2 flex flex-wrap items-start gap-x-4 gap-y-3">
-          <div className="min-w-0 flex-1">
+          {/* Full width on a phone so the title isn't squeezed into a sliver beside the controls;
+              side-by-side from sm up. */}
+          <div className="min-w-0 w-full sm:w-auto sm:flex-1">
             <div className="flex items-center gap-2.5 flex-wrap">
               {area && <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: area.color }} />}
               <h1 className="font-display text-2xl font-semibold leading-tight">{project.name}</h1>
@@ -97,8 +99,8 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
             </div>
           </div>
 
-          {/* Controls */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 shrink-0">
+          {/* Controls — full width below the title on a phone, inline from sm up. */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full sm:w-auto shrink-0">
             <Field label="Status">
               <Select value={project.status} onValueChange={v => setStatus(v as Project['status'])}>
                 <SelectTrigger className="h-8 w-full bg-card text-[12px]"><SelectValue /></SelectTrigger>

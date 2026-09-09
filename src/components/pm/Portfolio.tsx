@@ -175,7 +175,9 @@ export function Portfolio({ onOpenProject, right }: {
         </button>
         {filtersOn && <button onClick={() => { setSearch(''); setAreaFilter('all'); setStatusFilter('all'); setHealthFilter('all') }} className="text-[12px] text-[hsl(17_63%_47%)] hover:underline">Clear</button>}
         <span className="text-[11.5px] text-muted-foreground tabular">{filtered.length} project{filtered.length === 1 ? '' : 's'}</span>
-        {right && <div className="ml-auto flex items-center gap-2">{right}</div>}
+        {/* flex-wrap + sm:ml-auto so the action buttons wrap onto their own line on a phone instead of
+            running off the right edge (the last one — "New project" — was being clipped). */}
+        {right && <div className="flex flex-wrap items-center gap-2 sm:ml-auto">{right}</div>}
       </div>
 
       <LabelsManager open={manageLabels} onClose={() => setManageLabels(false)} onPromote={id => { setManageLabels(false); onOpenProject(id) }} />
