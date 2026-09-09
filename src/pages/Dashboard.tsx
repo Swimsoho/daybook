@@ -659,12 +659,13 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
         <button
           onClick={() => setCustomize(v => !v)}
           className={cn(
-            'text-[11px] flex items-center gap-1.5 border border-border rounded-sm px-2 py-1 hover:bg-accent',
-            customize && 'bg-primary text-primary-foreground border-primary hover:bg-primary/90',
+            'text-[12px] font-medium flex items-center gap-1.5 border rounded-md px-2.5 py-1.5 shadow-sm transition-colors',
+            customize ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'border-border bg-card hover:bg-accent',
           )}
+          title="Move, widen and resize the widgets on this page"
         >
           <LayoutGrid className="h-3.5 w-3.5" />
-          {customize ? 'Done arranging' : 'Rearrange widgets'}
+          {customize ? 'Done arranging' : 'Move / resize widgets'}
         </button>
       </div>
       {customize && (
@@ -709,8 +710,11 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.6fr_1fr]">
-        <div className="grid grid-cols-1 gap-5 content-start">
+      {/* Give the main (left) column the lion's share of the width — the attention/portfolio lists
+          live here and need room — and keep the right rail to a fixed, comfortable width (its call
+          list / inbox / dates are naturally narrow, so nothing there is cut off). */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid grid-cols-1 gap-5 content-start min-w-0">
           {renderZone(layout.left, 'left')}
           <DropZone {...zoneDropProps('left')} />
         </div>
@@ -979,7 +983,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
                         {looseAreaTasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={setOpenTask} />)}
                       </div>
                     )}
-                    <QuickAdd areaId={a.id} />
+                    <QuickAdd areaId={a.id} collapsible />
                   </div>
                 </div>
               )
@@ -1056,12 +1060,13 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
         <button
           onClick={() => setCustomize(v => !v)}
           className={cn(
-            'text-[11px] flex items-center gap-1.5 border border-border rounded-sm px-2 py-1 hover:bg-accent',
-            customize && 'bg-primary text-primary-foreground border-primary hover:bg-primary/90',
+            'text-[12px] font-medium flex items-center gap-1.5 border rounded-md px-2.5 py-1.5 shadow-sm transition-colors',
+            customize ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'border-border bg-card hover:bg-accent',
           )}
+          title="Move, widen and resize the panels on this page"
         >
           <LayoutGrid className="h-3.5 w-3.5" />
-          {customize ? 'Done arranging' : 'Rearrange panels'}
+          {customize ? 'Done arranging' : 'Move / resize panels'}
         </button>
       </div>
       {customize && (
@@ -1077,13 +1082,13 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
-        <div className="grid grid-cols-1 gap-5 content-start">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid grid-cols-1 gap-5 content-start min-w-0">
           {renderOverallZone(overallLayout.left, 'left')}
           <DropZone {...overallZoneDropProps('left')} />
         </div>
 
-        <div className="grid grid-cols-1 gap-5 content-start">
+        <div className="grid grid-cols-1 gap-5 content-start min-w-0">
           {renderOverallZone(overallLayout.right, 'right')}
           <DropZone {...overallZoneDropProps('right')} />
         </div>

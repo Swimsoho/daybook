@@ -28,10 +28,15 @@ import { AreaDot, DueChip, PriorityChip } from './bits'
 
 // ---------- Quick add — one line, Enter, done. Usable on any screen ----------
 
-export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, placeholder }: { areaId?: string; due?: string; projectId?: string; placeholder?: string }) {
+export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, placeholder, collapsible }: { areaId?: string; due?: string; projectId?: string; placeholder?: string; collapsible?: boolean }) {
   const { state, addTask } = useStore()
   const [text, setText] = useState('')
+  // When collapsible, the composer stays out of the way as a single "+ Add a task" line until you
+  // click it — so a By-Area list isn't padded with a full add form under every area. Escape or a
+  // successful add tucks it back away.
+  const [open, setOpen] = useState(!collapsible)
   const inputRef = useRef<HTMLInputElement>(null)
+  React.useEffect(() => { if (collapsible && open) inputRef.current?.focus() }, [collapsible, open])
   // Area/project pick right inline — only shown for whichever level isn't already fixed by the caller,
   // so a task never has to be filed "blind" and re-sorted later.
   const [pickedAreaId, setPickedAreaId] = useState('')
@@ -64,9 +69,26 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
     if (!fixedProjectId) setPickedProjectId('')
     setPickedCategoryId('')
     setPickedActionId('')
+    if (collapsible) setOpen(false)
+  }
+  // Collapsed affordance — one tidy line that opens the full composer on click.
+  if (collapsible && !open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center gap-1.5 px-4 py-1.5 text-left text-[12px] text-muted-foreground border-b border-dashed border-border/70 hover:bg-background hover:text-foreground transition-colors"
+      >
+        <span className="text-[15px] leading-none">+</span>
+        Add a task{area ? ` to ${area.name}` : ''}
+      </button>
+    )
   }
   return (
-    <div className="flex flex-wrap items-center gap-1.5 px-4 py-1.5 border-b border-dashed border-border/70 bg-background/40 focus-within:bg-background">
+    <div
+      className="flex flex-wrap items-center gap-1.5 px-4 py-1.5 border-b border-dashed border-border/70 bg-background/40 focus-within:bg-background"
+      onKeyDown={collapsible ? e => { if (e.key === 'Escape') { setText(''); setOpen(false) } } : undefined}
+    >
       <span className="text-muted-foreground text-[15px] leading-none shrink-0">+</span>
       <input
         ref={inputRef}

@@ -641,7 +641,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
                   <Plus className="h-3 w-3 mr-1" />Task
                 </Button>
               </div>
-              <QuickAdd areaId={area.id} />
+              <QuickAdd areaId={area.id} collapsible />
               {tasks.length === 0 && <EmptyNote>Nothing open here — type above or drag a task in.</EmptyNote>}
               {tasks.length > 0 && (viewMode === 'table' ? (
                 <TaskListTable tasks={tasks} selected={selected} onToggleSelect={toggleSelect} onOpen={setOpenTask} hideAreaCol bare />
