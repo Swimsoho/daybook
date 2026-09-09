@@ -370,6 +370,7 @@ function AssigneePicker({ task }: { task: Task }) {
   const project = task.projectId ? state.projects.find(p => p.id === task.projectId) : undefined
   const memberIds = new Set<string>()
   if (project?.ownerPersonId) memberIds.add(project.ownerPersonId)
+  for (const id of project?.memberPersonIds ?? []) memberIds.add(id)
   if (project) for (const t of state.tasks) if (t.projectId === project.id && t.personId) memberIds.add(t.personId)
   const members = state.people.filter(p => memberIds.has(p.id))
   const others = state.people.filter(p => !memberIds.has(p.id)).sort((a, b) => a.name.localeCompare(b.name))

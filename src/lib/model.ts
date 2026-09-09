@@ -42,6 +42,10 @@ export interface Project {
   start?: string
   // The person accountable for the project (a People contact id). Distinct from per-task assignees.
   ownerPersonId?: string
+  // The project's team — People contact ids explicitly added to the project (in the Overview → Team
+  // panel). These are the people surfaced first when assigning a task on this project, so a project
+  // effectively has a roster. The owner and anyone assigned to a task also count as team members.
+  memberPersonIds?: string[]
   notes?: string
   lastActivity: string // ISO date, for stall detection
 }

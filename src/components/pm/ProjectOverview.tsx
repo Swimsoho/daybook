@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Clock, CheckCircle2, Circle, Users, Pencil, ArrowRight, Layers } from 'lucide-react'
+import { AlertTriangle, Clock, CheckCircle2, Circle, Users, Pencil, ArrowRight, Layers, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Task, Person, Priority, fmtDate, daysSince } from '@/lib/model'
 import { useStore } from '@/lib/store'
@@ -10,6 +11,7 @@ import { projectMilestones } from '@/lib/milestones'
 import { PriorityChip, DueChip } from '@/components/bits'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -44,7 +46,7 @@ export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGoto }: 
       from the metric tiles and the phase rows. */
   onGoto: (tab: string) => void
 }) {
-  const { state } = useStore()
+  const { state, updateProject, addPerson } = useStore()
   const project = state.projects.find(p => p.id === projectId)
 
   const [notes, setNotes] = useState(project?.notes ?? '')
@@ -190,23 +192,15 @@ export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGoto }: 
       </div>
 
       {/* 5 · TEAM --------------------------------------------------------- */}
-      <section className="rounded-lg border border-border bg-card shadow-sm p-4">
-        <SectionHead icon={<Users size={13} />}>Team</SectionHead>
-        {!owner && team.length === 0 ? (
-          <p className="text-[13px] text-muted-foreground mt-1">No one assigned yet.</p>
-        ) : (
-          <div className="flex items-center gap-2 flex-wrap mt-1">
-            {owner && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[hsl(17_63%_47%_/_0.06)] pl-1 pr-2.5 py-1">
-                <Avatar person={owner} accent={ORANGE} />
-                <span className="text-[12.5px] font-medium leading-none">{owner.name}</span>
-                <span className="text-[9.5px] uppercase tracking-wide text-muted-foreground leading-none">owner</span>
-              </span>
-            )}
-            {team.filter(p => p.id !== owner?.id).map(p => <Avatar key={p.id} person={p} />)}
-          </div>
-        )}
-      </section>
+      <TeamPanel
+        project={project}
+        owner={owner}
+        team={team}
+        people={state.people}
+        onAdd={id => updateProject(project.id, { memberPersonIds: [...new Set([...(project.memberPersonIds ?? []), id])] })}
+        onRemove={id => updateProject(project.id, { memberPersonIds: (project.memberPersonIds ?? []).filter(x => x !== id) })}
+        onCreatePerson={name => { const p = addPerson({ name }); updateProject(project.id, { memberPersonIds: [...new Set([...(project.memberPersonIds ?? []), p.id])] }); toast.success(`Added ${p.name} to People & the team`); return p.id }}
+      />
 
       {/* 6 · NOTES -------------------------------------------------------- */}
       <section className="rounded-lg border border-border bg-card shadow-sm p-4">
@@ -276,6 +270,65 @@ function TaskRow({ task, onOpenTask, right }: { task: Task; onOpenTask: (t: Task
         <ArrowRight size={13} className="text-transparent group-hover:text-muted-foreground transition-colors shrink-0" />
       </button>
     </li>
+  )
+}
+
+// The Team roster — owner + explicitly-added members + anyone on a task. The "+ Add teammate" box
+// is always visible so building a team is obvious; added members are surfaced first when assigning
+// a task (see the board's assignee picker). Task-only people show an "on tasks" tag (no × — remove
+// them by unassigning the task); explicit members get a × to drop them from the roster.
+function TeamPanel({ project, owner, team, people, onAdd, onRemove, onCreatePerson }: {
+  project: { id: string; memberPersonIds?: string[] }
+  owner?: Person
+  team: Person[]
+  people: Person[]
+  onAdd: (id: string) => void
+  onRemove: (id: string) => void
+  onCreatePerson: (name: string) => string
+}) {
+  const explicit = new Set(project.memberPersonIds ?? [])
+  const others = team.filter(p => p.id !== owner?.id)
+  const inTeam = new Set(team.map(p => p.id))
+  const candidates = people.filter(p => !inTeam.has(p.id)).sort((a, b) => a.name.localeCompare(b.name))
+  return (
+    <section className="rounded-lg border border-border bg-card shadow-sm p-4">
+      <SectionHead icon={<Users size={13} />}>Team</SectionHead>
+      <div className="flex items-center gap-2 flex-wrap mt-1">
+        {owner && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-[hsl(17_63%_47%_/_0.06)] pl-1 pr-2.5 py-1">
+            <Avatar person={owner} accent={ORANGE} />
+            <span className="text-[12.5px] font-medium leading-none">{owner.name}</span>
+            <span className="text-[9.5px] uppercase tracking-wide text-muted-foreground leading-none">owner</span>
+          </span>
+        )}
+        {others.map(p => (
+          <span key={p.id} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card pl-1 pr-1.5 py-1">
+            <Avatar person={p} />
+            <span className="text-[12.5px] font-medium leading-none">{p.name}</span>
+            {explicit.has(p.id) ? (
+              <button onClick={() => onRemove(p.id)} title="Remove from team" className="grid place-items-center h-4 w-4 rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"><X size={11} /></button>
+            ) : (
+              <span className="text-[9px] uppercase tracking-wide text-muted-foreground leading-none pr-0.5" title="On the team because they're assigned to a task">on tasks</span>
+            )}
+          </span>
+        ))}
+        <div className="w-[190px]">
+          <SearchableSelect
+            value=""
+            onValueChange={id => { if (id) onAdd(id) }}
+            options={candidates.map(p => ({ value: p.id, label: p.name }))}
+            placeholder="+ Add teammate…"
+            searchPlaceholder="Search people, or type to add…"
+            onCreate={name => onCreatePerson(name)}
+            createLabel={q => `Add person “${q}”`}
+            className="h-8 text-[12.5px] bg-card"
+          />
+        </div>
+      </div>
+      {!owner && others.length === 0 && (
+        <p className="text-[11.5px] text-muted-foreground mt-2">No one on the team yet — add people above, or set an <b>Owner</b> in the header. Team members are offered first when you assign a task.</p>
+      )}
+    </section>
   )
 }
 

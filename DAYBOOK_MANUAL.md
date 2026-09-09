@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v116 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v117 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+101. **v117** — **Build a project team right in the Overview, and a stray tab scrollbar is gone.**
+
+    Two fixes. **(a) A real Team panel.** Overview → **Team** now has a **"+ Add teammate"** box, so adding people is obvious instead of "No one assigned yet" with nowhere to click. People you add are the project's **roster** (`Project.memberPersonIds`) — they get a ✕ to remove; anyone assigned to a task shows automatically with an "on tasks" tag; the owner sits first. And the roster feeds the rest: when you assign a task on the board, **team members are offered first**. **(b) No more phantom scrollbar** on the project tab row — `overflow-x-auto` was implicitly turning on vertical scrolling (a CSS quirk), which drew a tiny scrollbar behind the tab icons; that's pinned off now, and the horizontal scrollbar (for narrow screens) is hidden.
 
 100. **v116** — **Assign an owner to a project task right on the board.**
 

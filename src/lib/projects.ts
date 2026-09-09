@@ -120,10 +120,24 @@ export function projectOwner(s: AppState, p: Project): Person | undefined {
   return p.ownerPersonId ? s.people.find(x => x.id === p.ownerPersonId) : undefined
 }
 
-/** People assigned to any open task on the project — the working team. */
+/**
+ * The project's team: everyone explicitly added to it (project.memberPersonIds) plus its owner and
+ * anyone assigned to one of its tasks — deduped. This is the roster shown in the Overview → Team
+ * panel and surfaced first when assigning a task.
+ */
 export function projectTeam(s: AppState, projectId: string): Person[] {
-  const ids = new Set(projectTasksAll(s, projectId).filter(isOpen).map(t => t.personId).filter(Boolean) as string[])
+  const project = s.projects.find(p => p.id === projectId)
+  const ids = new Set<string>()
+  if (project?.ownerPersonId) ids.add(project.ownerPersonId)
+  for (const id of project?.memberPersonIds ?? []) ids.add(id)
+  for (const t of projectTasksAll(s, projectId)) if (t.personId) ids.add(t.personId)
+  // Preserve People order, but the caller (Overview) pulls the owner out and lists the rest.
   return s.people.filter(p => ids.has(p.id))
+}
+
+/** The ids that make up a project's team — for surfacing them first in an assignee picker. */
+export function projectMemberIdSet(s: AppState, projectId: string): Set<string> {
+  return new Set(projectTeam(s, projectId).map(p => p.id))
 }
 
 /** The project's effective start (explicit, else earliest task/milestone/created date). */

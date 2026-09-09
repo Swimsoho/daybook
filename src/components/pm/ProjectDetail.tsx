@@ -129,7 +129,9 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
 
       {/* ---- Tabs + add ---- */}
       <div className="flex items-center gap-2 border-b border-border -mb-1 flex-wrap">
-        <div className="flex items-center gap-1 overflow-x-auto">
+        {/* overflow-x-auto implicitly turns on overflow-y:auto (CSS spec), which shows a spurious
+            vertical scrollbar behind the tab icons — pin overflow-y hidden and hide the x-scrollbar. */}
+        <div className="flex items-center gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {TABS.map(t => (
             <button
               key={t.id}
