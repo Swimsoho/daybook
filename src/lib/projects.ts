@@ -9,6 +9,22 @@ import { projectMilestones, openBlockers } from '@/lib/milestones'
 
 export type Health = 'on-track' | 'at-risk' | 'off-track' | 'on-hold' | 'done'
 
+// ---- Two-tier model: real projects vs. lightweight labels ----
+export const isLabel = (p: Project) => p.kind === 'label'
+export const isRealProject = (p: Project) => p.kind !== 'label'
+/** Real projects only — what the Projects page and the PM workspace show. */
+export function realProjects(s: AppState): Project[] { return s.projects.filter(isRealProject) }
+/** Labels only — task-grouping tags that never appear on the Projects page. */
+export function labelProjects(s: AppState): Project[] { return s.projects.filter(isLabel) }
+/** The ids of real projects, for the "is this task hidden from the to-do list?" decision. */
+export function realProjectIdSet(s: AppState): Set<string> {
+  return new Set(s.projects.filter(isRealProject).map(p => p.id))
+}
+/** How many tasks carry a given label/project. */
+export function projectTaskCount(s: AppState, projectId: string): number {
+  return s.tasks.filter(t => t.projectId === projectId).length
+}
+
 export interface ProjectStats {
   total: number        // every task filed to the project (incl. done/dropped)
   done: number

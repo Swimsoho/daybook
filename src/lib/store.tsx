@@ -158,6 +158,9 @@ export interface Store {
    *  when `toId` is null. Used when a project is archived/removed so no task is left orphaned.
    *  Returns how many tasks were changed. */
   reassignProject: (fromId: string, toId: string | null) => number
+  // Remove a project/label entirely: detaches its tasks (and clears their phase) and deletes its
+  // phases. Used to delete a stray label from the Labels manager.
+  removeProject: (id: string) => void
   // Project phases — the level between a project and its tasks. A phase points at
   // its project; tasks point at the phase. Deleting a phase therefore never
   // deletes work: the tasks come back to the project unphased.
@@ -934,9 +937,23 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
         }, auditEvent('reordered', 'category', 'all', 'sorted A–Z'))
       },
       addProject(p) {
-        const proj = { id: uid('pr'), areaId: p.areaId, name: p.name, outcome: p.outcome ?? '', status: p.status ?? 'active' as const, priority: p.priority ?? 'P2' as Priority, due: p.due, notes: p.notes, lastActivity: today() }
-        withAudit(s => ({ ...s, projects: [...s.projects, proj] }), auditEvent('created', 'project', proj.id, p.name))
+        const proj = { id: uid('pr'), areaId: p.areaId, name: p.name, kind: p.kind ?? 'project' as const, outcome: p.outcome ?? '', status: p.status ?? 'active' as const, priority: p.priority ?? 'P2' as Priority, due: p.due, start: p.start, ownerPersonId: p.ownerPersonId, notes: p.notes, lastActivity: today() }
+        withAudit(s => ({ ...s, projects: [...s.projects, proj] }), auditEvent('created', p.kind === 'label' ? 'label' : 'project', proj.id, p.name))
         return proj
+      },
+      removeProject(id) {
+        // Detach every task (clearing its phase too, since phases belong to the removed project),
+        // drop the project's phases, then drop the project itself. Used to delete a stray label.
+        const proj = state.projects.find(p => p.id === id)
+        withAudit(
+          s => ({
+            ...s,
+            tasks: s.tasks.map(t => t.projectId === id ? { ...t, projectId: undefined, milestoneId: undefined } : t),
+            milestones: s.milestones.filter(m => m.projectId !== id),
+            projects: s.projects.filter(p => p.id !== id),
+          }),
+          auditEvent('deleted', proj?.kind === 'label' ? 'label' : 'project', id, proj?.name ?? ''),
+        )
       },
       updateProject(id, patch) {
         withAudit(s => ({ ...s, projects: s.projects.map(pr => pr.id === id ? { ...pr, ...patch, lastActivity: today() } : pr) }), auditEvent('updated', 'project', id, Object.keys(patch).join(', ') + ' changed'))
@@ -1265,16 +1282,18 @@ export function openTasks(s: AppState): Task[] {
   return s.tasks.filter(t => t.status !== 'done' && t.status !== 'dropped' && t.status !== 'inbox')
 }
 
-// A task belongs on the main to-do list when it isn't filed to a project, or when it's been
-// explicitly surfaced to the list (showInTodo). Project tasks otherwise live only in their project
-// (the Projects section), which is what keeps the day-to-day to-do list about actual to-dos.
-export function isTodoTask(t: Task): boolean {
-  return !t.projectId || !!t.showInTodo
+// A task belongs on the main to-do list when it isn't filed to a REAL project, or when it's been
+// surfaced (showInTodo). A task filed only to a *label* is still a plain to-do — a label just groups
+// tasks. Real-project tasks otherwise live in their project, keeping the to-do list about to-dos.
+export function isTodoTask(s: AppState, t: Task): boolean {
+  if (!t.projectId || t.showInTodo) return true
+  const proj = s.projects.find(p => p.id === t.projectId)
+  return !proj || proj.kind === 'label'
 }
 
 // Open tasks that belong on the main to-do surfaces (Today, Tasks, the phone's "Now").
 export function todoTasks(s: AppState): Task[] {
-  return openTasks(s).filter(isTodoTask)
+  return openTasks(s).filter(t => isTodoTask(s, t))
 }
 
 export function isOverdue(t: Task): boolean {

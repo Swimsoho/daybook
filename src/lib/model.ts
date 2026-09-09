@@ -27,6 +27,12 @@ export interface Project {
   id: string
   areaId: string
   name: string
+  // Two-tier model. A real **project** is a deliberate initiative (a goal, phases, a timeline) and
+  // is what the Projects page shows; a **label** is a lightweight tag that only groups tasks and
+  // never appears on the Projects page. Absent = 'project' (back-compat). Crucially, a task filed to
+  // a *label* stays on the to-do list (a label is just grouping), while a task filed to a real
+  // *project* comes off the to-do list unless surfaced (showInTodo).
+  kind?: 'project' | 'label'
   outcome: string
   status: 'active' | 'on-hold' | 'done' | 'archived'
   priority: Priority
@@ -340,6 +346,9 @@ export interface Settings {
   // this guards a run-once pass that surfaced the then-active project tasks (showInTodo) so nothing
   // vanished on upgrade. Set true after it runs; absent/false on a blob saved before the upgrade.
   projectTodoMigratedV111?: boolean
+  // One-time migration marker (v114): guards the pass that classified pre-existing projects as real
+  // projects vs. lightweight labels (bare task-groupings became labels). Set true after it runs.
+  labelMigratedV114?: boolean
   stallDays: number
   projectWipLimit: number
   tierCadence: Record<Tier, number>

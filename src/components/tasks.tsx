@@ -431,7 +431,7 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
                       <span className="text-muted-foreground">No project</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    {state.projects.filter(p => p.status === 'active' || p.status === 'on-hold').map(p => {
+                    {state.projects.filter(p => p.kind !== 'label' && (p.status === 'active' || p.status === 'on-hold')).map(p => {
                       const pa = state.areas.find(a => a.id === p.areaId)
                       return (
                         <DropdownMenuItem key={p.id} onClick={() => { updateTask(task.id, { projectId: p.id, areaId: p.areaId }, `moved to project ${p.name}`); toast(`Moved to ${p.name}`) }}>
@@ -444,8 +444,8 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
                 </DropdownMenuSub>
               )}
               {/* Surface / unsurface a project task on the main To-Do list. Only meaningful for a
-                  task that's filed to a project — loose tasks are always on the list. */}
-              {task.projectId && (
+                  task filed to a REAL project — loose and label-only tasks are always on the list. */}
+              {project && project.kind !== 'label' && (
                 <DropdownMenuItem onClick={() => { updateTask(task.id, { showInTodo: !task.showInTodo }, task.showInTodo ? 'removed from To-Do list' : 'added to To-Do list'); toast(task.showInTodo ? 'Removed from your To-Do list' : 'Added to your To-Do list') }}>
                   <ListChecks className="h-3.5 w-3.5 mr-2" />{task.showInTodo ? 'Remove from To-Do list' : 'Add to To-Do list'}
                 </DropdownMenuItem>
@@ -750,7 +750,10 @@ export function TaskDialog({ open, onClose, task, defaults }: {
   const set = (patch: Partial<Task>) => setForm(x => ({ ...x, ...patch }))
   const scheme = state.settings.priorityScheme
 
-  const projects = state.projects.filter(p => p.status === 'active' && (!f.areaId || p.areaId === f.areaId))
+  // Real projects are area-scoped; labels (lightweight grouping tags) are offered regardless of area.
+  const projects = state.projects.filter(p => p.status === 'active' && p.kind !== 'label' && (!f.areaId || p.areaId === f.areaId))
+  const labels = state.projects.filter(p => p.status === 'active' && p.kind === 'label')
+  const selectedIsLabel = !!f.projectId && state.projects.find(p => p.id === f.projectId)?.kind === 'label'
   const mainCats = categoriesForArea(state.categories, f.areaId, f.categoryIds?.[0])
   const activeActions = state.actions.filter(a => a.active || a.id === f.actionIds?.[0])
   const areaOptionsBase = withPopularFirst(state.areas.filter(a => a.active), a => areaUsage(state, a.id), a => a.name)
@@ -782,11 +785,13 @@ export function TaskDialog({ open, onClose, task, defaults }: {
 
   // Inline project creation — type a new name in the Project picker and it's saved under the
   // chosen Area (and immediately selected). A project must belong to an Area, so we require one.
-  const createProject = (name: string) => {
-    if (!f.areaId) { toast.error('Pick an Area first, then add the project'); return }
-    const proj = addProject({ name, areaId: f.areaId })
+  // Typing a new name here creates a lightweight LABEL (grouping), not a real project — real
+  // projects are created deliberately on the Projects page. A label still needs an Area to file under.
+  const createLabel = (name: string) => {
+    if (!f.areaId) { toast.error('Pick an Area first, then add the label'); return }
+    const proj = addProject({ name, areaId: f.areaId, kind: 'label' })
     set({ projectId: proj.id })
-    toast.success(`Project “${proj.name}” created`)
+    toast.success(`Label “${proj.name}” created`)
   }
 
   const areaColor = (id?: string) => state.areas.find(a => a.id === id)?.color
@@ -851,22 +856,26 @@ export function TaskDialog({ open, onClose, task, defaults }: {
                 />
               </div>
               <div className="grid grid-cols-1 gap-1.5">
-                <Label className="text-[12px] font-semibold text-foreground/80">Project <span className="font-normal text-muted-foreground">— optional</span></Label>
+                <Label className="text-[12px] font-semibold text-foreground/80">Project or label <span className="font-normal text-muted-foreground">— optional</span></Label>
                 <SearchableSelect
                   value={f.projectId ?? 'none'}
                   onValueChange={v => set({ projectId: v === 'none' ? undefined : v })}
-                  options={[{ value: 'none', label: 'None — loose one-off' }, ...projectOptionsBase.ordered.map(p => ({ value: p.id, label: p.name, color: areaColor(p.areaId) }))]}
+                  options={[
+                    { value: 'none', label: 'None — loose one-off' },
+                    ...projectOptionsBase.ordered.map(p => ({ value: p.id, label: p.name, color: areaColor(p.areaId) })),
+                    ...labels.map(l => ({ value: l.id, label: l.name, hint: 'label' })),
+                  ]}
                   popularCount={projectOptionsBase.popularCount}
-                  placeholder="None — loose one-off" searchPlaceholder="Search or type to add…"
-                  onCreate={createProject}
-                  createLabel={q => `Add project “${q}”${selectedArea ? ` in ${selectedArea.name}` : ''}`}
+                  placeholder="None — loose one-off" searchPlaceholder="Search projects/labels, or type to add a label…"
+                  onCreate={createLabel}
+                  createLabel={q => `Add label “${q}”${selectedArea ? ` in ${selectedArea.name}` : ''}`}
                 />
+                {selectedIsLabel && <p className="text-[11px] text-muted-foreground">A label just groups this task — it stays on your to-do list.</p>}
               </div>
             </div>
-            {/* Phase and dependencies only exist inside a project, so they only appear
-                once one is chosen — showing them on a loose task would offer a choice
-                with nothing behind it. */}
-            {f.projectId && (
+            {/* Phase, dependencies and the surface toggle only apply to a REAL project — a label is
+                just grouping, so none of these show for one. */}
+            {f.projectId && !selectedIsLabel && (
               <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="grid grid-cols-1 gap-1.5">
@@ -1384,21 +1393,22 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                 )
               })()}
               {task.areaId && (() => {
-                const projectsHere = state.projects.filter(p => p.areaId === task.areaId && (p.status === 'active' || p.status === 'on-hold'))
+                const projectsHere = state.projects.filter(p => p.areaId === task.areaId && p.kind !== 'label' && (p.status === 'active' || p.status === 'on-hold'))
+                const labelsHere = state.projects.filter(p => p.kind === 'label' && p.status === 'active')
                 const b = withPopularFirst(projectsHere, p => projectUsage(state, p.id), p => p.name)
                 return (
                   <SearchableSelect
                     value={task.projectId ?? '__none__'}
                     onValueChange={v => {
                       const p = state.projects.find(x => x.id === v)
-                      updateTask(task.id, { projectId: v === '__none__' ? undefined : v, areaId: p ? p.areaId : task.areaId }, p ? `moved to project ${p.name}` : 'project cleared')
+                      updateTask(task.id, { projectId: v === '__none__' ? undefined : v, areaId: p && p.kind !== 'label' ? p.areaId : task.areaId }, p ? `moved to ${p.kind === 'label' ? 'label' : 'project'} ${p.name}` : 'project cleared')
                       toast(p ? `Moved to ${p.name}` : 'No longer tied to a project')
                     }}
-                    options={[{ value: '__none__', label: 'No project' }, ...b.ordered.map(p => ({ value: p.id, label: p.name }))]}
+                    options={[{ value: '__none__', label: 'No project' }, ...b.ordered.map(p => ({ value: p.id, label: p.name })), ...labelsHere.map(l => ({ value: l.id, label: l.name, hint: 'label' }))]}
                     popularCount={b.popularCount > 0 ? b.popularCount + 1 : 0}
-                    placeholder="Project" searchPlaceholder="Search or type to add…"
-                    onCreate={name => { const proj = addProject({ name, areaId: task.areaId! }); updateTask(task.id, { projectId: proj.id }, `moved to project ${proj.name}`); toast.success(`Project “${proj.name}” created`) }}
-                    createLabel={q => `Add project “${q}”`}
+                    placeholder="Project / label" searchPlaceholder="Search, or type to add a label…"
+                    onCreate={name => { const proj = addProject({ name, areaId: task.areaId!, kind: 'label' }); updateTask(task.id, { projectId: proj.id }, `labelled ${proj.name}`); toast.success(`Label “${proj.name}” created`) }}
+                    createLabel={q => `Add label “${q}”`}
                     className="h-7 w-[150px] text-[11.5px] bg-card"
                   />
                 )

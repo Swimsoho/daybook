@@ -13,6 +13,7 @@ import {
   Priority, PRIORITY_LABELS, STATUS_LABELS, Task, TaskStatus, TYPE_LABELS, addDays, daysSince, fmtDate, today,
 } from '@/lib/model'
 import { useStore } from '@/lib/store'
+import { realProjectIdSet } from '@/lib/projects'
 import { ClearFiltersButton, DueChip, EmptyNote, PriorityChip } from '@/components/bits'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ViewExport } from '@/lib/exportView'
@@ -104,17 +105,18 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   const filtered = useMemo(() => {
     let ts = state.tasks.filter(t => !t.parentId) // parents view; children shown expanded
     const sub = state.tasks.filter(t => t.parentId)
+    const realIds = realProjectIdSet(state)
     const matches = (t: Task) =>
       (areaFilter === 'all' || t.areaId === areaFilter) &&
       (prioFilter === 'all' || t.priority === prioFilter) &&
       (catFilter === 'all' || t.categoryIds.includes(catFilter)) &&
       (actFilter === 'all' || (t.actionIds ?? []).includes(actFilter)) &&
-      // Project tasks live in the Projects section and stay off this list unless surfaced
-      // (showInTodo) — so the Tasks page is your to-do list, not every project's backlog. A chosen
+      // Real-project tasks live in the Projects section and stay off this list unless surfaced
+      // (showInTodo). A task filed only to a *label* is a plain to-do and always shows. A chosen
       // project filter scopes to that project; the "Show project tasks" toggle reveals them all.
       (projectFilter
         ? (projectFilter === '__none__' ? !t.projectId : t.projectId === projectFilter)
-        : (showProjectTasks || !t.projectId || !!t.showInTodo)) &&
+        : (showProjectTasks || !t.projectId || !realIds.has(t.projectId) || !!t.showInTodo)) &&
       (!search || t.title.toLowerCase().includes(search.toLowerCase()))
 
     // include parents whose subtasks match

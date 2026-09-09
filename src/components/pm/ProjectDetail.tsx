@@ -168,7 +168,7 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
       )}
       {tab === 'list' && <ProjectTaskList projectId={project.id} onOpenTask={onOpenTask} />}
 
-      <ProjectSettingsDialog project={project} open={editing} onClose={() => setEditing(false)} />
+      <ProjectSettingsDialog project={project} open={editing} onClose={() => setEditing(false)} onConverted={onBack} />
     </div>
   )
 }
@@ -225,7 +225,7 @@ function ProjectTaskList({ projectId, onOpenTask }: { projectId: string; onOpenT
 
 // Name / outcome / area / start date. The header handles status, priority, owner and target date
 // inline; this covers the rest without cluttering the top bar.
-function ProjectSettingsDialog({ project, open, onClose }: { project: Project; open: boolean; onClose: () => void }) {
+function ProjectSettingsDialog({ project, open, onClose, onConverted }: { project: Project; open: boolean; onClose: () => void; onConverted?: () => void }) {
   const { state, updateProject } = useStore()
   const [name, setName] = useState(project.name)
   const [outcome, setOutcome] = useState(project.outcome)
@@ -258,6 +258,10 @@ function ProjectSettingsDialog({ project, open, onClose }: { project: Project; o
             </div>
             <div className="grid gap-1.5"><Label className="text-xs">Start date</Label><Input type="date" value={start} onChange={e => setStart(e.target.value)} /></div>
           </div>
+        </div>
+        <div className="mt-1 rounded-md border border-border bg-muted/30 px-3 py-2 flex items-center gap-2">
+          <span className="text-[11.5px] text-muted-foreground flex-1">Not really a project? <b className="font-semibold text-foreground/80">Convert to a label</b> — it leaves the Projects page and just groups its tasks (which return to your to-do list).</span>
+          <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={() => { updateProject(project.id, { kind: 'label' }); toast.success(`“${project.name}” is now a label`); onClose(); onConverted?.() }}>Convert to label</Button>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>

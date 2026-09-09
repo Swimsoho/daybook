@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v113 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v114 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,17 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+98. **v114** — **Labels vs. Projects — the two‑tier split, so only real projects live on the Projects page.**
+
+    The old app used one word, "project", for two different things: a real initiative you manage, and a plain tag you slap on tasks to group them. That's why the Projects page filled up with things that weren't really projects. Now there are two distinct things:
+
+    - A **Project** is a deliberate initiative — a goal, phases, a timeline — and is the only kind that appears on the Projects page and in the PM workspace.
+    - A **Label** is a lightweight tag that just groups tasks. **A labelled task stays on your to‑do list** (a label is only grouping); it never hides the task the way filing it under a real project does.
+
+    **On upgrade (one‑time):** every existing "project" that was really just a bare tag — a name with some tasks but **no goal, no phases, no dates, no owner** — is reclassified as a **Label**. Anything with real structure stays a Project. It runs once, and every guess is one click to change, so nothing is lost.
+
+    **Working with them:** in a task's **"Project or label"** box you pick a real project (which files the task into it, off the to‑do list unless you surface it) or a label (which just tags it and keeps it on the list); typing a new name there creates a **label**. Real projects are created deliberately with **New project** on the Projects page. That page gains a **Labels** button opening a manager where you **rename**, **promote a label to a real project**, **merge** duplicates (their tasks move, the empty label is removed), or **delete** a label (its tasks are simply un‑tagged). Inside a project, **Edit → Convert to label** demotes it. Under the hood this is one field, `Project.kind` (`'project'` | `'label'`), and the "is this a to‑do?" rule everywhere now treats a label exactly like no project at all.
 
 97. **v113** — **The Projects page is now a real project‑management workspace.**
 

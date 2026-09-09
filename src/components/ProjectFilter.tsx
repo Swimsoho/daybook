@@ -7,7 +7,8 @@ import { useStore } from '@/lib/store'
 export function ProjectFilterBar({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
   const { state, updateTask } = useStore()
   const [dragOver, setDragOver] = useState<string | null>(null)
-  const projects = state.projects.filter(p => p.status === 'active' || p.status === 'on-hold')
+  // Real projects only — labels are task-grouping tags, not something you scope the task views by.
+  const projects = state.projects.filter(p => p.kind !== 'label' && (p.status === 'active' || p.status === 'on-hold'))
 
   function handleDrop(e: React.DragEvent, projectId: string | null) {
     e.preventDefault()

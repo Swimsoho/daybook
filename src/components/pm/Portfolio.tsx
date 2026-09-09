@@ -1,8 +1,12 @@
 import { useMemo, useState } from 'react'
-import { LayoutGrid, Table as TableIcon, Search } from 'lucide-react'
+import { LayoutGrid, Table as TableIcon, Search, Tag, ArrowUpRight, Trash2, Pencil, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Project, PriorityScheme, PRIORITY_LABELS, fmtDate, daysSince } from '@/lib/model'
 import { useStore, openTasks } from '@/lib/store'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { toast } from 'sonner'
 import { projectStats, projectHealth, projectOwner, HEALTH_META, HEALTH_ORDER, type Health } from '@/lib/projects'
 import { PriorityChip } from '@/components/bits'
 
@@ -34,10 +38,13 @@ export function Portfolio({ onOpenProject, right }: {
   const [groupBy, setGroupBy] = useState<GroupBy>('area')
   const [sortBy, setSortBy] = useState<SortBy>('health')
   const [viewMode, setViewMode] = useState<ViewMode>('cards')
+  const [manageLabels, setManageLabels] = useState(false)
+  const labelCount = state.projects.filter(p => p.kind === 'label').length
 
-  // Everything the rest of the page reads, computed once.
+  // Everything the rest of the page reads, computed once. Labels never appear here — they're
+  // task-grouping tags, managed from the Labels dialog, not real projects.
   const rows = useMemo(() => {
-    return state.projects.map(p => {
+    return state.projects.filter(p => p.kind !== 'label').map(p => {
       const stats = projectStats(state, p.id)
       const health = projectHealth(state, p, stats)
       const owner = projectOwner(state, p)
@@ -163,10 +170,15 @@ export function Portfolio({ onOpenProject, right }: {
           <button onClick={() => setViewMode('cards')} title="Card view" className={cn('h-8 px-2 grid place-items-center', viewMode === 'cards' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-accent')}><LayoutGrid className="h-3.5 w-3.5" /></button>
           <button onClick={() => setViewMode('table')} title="Table view" className={cn('h-8 px-2 grid place-items-center border-l border-border', viewMode === 'table' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:bg-accent')}><TableIcon className="h-3.5 w-3.5" /></button>
         </div>
+        <button onClick={() => setManageLabels(true)} title="Manage labels — the task-grouping tags" className="inline-flex items-center gap-1.5 h-8 rounded-md border border-border bg-card px-2.5 text-[12px] text-muted-foreground hover:text-foreground">
+          <Tag className="h-3.5 w-3.5" />Labels{labelCount ? ` · ${labelCount}` : ''}
+        </button>
         {filtersOn && <button onClick={() => { setSearch(''); setAreaFilter('all'); setStatusFilter('all'); setHealthFilter('all') }} className="text-[12px] text-[hsl(17_63%_47%)] hover:underline">Clear</button>}
         <span className="text-[11.5px] text-muted-foreground tabular">{filtered.length} project{filtered.length === 1 ? '' : 's'}</span>
         {right && <div className="ml-auto flex items-center gap-2">{right}</div>}
       </div>
+
+      <LabelsManager open={manageLabels} onClose={() => setManageLabels(false)} onPromote={id => { setManageLabels(false); onOpenProject(id) }} />
 
       {groups.length === 0 && (
         <div className="border border-border bg-card rounded-lg px-4 py-10 text-center text-[13px] text-muted-foreground">
@@ -307,4 +319,76 @@ function PortfolioTable({ rows, scheme, onOpen, showArea }: { rows: { p: Project
 function Avatar({ name }: { name: string }) {
   const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join('')
   return <span className="inline-grid place-items-center h-4 w-4 rounded-full bg-[hsl(152_20%_30%)] text-[8px] font-semibold text-[hsl(45_50%_96%)]">{initials}</span>
+}
+
+/**
+ * Manage labels — the lightweight task-grouping tags. Each can be renamed, **promoted to a real
+ * project** (it then appears on the Projects page), **merged** into another label or project (its
+ * tasks move, the empty label is removed), or **deleted** (its tasks are un-tagged). This is where a
+ * one-time migration's guesses get corrected.
+ */
+function LabelsManager({ open, onClose, onPromote }: { open: boolean; onClose: () => void; onPromote: (id: string) => void }) {
+  const { state, updateProject, reassignProject, removeProject } = useStore()
+  const labels = [...state.projects.filter(p => p.kind === 'label')].sort((a, b) => a.name.localeCompare(b.name))
+  const realProjects = state.projects.filter(p => p.kind !== 'label' && p.status !== 'archived')
+  const count = (id: string) => state.tasks.filter(t => t.projectId === id).length
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [draft, setDraft] = useState('')
+
+  const startRename = (p: Project) => { setEditingId(p.id); setDraft(p.name) }
+  const saveRename = (p: Project) => { const n = draft.trim(); if (n && n !== p.name) { updateProject(p.id, { name: n }); toast.success('Label renamed') } setEditingId(null) }
+  const promote = (p: Project) => { updateProject(p.id, { kind: 'project' }); toast.success(`“${p.name}” is now a project`); onPromote(p.id) }
+  const merge = (p: Project, targetId: string) => {
+    if (!targetId) return
+    const n = reassignProject(p.id, targetId)
+    removeProject(p.id)
+    const to = state.projects.find(x => x.id === targetId)
+    toast.success(`Merged “${p.name}” into ${to?.name ?? 'target'}${n ? ` (${n} task${n === 1 ? '' : 's'})` : ''}`)
+  }
+  const del = (p: Project) => {
+    const c = count(p.id)
+    if (c > 0 && !confirm(`Delete label “${p.name}”? Its ${c} task${c === 1 ? '' : 's'} will keep existing, just un-tagged.`)) return
+    removeProject(p.id)
+    toast.success(`Deleted label “${p.name}”`)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={o => !o && onClose()}>
+      <DialogContent className="sm:max-w-[620px] max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-display text-xl flex items-center gap-2"><Tag className="h-5 w-5" />Labels</DialogTitle>
+          <p className="text-[12.5px] text-muted-foreground">Labels group tasks without being full projects — their tasks stay on your to-do list. Promote one to a real project, merge duplicates, or delete the ones you don't need.</p>
+        </DialogHeader>
+        {labels.length === 0 ? (
+          <div className="py-8 text-center text-[13px] text-muted-foreground">No labels yet. Type a new name in a task's “Project or label” box to make one.</div>
+        ) : (
+          <div className="border border-border rounded-lg divide-y divide-border/60">
+            {labels.map(p => (
+              <div key={p.id} className="flex items-center gap-2 px-3 py-2">
+                {editingId === p.id ? (
+                  <>
+                    <Input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveRename(p)} autoFocus className="h-7 flex-1 text-[12.5px]" />
+                    <Button size="sm" className="h-7" onClick={() => saveRename(p)}><Check className="h-3.5 w-3.5" /></Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="min-w-0 flex-1 text-[13px] font-medium truncate">{p.name}</span>
+                    <span className="text-[11px] text-muted-foreground tabular shrink-0">{count(p.id)} task{count(p.id) === 1 ? '' : 's'}</span>
+                    <button onClick={() => startRename(p)} title="Rename" className="grid place-items-center h-7 w-7 rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+                    <button onClick={() => promote(p)} title="Promote to a real project" className="inline-flex items-center gap-1 h-7 rounded-sm border border-border px-2 text-[11.5px] text-muted-foreground hover:text-foreground hover:border-input"><ArrowUpRight className="h-3.5 w-3.5" />Make project</button>
+                    <select defaultValue="" onChange={e => { merge(p, e.target.value); e.currentTarget.value = '' }} title="Merge into…" className="h-7 rounded-sm border border-border bg-card px-1.5 text-[11.5px] text-muted-foreground cursor-pointer outline-none max-w-[130px]">
+                      <option value="">Merge into…</option>
+                      <optgroup label="Labels">{labels.filter(l => l.id !== p.id).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</optgroup>
+                      <optgroup label="Projects">{realProjects.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}</optgroup>
+                    </select>
+                    <button onClick={() => del(p)} title="Delete label" className="grid place-items-center h-7 w-7 rounded-sm text-[hsl(8_60%_45%)] hover:bg-[hsl(8_60%_96%)]"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
 }

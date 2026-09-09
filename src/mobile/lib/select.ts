@@ -29,13 +29,16 @@ export function openTasks(state: AppState): Task[] {
  * surfaced to the list (showInTodo). Project tasks otherwise live only in the Projects section —
  * the same rule the web app uses (lib/store.isTodoTask), kept here so the phone matches exactly.
  */
-export function isTodoTask(task: Task): boolean {
-  return !task.projectId || !!task.showInTodo;
+export function isTodoTask(state: AppState, task: Task): boolean {
+  if (!task.projectId || task.showInTodo) return true;
+  // a task filed only to a *label* (not a real project) is still a plain to-do
+  const proj = state.projects.find((p) => p.id === task.projectId);
+  return !proj || proj.kind === 'label';
 }
 
 /** Open tasks that belong on the phone's to-do surfaces (the "Now" list, the day's counters). */
 export function todoOpenTasks(state: AppState): Task[] {
-  return openTasks(state).filter(isTodoTask);
+  return openTasks(state).filter((t) => isTodoTask(state, t));
 }
 
 export function isOverdue(task: Task): boolean {

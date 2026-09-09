@@ -21,6 +21,9 @@ export function seedState(): AppState {
       { id: 'pr_shiur', areaId: 'a_shul', name: 'Tuesday night shiur series', outcome: 'Speakers booked through the season', status: 'on-hold', priority: 'P2', lastActivity: daysAgo(21) },
       { id: 'pr_fridge', areaId: 'a_ideas', name: 'Family calendar on the fridge screen', outcome: 'Explore: shared screen showing the week', status: 'active', priority: 'P3', lastActivity: daysAgo(15) },
       { id: 'pr_garden', areaId: 'a_family', name: 'Garden landscaping', outcome: 'Usable garden by summer', status: 'done', priority: 'P2', lastActivity: daysAgo(30) },
+      // A label (kind: 'label') — a lightweight tag that groups tasks but never shows on the Projects
+      // page, and whose tasks stay on the to-do list. Managed from Projects → Labels.
+      { id: 'lbl_errands', areaId: 'a_family', name: 'Errands', kind: 'label', outcome: '', status: 'active', priority: 'P3', lastActivity: daysAgo(2) },
     ],
     // Phases on the dinner, so the sample workspace shows what a phased project
     // looks like. Every other project has none — which is the point: phases are
@@ -63,6 +66,10 @@ export function seedState(): AppState {
       // Shul misc
       { id: 't40', title: 'Rota for Shabbos hospitality', type: 'todo', areaId: 'a_shul', categoryIds: ['c_chesed'], priority: 'P2', status: 'next', due: addDays(T, 5), source: 'manual', created: daysAgo(3) },
       { id: 't41', title: 'Visit Mr Gold in hospital', type: 'todo', areaId: 'a_shul', categoryIds: ['c_chesed_hosp'], priority: 'P1', status: 'next', due: addDays(T, 1), source: 'whatsapp', created: daysAgo(1) },
+      // Errands — carry the "Errands" LABEL (projectId: 'lbl_errands'). A labelled task is still a
+      // plain to-do: it shows on Today / the Tasks list, unlike a real project's tasks.
+      { id: 't42', title: 'Pick up dry cleaning', type: 'todo', areaId: 'a_family', projectId: 'lbl_errands', categoryIds: ['c_home'], priority: 'P2', status: 'next', due: T, source: 'manual', created: daysAgo(1) },
+      { id: 't43', title: 'Return Amazon parcel', type: 'todo', areaId: 'a_family', projectId: 'lbl_errands', categoryIds: ['c_home'], priority: 'P2', status: 'next', due: addDays(T, 2), source: 'manual', created: daysAgo(1) },
       // Ideas
       { id: 't50', title: 'Idea: family calendar on the fridge screen', type: 'todo', areaId: 'a_ideas', projectId: 'pr_fridge', categoryIds: [], priority: 'P3', status: 'next', source: 'whatsapp', created: daysAgo(15) },
       { id: 't51', title: 'Idea: automate the weekly shop', type: 'todo', areaId: 'a_ideas', categoryIds: [], priority: 'P3', status: 'next', source: 'voice', created: daysAgo(8) },

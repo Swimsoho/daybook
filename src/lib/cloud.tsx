@@ -335,6 +335,21 @@ function surfaceActiveProjectTasks(tasks: Task[]): Task[] {
   })
 }
 
+// One-time upgrade (v114): the app split "projects" into real projects vs. lightweight labels. Many
+// pre-existing "projects" were really just task-grouping tags (a name with some tasks, but no goal,
+// no phases, no dates, no owner) — those become labels so they drop off the Projects page and their
+// tasks return to the to-do list. Anything with real structure stays a project. Runs once, and the
+// user can promote/demote afterwards, so a wrong guess is one click to fix.
+function classifyProjectKinds(projects: AppState['projects'], milestones: AppState['milestones']): AppState['projects'] {
+  const phaseCount = new Map<string, number>()
+  for (const m of milestones ?? []) phaseCount.set(m.projectId, (phaseCount.get(m.projectId) ?? 0) + 1)
+  return (projects ?? []).map(p => {
+    if (p.kind) return p // already classified — never re-touch
+    const bare = !p.outcome?.trim() && !p.due && !p.notes?.trim() && !p.ownerPersonId && !(phaseCount.get(p.id) ?? 0)
+    return { ...p, kind: bare ? ('label' as const) : ('project' as const) }
+  })
+}
+
 function normalizeWatchTrackers(trackers: Tracker[]): Tracker[] {
   const isWatchList = (name: string) => /movie|film|tv|show|series|watch|cinema/i.test(name)
   return trackers.map(t => {
@@ -405,13 +420,16 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
     // Run the v111 project-task surfacing once (see surfaceActiveProjectTasks) — before the upgrade
     // this flag is absent, so active project tasks are surfaced so nothing drops off the lists.
     const runProjectTodoMigration = !loaded.settings?.projectTodoMigratedV111
+    const runLabelMigration = !loaded.settings?.labelMigratedV114
     const normalised: AppState = {
       ...loaded,
       tasks: runProjectTodoMigration ? surfaceActiveProjectTasks(loaded.tasks ?? []) : loaded.tasks,
+      projects: runLabelMigration ? classifyProjectKinds(loaded.projects, loaded.milestones) : loaded.projects,
       settings: {
         ...SETTINGS_BACKFILL,
         ...loaded.settings,
         projectTodoMigratedV111: true,
+        labelMigratedV114: true,
         // `features` is a nested object — the shallow spread above would otherwise let an
         // existing account's saved `features` blob (from before `lunchReminder` existed)
         // silently drop the new key, since object spread doesn't merge nested objects. The
