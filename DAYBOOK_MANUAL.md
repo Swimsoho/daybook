@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v111 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v113 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,21 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+97. **v113** — **The Projects page is now a real project‑management workspace.**
+
+    Projects went from a simple list of area‑grouped cards to a full PM tool, in two layers.
+
+    **The portfolio** (the landing) opens on a **KPI band** — active projects, off‑track, at‑risk, overdue tasks, and projects due within two weeks (the health tiles are clickable filters). Below it, every project shows with a **health badge** (On track / At risk / Off track / On hold / Done — computed from overdue work, stalls, blocked tasks and how close the due date is), a progress bar, its owner, due date, and open/overdue/blocked counts. You can **search**, **filter** by area / status / health, **group** by Area (the default), Status, Health or nothing, **sort** by health, due date, progress, priority, name or recent activity, and flip between a **card** view and a dense **table** view. New / Import / Export and the Excel template are all still here.
+
+    **Each project opens into its own workspace** with a rich header — inline **Status, Priority, Owner and Target‑date** controls, a health pill, a progress bar and live counts — plus an Edit dialog for name / outcome / area / start date. Under it are five tabbed views of the same work:
+    - **Overview** — metric tiles, a plain‑English health read‑out, phase‑by‑phase progress with dates, an Overdue list and an Up‑next list, the working team, and editable project notes.
+    - **Board** — a **drag‑and‑drop Kanban by status** (Next → In progress → Waiting on → Done); cards carry priority, due date, phase, owner and a blocked flag.
+    - **Phases** — the existing phase/milestone board.
+    - **Timeline** — a **Gantt‑style timeline**: phases and dated tasks on a week/month scale with a "today" line, overdue in red, and undated tasks flagged so they aren't lost.
+    - **List** — a flat, sortable table of every task (full row actions, including the To‑Do pin).
+
+    Two small model additions support it: a project **owner** and an optional **start date** (used by the timeline). Health and every number come from one shared calculation (`src/lib/projects.ts`), so the portfolio, the header, the overview and the boards can never disagree. The cross‑page project filter bar no longer rides along on this page — the workspace has its own filtering. Works the same on the phone (the layout reflows; the board and timeline scroll horizontally).
 
 96. **v111** — **Projects are their own world now — project tasks stay out of your to‑do list unless you say so.**
 

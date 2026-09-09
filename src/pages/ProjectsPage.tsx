@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Download, Plus, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -6,203 +6,76 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { cn } from '@/lib/utils'
-import { PRIORITY_LABELS, Priority, Task, daysSince, fmtDate } from '@/lib/model'
-import { ImportProjectRow, openTasks, stalledProjects, useStore } from '@/lib/store'
-import { EmptyNote, PriorityChip } from '@/components/bits'
+import { PRIORITY_LABELS, Priority, Task, TaskStatus, fmtDate } from '@/lib/model'
+import { ImportProjectRow, useStore } from '@/lib/store'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ViewExport } from '@/lib/exportView'
-import { TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
-import { ProjectBoard } from '@/components/ProjectBoard'
+import { TaskDetail, TaskDialog } from '@/components/tasks'
+import { Portfolio } from '@/components/pm/Portfolio'
+import { ProjectDetail } from '@/components/pm/ProjectDetail'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 import { SearchableSelect } from '@/components/ui/searchable-select'
 
 export default function ProjectsPage() {
-  const { state, updateProject, addProject, reassignProject } = useStore()
+  const { state, addProject, reassignProject } = useStore()
   const [openProjectId, setOpenProjectId] = useState<string | null>(null)
-  // When a project is archived/removed while it still has tasks, we prompt: move them to another
-  // project, or clear the link. `reassignFor` holds the project being removed while the prompt is up.
+  // When a project is archived while it still has tasks, we prompt: move them to another project or
+  // clear the link. `reassignFor` holds the project being archived while the prompt is up.
   const [reassignFor, setReassignFor] = useState<{ id: string; name: string; count: number } | null>(null)
   const [reassignTarget, setReassignTarget] = useState<string>('')
   const [openTask, setOpenTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
-  const [addTaskFor, setAddTaskFor] = useState<{ areaId: string; projectId: string; milestoneId?: string } | null>(null)
+  const [addTaskFor, setAddTaskFor] = useState<Partial<Task> | null>(null)
   const [addingProject, setAddingProject] = useState(false)
   const [importing, setImporting] = useState(false)
-  const open = openTasks(state)
-  const stalled = stalledProjects(state)
 
   const openProject = state.projects.find(p => p.id === openProjectId)
 
-  if (openProject) {
-    const area = state.areas.find(a => a.id === openProject.areaId)
-    return (
-      <div className="grid grid-cols-1 gap-4">
-        <div>
-          <button onClick={() => setOpenProjectId(null)} className="text-[12px] text-muted-foreground hover:text-foreground">← All projects</button>
-          <div className="mt-2 flex items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2.5">
-                {area && <span className="h-2.5 w-2.5 rounded-full" style={{ background: area.color }} />}
-                <h1 className="font-display text-2xl font-semibold">{openProject.name}</h1>
-                <PriorityChip p={openProject.priority} />
-              </div>
-              <p className="text-[13.5px] text-muted-foreground mt-1 italic">Goal: {openProject.outcome}</p>
-              {openProject.due && <p className="text-[12px] text-muted-foreground mt-0.5 tabular">Due {fmtDate(openProject.due)}</p>}
-            </div>
-            <div className="flex gap-2 shrink-0">
-              <Select value={openProject.status} onValueChange={v => {
-                updateProject(openProject.id, { status: v as never })
-                toast(`Project → ${v}`)
-                // Archiving a project with tasks still attached? Offer to re-home them.
-                if (v === 'archived') {
-                  const linked = state.tasks.filter(t => t.projectId === openProject.id).length
-                  if (linked > 0) { setReassignTarget(''); setReassignFor({ id: openProject.id, name: openProject.name, count: linked }) }
-                }
-              }}>
-                <SelectTrigger className="h-8 w-32 bg-card text-[12.5px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {['active', 'on-hold', 'done', 'archived'].map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Button size="sm" className="h-8" onClick={() => setAddTaskFor({ areaId: openProject.areaId, projectId: openProject.id })}><Plus className="h-3.5 w-3.5 mr-1" />Task</Button>
-            </div>
-          </div>
-        </div>
-        {reassignFor && <ReassignProjectDialog info={reassignFor} state={state} reassignProject={reassignProject} onClose={() => setReassignFor(null)} target={reassignTarget} setTarget={setReassignTarget} />}
-        <ProjectBoard
-          project={openProject}
-          onOpenTask={setOpenTask}
-          onAddTask={milestoneId => setAddTaskFor({ areaId: openProject.areaId, projectId: openProject.id, milestoneId })}
-        />
-        <TaskDetail task={openTask} onClose={() => setOpenTask(null)} onEdit={t => setEditTask(t)} />
-        <TaskDialog open={!!editTask || !!addTaskFor} onClose={() => { setEditTask(null); setAddTaskFor(null) }} task={editTask} defaults={addTaskFor ?? undefined} />
-      </div>
-    )
+  // Export / template / import / new — supplied to the portfolio's toolbar.
+  const portfolioActions = (
+    <>
+      <ExportMenu getData={(): ViewExport => {
+        const scheme = state.settings.priorityScheme
+        const rows: (string | number)[][] = []
+        for (const a of state.areas.filter(ar => ar.active)) {
+          for (const p of state.projects.filter(pr => pr.areaId === a.id && pr.status !== 'archived')) {
+            const total = state.tasks.filter(t => t.projectId === p.id).length
+            const doneN = state.tasks.filter(t => t.projectId === p.id && (t.status === 'done' || t.status === 'dropped')).length
+            rows.push([p.name, a.name, p.status, PRIORITY_LABELS[scheme][p.priority], p.due ? fmtDate(p.due) : '', total - doneN, doneN, total, p.lastActivity ? fmtDate(p.lastActivity) : ''])
+          }
+        }
+        return { title: 'Projects', headers: ['Project', 'Area', 'Status', 'Priority', 'Due', 'Open', 'Done', 'Total', 'Last activity'], rows, filenameBase: 'daybook-projects' }
+      }} />
+      <Button size="sm" variant="outline" className="h-8" onClick={downloadProjectsTemplate}><Download className="h-3.5 w-3.5 mr-1.5" />Template</Button>
+      <Button size="sm" variant="outline" className="h-8" onClick={() => setImporting(true)}><Upload className="h-3.5 w-3.5 mr-1.5" />Import</Button>
+      <Button size="sm" className="h-8" onClick={() => setAddingProject(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />New project</Button>
+    </>
+  )
+
+  const addForProject = (opts: { milestoneId?: string; status?: TaskStatus }) => {
+    if (!openProject) return
+    setAddTaskFor({ areaId: openProject.areaId, projectId: openProject.id, milestoneId: opts.milestoneId, status: opts.status })
   }
 
   return (
-    <div className="grid grid-cols-1 gap-5">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[13px] text-muted-foreground">Areas hold projects; projects hold tasks. WIP guardrail: keep ~{state.settings.projectWipLimit} active projects per area (edit in Settings).</p>
-        <div className="flex items-center gap-2 shrink-0">
-          <ExportMenu getData={(): ViewExport => {
-            const scheme = state.settings.priorityScheme
-            const rows: (string | number)[][] = []
-            for (const a of state.areas.filter(ar => ar.active)) {
-              for (const p of state.projects.filter(pr => pr.areaId === a.id && pr.status !== 'archived')) {
-                const total = state.tasks.filter(t => t.projectId === p.id).length
-                const doneN = state.tasks.filter(t => t.projectId === p.id && (t.status === 'done' || t.status === 'dropped')).length
-                rows.push([p.name, a.name, p.status, PRIORITY_LABELS[scheme][p.priority], p.due ? fmtDate(p.due) : '', total - doneN, doneN, total, p.lastActivity ? fmtDate(p.lastActivity) : ''])
-              }
-            }
-            return {
-              title: 'Projects',
-              headers: ['Project', 'Area', 'Status', 'Priority', 'Due', 'Open', 'Done', 'Total', 'Last activity'],
-              rows, filenameBase: 'daybook-projects',
-            }
-          }} />
-          <Button size="sm" variant="outline" className="h-8" onClick={downloadProjectsTemplate}><Download className="h-3.5 w-3.5 mr-1.5" />Excel template</Button>
-          <Button size="sm" variant="outline" className="h-8" onClick={() => setImporting(true)}><Upload className="h-3.5 w-3.5 mr-1.5" />Import</Button>
-          <Button size="sm" className="h-8" onClick={() => setAddingProject(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />New project</Button>
-        </div>
-      </div>
-      {state.areas.filter(a => a.active).map((a, i) => {
-        const projs = state.projects.filter(p => p.areaId === a.id && p.status !== 'archived')
-        // tasks filed straight under the area, no project attached — the empty-state copy below
-        // promises these "live directly under the area" but nothing ever rendered them
-        const looseAreaTasks = open.filter(t => t.areaId === a.id && !t.projectId)
-        const activeCount = projs.filter(p => p.status === 'active').length
-        const overWip = activeCount > state.settings.projectWipLimit
-        return (
-          <section key={a.id} className="border border-border bg-card shadow-sm rounded-lg rise-in" style={{ animationDelay: `${i * 60}ms` }}>
-            <div className="px-4 py-3 border-b border-border flex items-center gap-2.5">
-              <span className="h-3 w-3 rounded-full" style={{ background: a.color }} />
-              <div>
-                <span className="font-display text-[15.5px] font-semibold">{a.name}</span>
-                <span className="text-[11.5px] text-muted-foreground ml-2">{a.description}</span>
-              </div>
-              {overWip && (
-                <span className="text-[10.5px] text-[hsl(8_60%_41%)] uppercase tracking-wide font-semibold">
-                  {activeCount}/{state.settings.projectWipLimit} — over WIP limit
-                </span>
-              )}
-              <span className="text-[11px] text-muted-foreground tabular ml-auto">review {a.reviewDay}</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border">
-              {projs.map(p => {
-                const pt = open.filter(t => t.projectId === p.id)
-                const done = state.tasks.filter(t => t.projectId === p.id && t.status === 'done').length
-                const total = state.tasks.filter(t => t.projectId === p.id).length
-                const isStalled = stalled.includes(p)
-                // Phases are opt-in, so the count only appears on projects that have
-                // them — an unphased project shouldn't grow a "0 phases" label.
-                const phases = state.milestones.filter(m => m.projectId === p.id)
-                return (
-                  <button key={p.id} onClick={() => setOpenProjectId(p.id)} className="bg-card text-left px-4 py-3 hover:bg-accent/50 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13.5px] font-medium truncate">{p.name}</span>
-                      <PriorityChip p={p.priority} className="ml-auto shrink-0" />
-                    </div>
-                    <div className="text-[11.5px] text-muted-foreground truncate mt-0.5">{p.outcome}</div>
-                    <div className="mt-2 flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-muted rounded-sm overflow-hidden">
-                        <div className="h-full bg-[hsl(152_25%_38%)]" style={{ width: total ? `${(done / total) * 100}%` : '0%' }} />
-                      </div>
-                      <span className="text-[10.5px] tabular text-muted-foreground">{done}/{total}</span>
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-2 text-[10.5px] uppercase tracking-wide">
-                      {p.status === 'on-hold' && <span className="text-muted-foreground">on hold</span>}
-                      {p.status === 'done' && <span className="text-[hsl(152_25%_35%)]">done</span>}
-                      {isStalled && <span className="text-[hsl(8_60%_41%)] font-semibold">stalled {daysSince(p.lastActivity)}d</span>}
-                      {phases.length > 0 && <span className="text-muted-foreground normal-case tracking-normal tabular">{phases.length} phase{phases.length === 1 ? '' : 's'}</span>}
-                      {p.due && p.status === 'active' && <span className="text-muted-foreground normal-case tracking-normal tabular">due {fmtDate(p.due)}</span>}
-                      <span className="ml-auto text-muted-foreground tabular normal-case">{pt.length} open</span>
-                    </div>
-                  </button>
-                )
-              })}
-              {projs.length === 0 && <div className="bg-card px-4 py-3 text-[12.5px] text-muted-foreground italic">No projects — loose tasks live directly under the area.</div>}
-            </div>
-            {looseAreaTasks.length > 0 && <UnfiledTasks tasks={looseAreaTasks} onOpen={setOpenTask} />}
-          </section>
-        )
-      })}
-      <NewProjectDialog open={addingProject} onClose={() => setAddingProject(false)} onAdd={(name, areaId, outcome) => { addProject({ name, areaId, outcome }); toast.success('Project created') }} />
+    <div className="grid grid-cols-1 gap-4">
+      {openProject ? (
+        <ProjectDetail
+          projectId={openProject.id}
+          onBack={() => setOpenProjectId(null)}
+          onOpenTask={setOpenTask}
+          onAddTask={addForProject}
+          onArchivedWithTasks={info => { setReassignTarget(''); setReassignFor(info) }}
+        />
+      ) : (
+        <Portfolio onOpenProject={setOpenProjectId} right={portfolioActions} />
+      )}
+
+      {reassignFor && <ReassignProjectDialog info={reassignFor} state={state} reassignProject={reassignProject} onClose={() => setReassignFor(null)} target={reassignTarget} setTarget={setReassignTarget} />}
+      <NewProjectDialog open={addingProject} onClose={() => setAddingProject(false)} onAdd={(name, areaId, outcome) => { const p = addProject({ name, areaId, outcome }); toast.success('Project created'); setAddingProject(false); if (p?.id) setOpenProjectId(p.id) }} />
       <ImportProjectsDialog open={importing} onClose={() => setImporting(false)} />
       <TaskDetail task={openTask} onClose={() => setOpenTask(null)} onEdit={t => setEditTask(t)} />
-      <TaskDialog open={!!editTask} onClose={() => setEditTask(null)} task={editTask} />
-    </div>
-  )
-}
-
-/**
- * Tasks filed to an area but to no project.
- *
- * These used to render in full under every area, which made the Projects page a
- * second copy of the task list — the same to-dos you'd just scrolled past in
- * Tasks, with none of the project structure that's the point of this page.
- *
- * They can't simply be hidden either: a task with no project is the one most
- * likely to be forgotten, and this is the only screen where its absence from a
- * project is visible. So it's a collapsed count, framed as work to file rather
- * than work to read — the page stays about projects, and the loose ends stay
- * reachable in one click.
- */
-function UnfiledTasks({ tasks, onOpen }: { tasks: Task[]; onOpen: (t: Task) => void }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div className="border-t border-border">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full px-4 py-2 flex items-center gap-2 text-left hover:bg-accent/40 transition-colors"
-      >
-        <span className="text-[11.5px] text-muted-foreground">
-          {tasks.length} task{tasks.length === 1 ? '' : 's'} in this area with no project
-        </span>
-        <span className="text-[11px] text-muted-foreground ml-auto">{open ? 'Hide' : 'Show'}</span>
-      </button>
-      {open && tasks.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={onOpen} />)}
+      <TaskDialog open={!!editTask || !!addTaskFor} onClose={() => { setEditTask(null); setAddTaskFor(null) }} task={editTask} defaults={addTaskFor ?? undefined} />
     </div>
   )
 }

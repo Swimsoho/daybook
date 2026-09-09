@@ -30,7 +30,12 @@ export interface Project {
   outcome: string
   status: 'active' | 'on-hold' | 'done' | 'archived'
   priority: Priority
-  due?: string // ISO date
+  due?: string // ISO date — the target finish date
+  // Optional project start date (ISO). Used by the Projects timeline/Gantt to place the project and
+  // its phases on a scale; absent projects start at their earliest task/milestone date.
+  start?: string
+  // The person accountable for the project (a People contact id). Distinct from per-task assignees.
+  ownerPersonId?: string
   notes?: string
   lastActivity: string // ISO date, for stall detection
 }

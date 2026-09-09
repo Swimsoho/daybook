@@ -383,7 +383,9 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
           </div>
         </header>
 
-        {(page === 'today' || page === 'tomorrow' || page === 'week' || page === 'overall' || page === 'tasks' || page === 'projects') && (
+        {/* The Projects page is its own PM workspace with its own filtering, so the cross-page project
+            filter bar only rides along on the task/day views. */}
+        {(page === 'today' || page === 'tomorrow' || page === 'week' || page === 'overall' || page === 'tasks') && (
           <div className="border-b border-border bg-muted px-4 md:px-6 py-2">
             <ProjectFilterBar value={projectFilter} onChange={setProjectFilter} />
           </div>
