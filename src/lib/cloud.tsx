@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Toaster, toast } from 'sonner'
 import { supabase } from './supabase'
-import { AdminUser, AppState, Role, Tracker, TrackerColumn } from './model'
+import { AdminUser, AppState, Role, Task, Tracker, TrackerColumn, daysSince } from './model'
 import { mergeStates, saveWorkspaceState } from './sync'
 import { emptyState, seedState } from './seed'
 
@@ -316,6 +316,25 @@ function augmentStandardTrackers(trackers: Tracker[]): Tracker[] {
 // defaults for exactly that case — a watch-list whose watch-status column has NO options yet — and
 // never touches a column that already has its own options. Runs on load; a no-op once set.
 const WATCH_STATUS_DEFAULTS = ['Want to watch', 'Watching', 'Watched']
+// One-time upgrade (v111): project tasks were separated from the main to-do list — a task filed to
+// a project no longer shows on Today / the Tasks list unless it's surfaced (showInTodo). To keep
+// that change from silently pulling active work off an existing account's lists, this surfaces the
+// project tasks that were actually being worked at upgrade time — in progress, P0/P1, or due within
+// the next two weeks (overdue included) — and leaves the backlog (P2/P3, no near due date) in its
+// project. Runs once, gated by settings.projectTodoMigratedV111; anything the user later takes off
+// the list stays off. Loose tasks and already-surfaced tasks are untouched.
+function surfaceActiveProjectTasks(tasks: Task[]): Task[] {
+  return tasks.map(t => {
+    if (!t.projectId || t.showInTodo) return t
+    if (t.status === 'done' || t.status === 'dropped' || t.status === 'inbox') return t
+    const active =
+      t.status === 'in-progress' ||
+      t.priority === 'P0' || t.priority === 'P1' ||
+      (!!t.due && daysSince(t.due) >= -14) // overdue (positive) or due within ~2 weeks
+    return active ? { ...t, showInTodo: true } : t
+  })
+}
+
 function normalizeWatchTrackers(trackers: Tracker[]): Tracker[] {
   const isWatchList = (name: string) => /movie|film|tv|show|series|watch|cinema/i.test(name)
   return trackers.map(t => {
@@ -383,11 +402,16 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
 
   if (data?.data && Object.keys(data.data).length > 0) {
     const loaded = data.data as unknown as AppState
+    // Run the v111 project-task surfacing once (see surfaceActiveProjectTasks) — before the upgrade
+    // this flag is absent, so active project tasks are surfaced so nothing drops off the lists.
+    const runProjectTodoMigration = !loaded.settings?.projectTodoMigratedV111
     const normalised: AppState = {
       ...loaded,
+      tasks: runProjectTodoMigration ? surfaceActiveProjectTasks(loaded.tasks ?? []) : loaded.tasks,
       settings: {
         ...SETTINGS_BACKFILL,
         ...loaded.settings,
+        projectTodoMigratedV111: true,
         // `features` is a nested object — the shallow spread above would otherwise let an
         // existing account's saved `features` blob (from before `lunchReminder` existed)
         // silently drop the new key, since object spread doesn't merge nested objects. The

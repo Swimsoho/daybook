@@ -527,7 +527,7 @@ None of these are things the rest of the app depends on to function — they're 
 
     **Seeing project tasks in the Tasks page:** by default the Tasks page is your to‑do list (loose tasks + surfaced project tasks). A new **"Project tasks"** toggle folds every project's tasks into the list when you want the full picture; and picking a project in the filter bar still scopes the list to just that project. Reports and the Overall/portfolio view still show everything (they're management views, not the to‑do list).
 
-    Under the hood this is one new task field, `showInTodo`, and a shared `isTodoTask` rule used by every to‑do surface on both web and phone. **Heads‑up on upgrade:** existing project tasks will drop off your Today/Tasks lists (they're safe in their projects) — pin the few you're actively working to bring them back onto the list.
+    Under the hood this is one new task field, `showInTodo`, and a shared `isTodoTask` rule used by every to‑do surface on both web and phone. **On upgrade (one‑time):** so nothing you're actively working disappears, the app surfaces your currently‑active project tasks onto the to‑do list automatically — anything in progress, any P0/P1, or anything due within the next two weeks (overdue included). The rest of each project's backlog moves into the project, out of your daily list. This runs once (marked by `settings.projectTodoMigratedV111`); after it, surfacing is entirely manual — pin what you want on the list and un‑pin what you don't, and your choices stick. So you can create your projects, allocate your existing to‑dos into them, and only the ones you pin stay on the to‑do list.
 
 95. **v110** — **"Date watched" on watch‑lists**, plus a much better date input everywhere.
 

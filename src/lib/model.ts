@@ -331,6 +331,10 @@ export interface Settings {
   // once inside the same send window. Set by that function, not the client.
   lastMorningPushSent?: string
   lastLunchPushSent?: string
+  // One-time migration marker (v111). When project tasks were separated from the main to-do list,
+  // this guards a run-once pass that surfaced the then-active project tasks (showInTodo) so nothing
+  // vanished on upgrade. Set true after it runs; absent/false on a blob saved before the upgrade.
+  projectTodoMigratedV111?: boolean
   stallDays: number
   projectWipLimit: number
   tierCadence: Record<Tier, number>
