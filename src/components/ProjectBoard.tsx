@@ -15,6 +15,7 @@ import {
   NO_PHASE, openBlockers, phaseRefs, progress, projectStats, projectTasks, groupByPhase,
 } from '@/lib/milestones'
 import { ImportPlanDialog } from '@/components/ImportPlanDialog'
+import { SearchableSelect } from '@/components/ui/searchable-select'
 
 /**
  * ─────────────────────────────────────────────────────────────────────────────
@@ -281,7 +282,6 @@ function BoardRow({ task, reference, refs, onOpen, onStatus }: {
   onStatus: (s: TaskStatus) => void
 }) {
   const { state, updateTask } = useStore()
-  const owner = state.people.find(p => p.id === task.personId)
   const blockers = openBlockers(state, task)
   const finished = task.status === 'done' || task.status === 'dropped'
 
@@ -329,9 +329,7 @@ function BoardRow({ task, reference, refs, onOpen, onStatus }: {
         </Select>
       </div>
 
-      <span className={cn('text-[12px] truncate hidden sm:block', !owner && 'text-muted-foreground italic')}>
-        {owner?.name ?? 'unassigned'}
-      </span>
+      <div className="hidden sm:block min-w-0"><AssigneePicker task={task} /></div>
 
       <span className="hidden sm:block"><PriorityDot p={task.priority} /></span>
 
@@ -358,6 +356,40 @@ function TargetDate({ due, finished }: { due?: string; finished: boolean }) {
     )}>
       {label}
     </span>
+  )
+}
+
+/**
+ * Inline assignee (owner) picker on a board row — set who owns a task without opening it. The
+ * project's own people (its owner + anyone already on one of its tasks) are surfaced at the top, so
+ * a project effectively has a working team you pick from first; anyone in People is still available,
+ * and typing a new name adds them to People and assigns them in one go.
+ */
+function AssigneePicker({ task }: { task: Task }) {
+  const { state, updateTask, addPerson } = useStore()
+  const project = task.projectId ? state.projects.find(p => p.id === task.projectId) : undefined
+  const memberIds = new Set<string>()
+  if (project?.ownerPersonId) memberIds.add(project.ownerPersonId)
+  if (project) for (const t of state.tasks) if (t.projectId === project.id && t.personId) memberIds.add(t.personId)
+  const members = state.people.filter(p => memberIds.has(p.id))
+  const others = state.people.filter(p => !memberIds.has(p.id)).sort((a, b) => a.name.localeCompare(b.name))
+  const ordered = [...members, ...others]
+  return (
+    <SearchableSelect
+      value={task.personId ?? '__none__'}
+      onValueChange={v => {
+        const p = state.people.find(x => x.id === v)
+        updateTask(task.id, { personId: v === '__none__' ? undefined : v }, p ? `assigned to ${p.name}` : 'unassigned')
+        toast(p ? `Assigned to ${p.name}` : 'Unassigned')
+      }}
+      options={[{ value: '__none__', label: 'Unassigned' }, ...ordered.map(p => ({ value: p.id, label: p.name }))]}
+      popularCount={members.length ? members.length + 1 : 0}
+      placeholder="Assign…"
+      searchPlaceholder="Search people, or type to add…"
+      onCreate={name => { const p = addPerson({ name }); updateTask(task.id, { personId: p.id }, `assigned to ${p.name}`); toast.success(`Added ${p.name} & assigned`) }}
+      createLabel={q => `Add person “${q}”`}
+      className="h-7 w-full text-[11.5px] bg-card"
+    />
   )
 }
 

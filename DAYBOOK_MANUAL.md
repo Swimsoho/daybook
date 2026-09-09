@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v115 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v116 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+100. **v116** — **Assign an owner to a project task right on the board.**
+
+    The phase board showed an owner column that read "unassigned" with no way to change it. That column is now an **inline assignee picker** on every row: click it and pick who owns the task — it saves immediately, no need to open the task. It works like a per‑project team without a rigid setup: the project's own people (its **owner**, plus anyone already assigned to one of its tasks) are surfaced at the **top** of the list, then everyone else in People; and typing a new name **adds them to People and assigns them in one go**. (The assignee is the task's `personId` — the same field the task detail's Contact picker sets — so the board, the overview "Team", and the portfolio owner all stay in step.)
 
 99. **v115** — **Project Overview is click‑through, and you can set a task's stage without opening Edit.**
 
