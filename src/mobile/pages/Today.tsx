@@ -6,10 +6,10 @@ import {
   isDone,
   isOverdue,
   isDueToday,
-  openTasks,
   overdueBy,
   tierColor,
   todaysTasks,
+  todoOpenTasks,
 } from '@/mobile/lib/select';
 import { useStore } from '@/lib/store';
 import { Avatar, CallButton, EmptyState, SectionTitle } from '@/mobile/components/bits';
@@ -28,7 +28,7 @@ export function Today({
   const { settings } = state;
 
   const now = todaysTasks(state);
-  const open = openTasks(state);
+  const open = todoOpenTasks(state); // the day's counters track the to-do list, not project backlogs
   const dueTodayCount = open.filter(isDueToday).length;
   const overdueCount = open.filter(isOverdue).length;
   const doneToday = state.tasks.filter(

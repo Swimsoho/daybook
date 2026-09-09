@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v110 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v111 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,16 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+96. **v111** — **Projects are their own world now — project tasks stay out of your to‑do list unless you say so.**
+
+    Until now, anything filed to a project still showed up in your day‑to‑day to‑do list (Today, the Tasks page, the phone's "Now"), so a busy project flooded your list. That's fixed. The rule is simple: **a task with no project is a plain to‑do and always shows on your list; a task filed to a project lives inside that project and is kept OFF the to‑do list — unless you surface it.** So your to‑do list is now your actual to‑dos, and each project is a self‑contained space with its own tasks and phases (the Projects section, unchanged, is that home).
+
+    **Surfacing a project task onto your to‑do list** (three ways, all the same flag): on the **project board**, click the **pin** on any task row; in the **Tasks list** (when a project task is shown), the row's **⋯ menu → "Add to To‑Do list"**; or when editing a task, the **"Show on my To‑Do list"** checkbox. Surfaced tasks appear on Today/Tasks with everything else and can be un‑surfaced the same way — the task always stays part of its project either way.
+
+    **Seeing project tasks in the Tasks page:** by default the Tasks page is your to‑do list (loose tasks + surfaced project tasks). A new **"Project tasks"** toggle folds every project's tasks into the list when you want the full picture; and picking a project in the filter bar still scopes the list to just that project. Reports and the Overall/portfolio view still show everything (they're management views, not the to‑do list).
+
+    Under the hood this is one new task field, `showInTodo`, and a shared `isTodoTask` rule used by every to‑do surface on both web and phone. **Heads‑up on upgrade:** existing project tasks will drop off your Today/Tasks lists (they're safe in their projects) — pin the few you're actively working to bring them back onto the list.
 
 95. **v110** — **"Date watched" on watch‑lists**, plus a much better date input everywhere.
 

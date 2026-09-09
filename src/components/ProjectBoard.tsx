@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp, Lock, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { ChevronDown, ChevronUp, Lock, Pencil, Pin, Plus, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -280,13 +280,13 @@ function BoardRow({ task, reference, refs, onOpen, onStatus }: {
   onOpen: () => void
   onStatus: (s: TaskStatus) => void
 }) {
-  const { state } = useStore()
+  const { state, updateTask } = useStore()
   const owner = state.people.find(p => p.id === task.personId)
   const blockers = openBlockers(state, task)
   const finished = task.status === 'done' || task.status === 'dropped'
 
   return (
-    <div className="px-4 py-2.5 grid grid-cols-[2.5rem_1fr_auto] sm:grid-cols-[2.5rem_1fr_7.5rem_7rem_5rem_6rem] gap-x-3 gap-y-1.5 items-center hover:bg-accent/40 transition-colors">
+    <div className="px-4 py-2.5 grid grid-cols-[2.5rem_1fr_auto] sm:grid-cols-[2.5rem_1fr_9.5rem_7rem_5rem_6rem] gap-x-3 gap-y-1.5 items-center hover:bg-accent/40 transition-colors">
       <span className="text-[11px] tabular font-semibold text-muted-foreground">{reference}</span>
 
       <button onClick={onOpen} className="text-left min-w-0">
@@ -303,14 +303,31 @@ function BoardRow({ task, reference, refs, onOpen, onStatus }: {
         )}
       </button>
 
-      <Select value={task.status} onValueChange={v => onStatus(v as TaskStatus)}>
-        <SelectTrigger className="h-7 text-[11.5px] bg-card"><SelectValue /></SelectTrigger>
-        <SelectContent>
-          {(Object.keys(STATUS_LABELS) as TaskStatus[]).map(s => (
-            <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <div className="flex items-center gap-1">
+        {/* Pin this project task onto the main To-Do list (Today / Tasks). It stays in the project;
+            this just also surfaces it as something to act on now. */}
+        {!finished && (
+          <button
+            type="button"
+            title={task.showInTodo ? 'On your To-Do list — click to remove' : 'Add to your To-Do list'}
+            onClick={() => { updateTask(task.id, { showInTodo: !task.showInTodo }); toast(task.showInTodo ? `${task.title} removed from To-Do` : `${task.title} added to To-Do`) }}
+            className={cn(
+              'shrink-0 grid place-items-center h-7 w-7 rounded-sm border transition-colors',
+              task.showInTodo ? 'border-[hsl(17_63%_47%)] bg-[hsl(17_63%_47%/0.1)] text-[hsl(17_63%_42%)]' : 'border-transparent text-muted-foreground hover:border-border',
+            )}
+          >
+            <Pin className={cn('h-3.5 w-3.5', task.showInTodo && 'fill-current')} />
+          </button>
+        )}
+        <Select value={task.status} onValueChange={v => onStatus(v as TaskStatus)}>
+          <SelectTrigger className="h-7 text-[11.5px] bg-card"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {(Object.keys(STATUS_LABELS) as TaskStatus[]).map(s => (
+              <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <span className={cn('text-[12px] truncate hidden sm:block', !owner && 'text-muted-foreground italic')}>
         {owner?.name ?? 'unassigned'}

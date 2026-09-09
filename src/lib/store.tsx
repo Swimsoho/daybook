@@ -1265,6 +1265,18 @@ export function openTasks(s: AppState): Task[] {
   return s.tasks.filter(t => t.status !== 'done' && t.status !== 'dropped' && t.status !== 'inbox')
 }
 
+// A task belongs on the main to-do list when it isn't filed to a project, or when it's been
+// explicitly surfaced to the list (showInTodo). Project tasks otherwise live only in their project
+// (the Projects section), which is what keeps the day-to-day to-do list about actual to-dos.
+export function isTodoTask(t: Task): boolean {
+  return !t.projectId || !!t.showInTodo
+}
+
+// Open tasks that belong on the main to-do surfaces (Today, Tasks, the phone's "Now").
+export function todoTasks(s: AppState): Task[] {
+  return openTasks(s).filter(isTodoTask)
+}
+
 export function isOverdue(t: Task): boolean {
   return !!t.due && daysSince(t.due) > 0 && t.status !== 'done' && t.status !== 'dropped'
 }

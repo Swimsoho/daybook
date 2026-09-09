@@ -28,7 +28,7 @@ function WeekDash({ projectFilter }: { goTo: (p: string) => void; projectFilter?
   const { state } = useStore()
   const [openTask, setOpenTask] = useState<Task | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
-  const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
+  const open = openTasks(state).filter(t => matchesTodo(t, projectFilter))
   const byTimeThenPrio = (a: Task, b: Task) =>
     (a.startTime ?? '99:99').localeCompare(b.startTime ?? '99:99') || a.priority.localeCompare(b.priority)
   const days = Array.from({ length: 7 }, (_, i) => addDays(today(), i))
@@ -78,7 +78,7 @@ function TomorrowDash({ projectFilter }: { goTo: (p: string) => void; projectFil
   const [editTask, setEditTask] = useState<Task | null>(null)
   const tmrw = addDays(today(), 1)
 
-  const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
+  const open = openTasks(state).filter(t => matchesTodo(t, projectFilter))
   const callActionIds = new Set(state.actions.filter(a => a.name.trim().toLowerCase() === 'call').map(a => a.id))
   const isCall = (t: Task) => t.type === 'call' || (t.type === 'followup' && !!t.personId) || (t.actionIds ?? []).some(id => callActionIds.has(id))
   const byPrio = (a: Task, b: Task) => a.priority.localeCompare(b.priority)
@@ -145,6 +145,15 @@ function greeting(): string {
 
 function matchesProject(t: Task, projectFilter?: string | null): boolean {
   if (!projectFilter) return true
+  return projectFilter === '__none__' ? !t.projectId : t.projectId === projectFilter
+}
+
+// The to-do surfaces (Today / This Week / Tomorrow) show loose tasks plus any project task the
+// person has surfaced (showInTodo) — never a project's whole backlog, which lives in the Projects
+// section. A chosen project filter still scopes to that project (or, for the "Loose tasks" chip,
+// to loose tasks only), so you can pull one project's work up on demand.
+function matchesTodo(t: Task, projectFilter?: string | null): boolean {
+  if (!projectFilter) return !t.projectId || !!t.showInTodo
   return projectFilter === '__none__' ? !t.projectId : t.projectId === projectFilter
 }
 
@@ -339,7 +348,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
   // whole page. Keeps the number and the drill-through in perfect agreement.
   const [drill, setDrill] = useState<{ title: string; sub?: string; tasks?: Task[]; calls?: boolean } | null>(null)
 
-  const open = openTasks(state).filter(t => matchesProject(t, projectFilter))
+  const open = openTasks(state).filter(t => matchesTodo(t, projectFilter))
   // A task counts as a "call" if its Type is Call OR it carries a Call action. Calls have their own
   // home (Today's call list), so they're kept OUT of the Today task list and the capacity count —
   // no double-listing, no inflating the daily number.

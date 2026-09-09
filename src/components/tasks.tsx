@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarDays, Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, Loader2, MoreHorizontal, Paperclip, Phone, Send, Timer, Trash2, User } from 'lucide-react'
+import { CalendarDays, Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, ListChecks, Loader2, MoreHorizontal, Paperclip, Phone, Send, Timer, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -443,6 +443,13 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
               )}
+              {/* Surface / unsurface a project task on the main To-Do list. Only meaningful for a
+                  task that's filed to a project — loose tasks are always on the list. */}
+              {task.projectId && (
+                <DropdownMenuItem onClick={() => { updateTask(task.id, { showInTodo: !task.showInTodo }, task.showInTodo ? 'removed from To-Do list' : 'added to To-Do list'); toast(task.showInTodo ? 'Removed from your To-Do list' : 'Added to your To-Do list') }}>
+                  <ListChecks className="h-3.5 w-3.5 mr-2" />{task.showInTodo ? 'Remove from To-Do list' : 'Add to To-Do list'}
+                </DropdownMenuItem>
+              )}
               {qa.reassign && (
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>Reassign category</DropdownMenuSubTrigger>
@@ -860,6 +867,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
                 once one is chosen — showing them on a loose task would offer a choice
                 with nothing behind it. */}
             {f.projectId && (
+              <>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="grid grid-cols-1 gap-1.5">
                   <Label className="text-[12px] font-semibold text-foreground/80">Phase <span className="font-normal text-muted-foreground">— optional</span></Label>
@@ -883,6 +891,21 @@ export function TaskDialog({ open, onClose, task, defaults }: {
                   />
                 </div>
               </div>
+              {/* A project task is off the main To-Do list by default (it lives in the project).
+                  Tick this to also surface it on Today / the Tasks list as something to act on now. */}
+              <label className="flex items-start gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                  checked={!!f.showInTodo}
+                  onChange={e => set({ showInTodo: e.target.checked })}
+                />
+                <span className="text-[12px] leading-snug">
+                  <span className="font-semibold text-foreground/80">Show on my To-Do list</span>
+                  <span className="block text-muted-foreground">Otherwise it stays in the project only, off your day-to-day list.</span>
+                </span>
+              </label>
+              </>
             )}
           </section>
 

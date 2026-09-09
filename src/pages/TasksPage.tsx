@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowUpDown, CalendarClock, Check, Download, FileUp, Plus, Trash2 } from 'lucide-react'
+import { ArrowUpDown, CalendarClock, Check, Download, FileUp, FolderKanban, Plus, Trash2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -82,6 +82,9 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   const [sortBy, setSortBy] = useState<SortBy>('due')
   // Today page: group everything by priority (default) or category, drag between groups to move.
   const [todayGroup, setTodayGroup] = useState<'priority' | 'category'>('priority')
+  // Off by default: the Tasks page is the to-do list (loose tasks + surfaced project tasks). Turn
+  // this on to fold every project's tasks into the list too. Ignored when a project filter is set.
+  const [showProjectTasks, setShowProjectTasks] = useState(false)
   const scheme = state.settings.priorityScheme
   const filtersActive = !!search || areaFilter !== 'all' || prioFilter !== 'all' || catFilter !== 'all' || actFilter !== 'all' || !!projectFilter
   const clearAll = () => { setSearch(''); setAreaFilter('all'); setPrioFilter('all'); setCatFilter('all'); setActFilter('all'); onClearProject?.() }
@@ -106,7 +109,12 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       (prioFilter === 'all' || t.priority === prioFilter) &&
       (catFilter === 'all' || t.categoryIds.includes(catFilter)) &&
       (actFilter === 'all' || (t.actionIds ?? []).includes(actFilter)) &&
-      (!projectFilter || (projectFilter === '__none__' ? !t.projectId : t.projectId === projectFilter)) &&
+      // Project tasks live in the Projects section and stay off this list unless surfaced
+      // (showInTodo) — so the Tasks page is your to-do list, not every project's backlog. A chosen
+      // project filter scopes to that project; the "Show project tasks" toggle reveals them all.
+      (projectFilter
+        ? (projectFilter === '__none__' ? !t.projectId : t.projectId === projectFilter)
+        : (showProjectTasks || !t.projectId || !!t.showInTodo)) &&
       (!search || t.title.toLowerCase().includes(search.toLowerCase()))
 
     // include parents whose subtasks match
@@ -135,7 +143,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       case 'list':
         return ts.filter(t => t.status !== 'done' && t.status !== 'dropped')
     }
-  }, [state.tasks, view, search, areaFilter, prioFilter, catFilter, actFilter, projectFilter])
+  }, [state.tasks, view, search, areaFilter, prioFilter, catFilter, actFilter, projectFilter, showProjectTasks])
 
   // Sort honours the chosen key; undated tasks always sort last for date-based orders. Default is
   // due date (soonest first). 'done' keeps its own recency order set above.
@@ -362,6 +370,21 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
               {(Object.keys(SORT_BY_LABELS) as SortBy[]).map(k => <SelectItem key={k} value={k}>{SORT_BY_LABELS[k]}</SelectItem>)}
             </SelectContent>
           </Select>
+        )}
+        {/* Project tasks stay in the Projects section; flip this to fold them all into the list.
+            Hidden when a project is already selected in the filter bar (that scopes to it). */}
+        {!projectFilter && (
+          <button
+            type="button"
+            onClick={() => setShowProjectTasks(v => !v)}
+            title="Tasks filed to a project live in the Projects section. Turn this on to include them all here."
+            className={cn(
+              'inline-flex items-center gap-1.5 h-8 rounded-md border px-2.5 text-[12px] transition-colors',
+              showProjectTasks ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <FolderKanban className="h-3.5 w-3.5" />Project tasks
+          </button>
         )}
         <ClearFiltersButton active={filtersActive} onClear={clearAll} />
       </div>

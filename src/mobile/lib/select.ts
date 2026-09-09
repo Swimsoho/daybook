@@ -24,6 +24,20 @@ export function openTasks(state: AppState): Task[] {
   return state.tasks.filter((t) => !isClosed(t));
 }
 
+/**
+ * A task belongs on the main to-do surfaces when it isn't filed to a project, or when it's been
+ * surfaced to the list (showInTodo). Project tasks otherwise live only in the Projects section —
+ * the same rule the web app uses (lib/store.isTodoTask), kept here so the phone matches exactly.
+ */
+export function isTodoTask(task: Task): boolean {
+  return !task.projectId || !!task.showInTodo;
+}
+
+/** Open tasks that belong on the phone's to-do surfaces (the "Now" list, the day's counters). */
+export function todoOpenTasks(state: AppState): Task[] {
+  return openTasks(state).filter(isTodoTask);
+}
+
 export function isOverdue(task: Task): boolean {
   return !isClosed(task) && relDue(task.due).tone === 'overdue';
 }
@@ -38,7 +52,7 @@ export function isDueToday(task: Task): boolean {
  * date), or anything due today or overdue.
  */
 export function todaysTasks(state: AppState): Task[] {
-  return openTasks(state)
+  return todoOpenTasks(state)
     .filter(
       (t) =>
         t.priority === 'P0' ||

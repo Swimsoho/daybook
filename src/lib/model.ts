@@ -77,6 +77,14 @@ export interface Task {
   projectId?: string
   /** which phase of the project this sits in. Undefined = filed to the project but no phase yet. */
   milestoneId?: string
+  /**
+   * A task filed to a project (has a `projectId`) lives inside that project and is kept OFF the
+   * main to-do surfaces — Today, the Tasks list, the phone's "Now" — so project work doesn't drown
+   * the day-to-day list. Set this true to also surface it on the to-do list: it stays part of the
+   * project, just pinned to the top-level list as something to act on now. Loose tasks (no
+   * projectId) are always on the to-do list and ignore this flag.
+   */
+  showInTodo?: boolean
   parentId?: string
   /**
    * Other tasks that have to finish first. This is a real dependency between two
