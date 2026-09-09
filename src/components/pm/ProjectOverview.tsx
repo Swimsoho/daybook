@@ -36,11 +36,13 @@ const PRIO_RANK: Record<Priority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 }
 const isOpen = (t: Task) => t.status !== 'done' && t.status !== 'dropped' && t.status !== 'inbox'
 const isFinished = (t: Task) => t.status === 'done' || t.status === 'dropped'
 
-export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGotoBoard }: {
+export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGoto }: {
   projectId: string
   onOpenTask: (task: Task) => void
   onSaveNotes: (notes: string) => void
-  onGotoBoard: () => void
+  /** Jump to another tab of the project (board / phases / timeline / list). Powers the click-through
+      from the metric tiles and the phase rows. */
+  onGoto: (tab: string) => void
 }) {
   const { state } = useStore()
   const project = state.projects.find(p => p.id === projectId)
@@ -67,11 +69,18 @@ export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGotoBoar
     .filter(t => !!t.due && daysSince(t.due) > 0)
     .sort((a, b) => (a.due ?? '').localeCompare(b.due ?? ''))
 
+  // "Up next" now surfaces the actual open tasks so you can click straight into any of them —
+  // scheduled ones first (soonest due), then undated ones by priority. (Overdue has its own list.)
   const upNext = openTasks
-    .filter(t => !!t.due && daysSince(t.due) <= 0) // due today or in the future
-    .sort((a, b) =>
-      (a.due ?? '').localeCompare(b.due ?? '') || PRIO_RANK[a.priority] - PRIO_RANK[b.priority])
-    .slice(0, 6)
+    .filter(t => !(t.due && daysSince(t.due) > 0)) // exclude overdue (shown separately)
+    .sort((a, b) => {
+      const ad = a.due ?? '', bd = b.due ?? ''
+      if (ad && bd) return ad.localeCompare(bd) || PRIO_RANK[a.priority] - PRIO_RANK[b.priority]
+      if (ad) return -1
+      if (bd) return 1
+      return PRIO_RANK[a.priority] - PRIO_RANK[b.priority]
+    })
+    .slice(0, 8)
 
   const notesDirty = notes !== (project.notes ?? '')
   const saveNotes = () => { if (notesDirty) onSaveNotes(notes) }
@@ -85,12 +94,13 @@ export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGotoBoar
           value={`${stats.pct}%`}
           accent={stats.pct >= 100 ? GREEN : ORANGE}
           bar={stats.pct}
+          onClick={() => onGoto('board')}
         />
-        <Tile label="Open" value={stats.open} accent={ORANGE} />
-        <Tile label="Overdue" value={stats.overdue} accent={stats.overdue > 0 ? DANGER : MUTED} danger={stats.overdue > 0} />
-        <Tile label="In progress" value={stats.inProgress} accent={ORANGE} />
-        <Tile label="Blocked" value={stats.blocked} accent={stats.blocked > 0 ? AMBER : MUTED} amber={stats.blocked > 0} />
-        <Tile label="Phases" value={`${stats.phasesDone}/${stats.phases}`} accent={GREEN} />
+        <Tile label="Open" value={stats.open} accent={ORANGE} onClick={() => onGoto('list')} />
+        <Tile label="Overdue" value={stats.overdue} accent={stats.overdue > 0 ? DANGER : MUTED} danger={stats.overdue > 0} onClick={() => onGoto('list')} />
+        <Tile label="In progress" value={stats.inProgress} accent={ORANGE} onClick={() => onGoto('board')} />
+        <Tile label="Blocked" value={stats.blocked} accent={stats.blocked > 0 ? AMBER : MUTED} amber={stats.blocked > 0} onClick={() => onGoto('list')} />
+        <Tile label="Phases" value={`${stats.phasesDone}/${stats.phases}`} accent={GREEN} onClick={() => onGoto('phases')} />
       </div>
 
       {/* 2 · HEALTH STRIP ------------------------------------------------- */}
@@ -111,7 +121,7 @@ export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGotoBoar
         {phases.length === 0 ? (
           <p className="text-[13px] text-muted-foreground mt-1">
             No phases yet. Break the project into stages on the{' '}
-            <button onClick={onGotoBoard} className="text-primary underline-offset-2 hover:underline font-medium">Phases tab</button>.
+            <button onClick={() => onGoto('phases')} className="text-primary underline-offset-2 hover:underline font-medium">Phases tab</button>.
           </p>
         ) : (
           <div className="flex flex-col gap-3 mt-1">
@@ -122,7 +132,7 @@ export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGotoBoar
               const pct = total ? Math.round((done / total) * 100) : 0
               const off = ph.status === 'done'
               return (
-                <div key={ph.id} className="min-w-0">
+                <button key={ph.id} type="button" onClick={() => onGoto('phases')} title="Open the Phases tab" className="min-w-0 text-left rounded-sm -mx-1 px-1 py-0.5 hover:bg-accent/60 transition-colors">
                   <div className="flex items-baseline justify-between gap-3 mb-1">
                     <span className={cn('text-[13px] font-medium truncate', off && 'text-muted-foreground')}>{ph.name}</span>
                     <span className="flex items-center gap-2.5 shrink-0 text-[11.5px] tabular text-muted-foreground">
@@ -136,7 +146,7 @@ export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGotoBoar
                       style={{ width: `${pct}%`, background: off ? MUTED : (pct >= 100 ? GREEN : ORANGE) }}
                     />
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>
@@ -162,7 +172,7 @@ export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGotoBoar
             <p className="text-[13px] text-muted-foreground mt-1">
               {stats.open === 0
                 ? 'No open tasks.'
-                : <>Nothing scheduled. Add due dates on the <button onClick={onGotoBoard} className="text-primary underline-offset-2 hover:underline font-medium">Board</button>.</>}
+                : <>Nothing scheduled. Add due dates on the <button onClick={() => onGoto('board')} className="text-primary underline-offset-2 hover:underline font-medium">Board</button>.</>}
             </p>
           ) : (
             <ul className="flex flex-col divide-y divide-border/70 -mx-1 mt-0.5">
@@ -221,13 +231,15 @@ export function ProjectOverview({ projectId, onOpenTask, onSaveNotes, onGotoBoar
 
 // ─── pieces ────────────────────────────────────────────────────────────────
 
-function Tile({ label, value, accent, bar, danger, amber }: {
-  label: string; value: React.ReactNode; accent: string; bar?: number; danger?: boolean; amber?: boolean
+function Tile({ label, value, accent, bar, danger, amber, onClick }: {
+  label: string; value: React.ReactNode; accent: string; bar?: number; danger?: boolean; amber?: boolean; onClick?: () => void
 }) {
   const numColor = danger ? DANGER : amber ? AMBER : accent
   return (
-    <div
-      className="relative rounded-lg border border-border bg-card shadow-sm px-3 py-2.5 flex flex-col gap-1 min-w-0 overflow-hidden"
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn('relative rounded-lg border border-border bg-card shadow-sm px-3 py-2.5 flex flex-col gap-1 min-w-0 overflow-hidden text-left', onClick && 'hover:-translate-y-0.5 hover:shadow transition-all cursor-pointer')}
       style={{ background: `color-mix(in srgb, ${accent} 5%, hsl(var(--card)))` }}
     >
       <span aria-hidden className="absolute inset-x-0 top-0 h-[2.5px]" style={{ background: accent }} />
@@ -238,7 +250,7 @@ function Tile({ label, value, accent, bar, danger, amber }: {
         </div>
       )}
       <span className="text-[10.5px] uppercase tracking-wide text-muted-foreground truncate leading-tight">{label}</span>
-    </div>
+    </button>
   )
 }
 

@@ -1,6 +1,6 @@
 # Daybook — Full Feature & Technical Manual
 
-*Covers the app as built through v114 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
+*Covers the app as built through v115 (September 2026). Written for Craig as a complete reference — what's built, how it behaves, and how it's put together under the hood.*
 
 ---
 
@@ -518,6 +518,10 @@ None of these are things the rest of the app depends on to function — they're 
 63. **v76** — Watch‑list platforms now **stay current on their own** (scheduled auto‑refresh).
 
     v75 gave you the *button* to look up where a title streams; v76 makes it **self‑maintaining** so you don't have to press it. A new daily scheduled job (`refresh-watch-providers`, driven by pg_cron exactly like the morning reminder) re‑checks current US providers on TMDB for the entries in every Movies / TV / watch‑list collection and updates their Platform / "Where to watch" column — refreshing the **stalest ones first**, up to a per‑run cap, so a big list keeps itself accurate as titles move between services. The in‑app **"Where to watch (US)"** button still handles on‑demand and newly‑added titles; the scheduled job keeps the rest fresh in the background. Each entry gets an invisible "last refreshed" stamp so the job knows what to prioritise. Setup adds one step to the streaming setup doc: deploy the `refresh-watch-providers` function and apply migration `0005` (its daily cron) — and it reuses the **same TMDB key** and the pg_cron/pg_net you already enabled for reminders.
+
+99. **v115** — **Project Overview is click‑through, and you can set a task's stage without opening Edit.**
+
+    Two follow‑ups on the project workspace. **(a) The Overview drills in.** The six metric tiles are now buttons — **% complete / Open / In progress** jump to the relevant view, **Overdue / Blocked** open the task **List**, and **Phases** opens the **Phases** tab; each **phase row** is clickable to the Phases tab too. And **Up next** now lists your actual open tasks (scheduled ones first, then undated by priority) instead of only dated ones, so you can click straight into any task from the overview rather than staring at an empty list. **(b) Assign a stage in one click.** Open any task (from the board, a list, the overview) and the quick view now has a **Stage / phase** dropdown right under Move‑to — pick a phase and it **saves immediately**, no need to open the full editor. It only appears for tasks in a real project that has phases.
 
 98. **v114** — **Labels vs. Projects — the two‑tier split, so only real projects live on the Projects page.**
 

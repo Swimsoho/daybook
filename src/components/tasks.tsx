@@ -1413,6 +1413,30 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                   />
                 )
               })()}
+              {/* Stage (phase) — appears when this task is in a real project that has phases, so you
+                  can assign it a stage right here and it saves immediately, no full edit needed. */}
+              {(() => {
+                const proj = task.projectId ? state.projects.find(p => p.id === task.projectId) : null
+                if (!proj || proj.kind === 'label') return null
+                const phases = projectMilestones(state, proj.id)
+                if (phases.length === 0) return null
+                return (
+                  <Select
+                    value={task.milestoneId ?? '__none__'}
+                    onValueChange={v => {
+                      const m = phases.find(x => x.id === v)
+                      updateTask(task.id, { milestoneId: v === '__none__' ? undefined : v }, m ? `stage → ${m.name}` : 'stage cleared')
+                      toast(m ? `Stage: ${m.name}` : 'Stage cleared')
+                    }}
+                  >
+                    <SelectTrigger className="h-7 w-[150px] text-[11.5px] bg-card"><SelectValue placeholder="Stage / phase" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No stage</SelectItem>
+                      {phases.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )
+              })()}
               {(() => {
                 const catsHere = categoriesForArea(state.categories, task.areaId, task.categoryIds[0])
                 const b = withPopularFirst(catsHere, c => categoryUsage(state, c.id), c => c.name)

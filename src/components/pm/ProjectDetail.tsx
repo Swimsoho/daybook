@@ -152,7 +152,7 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
           projectId={project.id}
           onOpenTask={onOpenTask}
           onSaveNotes={notes => updateProject(project.id, { notes })}
-          onGotoBoard={() => setTab('phases')}
+          onGoto={t => setTab(t as Tab)}
         />
       )}
       {tab === 'board' && (
