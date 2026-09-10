@@ -1243,7 +1243,7 @@ function TaskShare({ task }: { task: Task }) {
 // ---------- Task detail sheet (with per-item history) ----------
 
 export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | null; onClose: () => void; onEdit: (t: Task) => void }) {
-  const { state, completeTask, calledFollowUp, snoozeTask, updateTask, dropTask, noteTask, addProject } = useStore()
+  const { state, completeTask, calledFollowUp, snoozeTask, updateTask, dropTask, noteTask, addProject, moveTaskToTracker, reinsertTasks, deleteEntries } = useStore()
   // Always read the LIVE task from the store — the `task` passed in is a snapshot from when the
   // panel opened, so without this, changes made here (Type, Priority, Status, Move-to) wouldn't
   // visibly update the buttons/labels until the panel was closed and reopened.
@@ -1530,6 +1530,35 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                     popularCount={b.popularCount > 0 ? b.popularCount + 1 : 0}
                     placeholder="Action" searchPlaceholder="Search actions…"
                     className="h-7 w-[120px] text-[11.5px] bg-card"
+                  />
+                )
+              })()}
+              {/* Move OUT of tasks into a Collection (a tracker). This isn't a task any more — it
+                  becomes an entry in the chosen tracker, so it lives with your other collected items. */}
+              {(() => {
+                const trackers = state.trackers.filter(t => t.active)
+                if (trackers.length === 0) return null
+                return (
+                  <SearchableSelect
+                    value="__none__"
+                    onValueChange={v => {
+                      if (v === '__none__') return
+                      const trk = state.trackers.find(t => t.id === v)
+                      const res = moveTaskToTracker(task.id, v)
+                      if (!res) { toast.error('Couldn’t move that'); return }
+                      toast.success(`Moved to ${trk?.name ?? 'collection'}`, {
+                        description: 'It’s now an entry in Collections, not a task.',
+                        action: { label: 'Undo', onClick: () => { deleteEntries([res.entry.id]); reinsertTasks(res.removedTasks) } },
+                        duration: 6000,
+                      })
+                      onClose()
+                    }}
+                    options={[
+                      { value: '__none__', label: 'Move to a collection…' },
+                      ...trackers.map(t => ({ value: t.id, label: `${state.collections.find(c => c.id === t.collectionId)?.name ? state.collections.find(c => c.id === t.collectionId)!.name + ' · ' : ''}${t.name}` })),
+                    ]}
+                    placeholder="Move to a collection…" searchPlaceholder="Search collections…"
+                    className="h-7 w-[170px] text-[11.5px] bg-card"
                   />
                 )
               })()}

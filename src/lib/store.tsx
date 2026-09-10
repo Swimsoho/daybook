@@ -118,6 +118,9 @@ export interface Store {
   acceptCapture: (id: string, overrides?: { areaId?: string; projectId?: string; categoryIds?: string[]; actionIds?: string[]; trackerId?: string; title?: string; due?: string }) => void
   dismissCapture: (id: string) => void
   addEntry: (trackerId: string, values: Entry['values']) => void
+  // Convert a task into a Collection entry in the given tracker and remove the task. Returns the new
+  // entry + the removed task(s) so the caller can undo.
+  moveTaskToTracker: (taskId: string, trackerId: string) => { entry: Entry; removedTasks: Task[] } | undefined
   updateEntry: (id: string, values: Entry['values']) => void
   // Multi-select actions in Collections. `patchEntries` merges a partial value map into every
   // listed entry (bulk "mark Watched", bulk rating, bulk set any single-choice field).
@@ -760,6 +763,34 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
       addEntry(trackerId, values) {
         const e: Entry = { id: uid('e'), trackerId, values, created: today() }
         withAudit(s => ({ ...s, entries: [...s.entries, e] }), auditEvent('created', 'entry', e.id, String(Object.values(values)[0] ?? '')))
+      },
+      // Move a task out of the to-do world and into a Collection: create an entry in the chosen
+      // tracker (title → its title column, notes → a long-text column if it has one, due → a date
+      // column if it has one, status → the first option) and remove the task. Returns the new entry
+      // so the caller can offer an undo.
+      moveTaskToTracker(taskId, trackerId) {
+        const task = state.tasks.find(t => t.id === taskId)
+        const trk = state.trackers.find(t => t.id === trackerId)
+        if (!task || !trk) return undefined
+        const titleCol = trk.columns.find(c => c.isTitle)?.key ?? trk.columns[0]?.key ?? 'name'
+        const longCol = trk.columns.find(c => c.type === 'longtext' && c.key !== titleCol)
+        const dateCol = trk.columns.find(c => c.type === 'date')
+        const statusCol = trk.columns.find(c => c.type === 'status' && (c.options?.length ?? 0) > 0)
+        const values: Entry['values'] = { [titleCol]: task.title }
+        if (longCol && task.notes) values[longCol.key] = task.notes
+        if (dateCol && task.due) values[dateCol.key] = task.due
+        if (statusCol) values[statusCol.key] = statusCol.options![0]
+        const entry: Entry = { id: uid('e'), trackerId, values, created: today() }
+        const removed = state.tasks.filter(t => t.id === taskId || t.parentId === taskId)
+        withAudit(
+          s => ({
+            ...s,
+            entries: [...s.entries, entry],
+            tasks: s.tasks.filter(t => t.id !== taskId && t.parentId !== taskId),
+          }),
+          auditEvent('moved', 'task', taskId, `“${task.title}” → ${trk.name} (Collections)`),
+        )
+        return { entry, removedTasks: removed }
       },
       updateEntry(id, values) {
         withAudit(
