@@ -16,7 +16,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
-  Priority, PRIORITY_DESC, PRIORITY_LABELS, STATUS_LABELS, Task, TaskStatus, TaskType, TYPE_LABELS, fmtDate, today, addDays, daysSince,
+  Priority, PRIORITY_DESC, PRIORITY_LABELS, STATUS_LABELS, statusTint, Task, TaskStatus, TaskType, TYPE_LABELS, fmtDate, today, addDays, daysSince,
 } from '@/lib/model'
 import {
   actionUsage, areaUsage, categoriesForArea, categoryUsage, projectUsage, rollup, subtasksOf, useStore, vendorUsage, withPopularFirst,
@@ -347,7 +347,8 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
               if (v === 'done') { completeTask(task.id); toast.success('Done — archived') }
               else updateTask(task.id, { status: v, waitingSince: v === 'waiting' ? today() : task.waitingSince }, `status → ${STATUS_LABELS[v]}`)
             }}
-            className="hidden sm:block h-6 max-w-[96px] shrink-0 text-[10.5px] border border-border rounded-sm bg-background px-1 text-muted-foreground hover:border-input hover:text-foreground cursor-pointer outline-none"
+            style={{ background: statusTint(task.status).bg, borderColor: statusTint(task.status).border, color: statusTint(task.status).text }}
+            className="hidden sm:block h-6 max-w-[104px] shrink-0 text-[10.5px] font-medium border rounded-sm px-1 cursor-pointer outline-none"
           >
             {(['inbox', 'next', 'in-progress', 'waiting', 'done'] as TaskStatus[])
               .filter(s => s !== 'inbox' || task.status === 'inbox')
@@ -1660,7 +1661,7 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
         </div>
         <DialogFooter className="items-center">
           <span className="mr-auto text-[11px] text-muted-foreground hidden sm:inline">Changes here save automatically</span>
-          <Button variant="outline" onClick={() => { if (!printTask(state, task)) toast.error('Allow pop-ups to print — then try again.') }} title="Print or save this task as a PDF">
+          <Button variant="outline" onClick={async () => { toast('Preparing the printout…'); if (!(await printTask(state, task))) toast.error('Couldn’t open the print view.') }} title="Print or save this task as a PDF">
             <Printer className="h-3.5 w-3.5 mr-1.5" />Print
           </Button>
           <Button variant="outline" onClick={() => { onClose(); onEdit(task) }}>Edit</Button>

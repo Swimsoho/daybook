@@ -84,7 +84,7 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: hm.dot }} />{hm.label}
               </span>
               <button onClick={() => setEditing(true)} title="Edit project details" className="ml-1 grid place-items-center h-6 w-6 rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
-              <button onClick={() => { if (!printProject(state, project)) toast.error('Allow pop-ups to print — then try again.') }} title="Print or save this project as a PDF" className="inline-flex items-center gap-1 h-6 rounded-sm border border-border bg-card px-2 text-[11.5px] text-muted-foreground hover:bg-accent hover:text-foreground"><Printer className="h-3.5 w-3.5" />Print</button>
+              <button onClick={async () => { toast('Preparing the report…'); if (!(await printProject(state, project))) toast.error('Couldn’t open the print view.') }} title="Generate a printable PDF report of this project" className="inline-flex items-center gap-1.5 h-7 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-[12px] font-medium text-primary hover:bg-primary hover:text-primary-foreground transition-colors"><Printer className="h-3.5 w-3.5" />PDF report</button>
             </div>
             {project.outcome && <p className="text-[13.5px] text-muted-foreground mt-1 italic">Goal: {project.outcome}</p>}
             {/* progress + counts */}

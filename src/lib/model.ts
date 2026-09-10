@@ -584,6 +584,27 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   'dropped': 'Dropped',
 }
 
+// A coordinated colour per task status, so status reads at a glance and never clashes with the
+// priority palette (which lives in its own column). Distinct hues: blue = queued/next,
+// amber = actively in progress, violet = waiting on someone, green = done, grey = inbox/dropped.
+export const STATUS_COLOR: Record<TaskStatus, string> = {
+  'inbox': 'hsl(220 9% 52%)',
+  'next': 'hsl(215 55% 50%)',
+  'in-progress': 'hsl(35 80% 46%)',
+  'waiting': 'hsl(275 35% 54%)',
+  'done': 'hsl(152 30% 38%)',
+  'dropped': 'hsl(220 9% 60%)',
+}
+// Subtle tint set for a status pill / control: a tinted fill, a matching border and readable text.
+export function statusTint(s: TaskStatus): { bg: string; border: string; text: string } {
+  const c = STATUS_COLOR[s]
+  return {
+    bg: `color-mix(in srgb, ${c} 12%, hsl(var(--card)))`,
+    border: `color-mix(in srgb, ${c} 45%, transparent)`,
+    text: `color-mix(in srgb, ${c} 78%, hsl(var(--foreground)))`,
+  }
+}
+
 export const TYPE_LABELS: Record<TaskType, string> = {
   todo: 'To-do',
   call: 'To-call',

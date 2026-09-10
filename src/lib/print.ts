@@ -9,6 +9,22 @@ import { projectMilestones } from './milestones'
 import {
   projectStats, projectHealth, HEALTH_META, projectMembers, projectOwnerMember, projectMember,
 } from './projects'
+import { getAttachmentUrl } from './attachments'
+
+// Resolve signed URLs for the image attachments so they can be embedded as real <img> in the
+// printout (not just listed). Non-images are left to the file list.
+async function imageSrcs(files: { id: string; name: string; path: string; type: string }[]) {
+  const imgs = files.filter(f => f.type.startsWith('image/'))
+  const out = await Promise.all(imgs.map(async f => ({ f, url: await getAttachmentUrl(f.path) })))
+  return out.filter(x => !!x.url) as { f: typeof imgs[number]; url: string }[]
+}
+
+function imagesSection(imgs: { f: { name: string }; url: string }[]): string {
+  if (!imgs.length) return ''
+  return `<h2>Images</h2>${imgs.map(x =>
+    `<figure style="margin:10px 0;break-inside:avoid"><img src="${esc(x.url)}" style="max-width:100%;max-height:460px;border:1px solid var(--line);border-radius:6px" /><figcaption class="muted" style="margin-top:4px">${esc(x.f.name)}</figcaption></figure>`,
+  ).join('')}`
+}
 
 const esc = (s: unknown): string =>
   String(s ?? '')
@@ -65,14 +81,35 @@ function shell(title: string, subtitle: string, body: string): string {
   ${body}
   <div class="foot"><span>Daybook</span><span>Printed ${esc(fmtDateLong(new Date().toISOString().slice(0,10)))}</span></div>
 </div>
-<script>window.onload = function(){ setTimeout(function(){ window.print(); }, 250); };</script>
+<script>
+window.onload = function(){
+  var pending = Array.prototype.slice.call(document.images).filter(function(i){ return !i.complete; });
+  var go = function(){ setTimeout(function(){ window.print(); }, 200); };
+  if (!pending.length) { go(); return; }
+  var left = pending.length;
+  var done = function(){ if (--left <= 0) go(); };
+  pending.forEach(function(i){ i.addEventListener('load', done); i.addEventListener('error', done); });
+  setTimeout(go, 5000); // safety: print even if an image is slow
+};
+</script>
 </body></html>`
 }
 
-function openWindow(html: string) {
-  const w = window.open('', '_blank', 'width=900,height=1100')
-  if (!w) return false
-  w.document.open(); w.document.write(html); w.document.close()
+// Print via a hidden iframe rather than a pop-up window: pop-up blockers silently kill window.open
+// (which is why "Print" seemed to just print the app page), whereas an iframe always works and the
+// iframe's own print() prints only the report, not the surrounding app.
+function printViaIframe(html: string): boolean {
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  document.body.appendChild(iframe)
+  const doc = iframe.contentWindow?.document
+  if (!doc) { iframe.remove(); return false }
+  // Clean the iframe up a little after the print dialog has had time to open.
+  const cleanup = () => setTimeout(() => iframe.remove(), 60000)
+  iframe.contentWindow?.addEventListener('afterprint', () => iframe.remove())
+  doc.open(); doc.write(html); doc.close()
+  cleanup()
   return true
 }
 
@@ -82,7 +119,7 @@ function rows(items: [string, string | undefined][]): string {
 }
 
 // ---- Task ----
-export function printTask(state: AppState, task: Task): boolean {
+export async function printTask(state: AppState, task: Task): Promise<boolean> {
   const scheme = state.settings.priorityScheme
   const area = state.areas.find(a => a.id === task.areaId)
   const project = state.projects.find(p => p.id === task.projectId)
@@ -122,18 +159,19 @@ export function printTask(state: AppState, task: Task): boolean {
     ).join('')
   }<div class="entry"><span class="date">${esc(fmtDate(task.created))}</span><span>created · source: ${esc(task.source)}</span></div></div>`
 
+  const imgsBlock = imagesSection(await imageSrcs(atts))
   const attBlock = atts.length
     ? `<h2>Attachments (${atts.length})</h2><ul class="docs">${atts.map(a => `<li><span>${esc(a.name)}</span><span class="muted">${esc(a.type)} · ${(a.size/1024).toFixed(0)} KB</span></li>`).join('')}</ul>`
     : ''
 
   const body = `<div class="chips">${chips}</div>${task.callAbout ? `<p class="muted">About: ${esc(task.callAbout)}</p>` : ''}
-    <h2>Details</h2><div>${meta}</div>${notesBlock}${attBlock}${logBlock}`
+    <h2>Details</h2><div>${meta}</div>${notesBlock}${imgsBlock}${attBlock}${logBlock}`
 
-  return openWindow(shell(task.title, `Task${area ? ` · ${esc(area.name)}` : ''}`, body))
+  return printViaIframe(shell(task.title, `Task${area ? ` · ${esc(area.name)}` : ''}`, body))
 }
 
 // ---- Project ----
-export function printProject(state: AppState, project: Project): boolean {
+export async function printProject(state: AppState, project: Project): Promise<boolean> {
   const scheme = state.settings.priorityScheme
   const area = state.areas.find(a => a.id === project.areaId)
   const stats = projectStats(state, project.id)
@@ -185,13 +223,14 @@ export function printProject(state: AppState, project: Project): boolean {
     : ''
 
   const notesBlock = project.notes ? `<h2>Notes</h2><div class="note">${nl2br(project.notes)}</div>` : ''
+  const imgsBlock = imagesSection(await imageSrcs(docs))
 
   const body = `<div class="chips">${chips}</div>${project.outcome ? `<p class="muted"><b>Goal:</b> ${esc(project.outcome)}</p>` : ''}
     <div class="bar"><i style="width:${stats.pct}%"></i></div>
     <h2>Summary</h2><div>${meta}</div>${notesBlock}
     <h2>Work — ${phases.length} phase${phases.length === 1 ? '' : 's'}, ${tasks.length} task${tasks.length === 1 ? '' : 's'}</h2>
     ${phaseBlocks}${noPhaseBlock || (phases.length === 0 && tasks.length === 0 ? '<p class="muted">No tasks yet.</p>' : '')}
-    ${docsBlock}`
+    ${imgsBlock}${docsBlock}`
 
-  return openWindow(shell(project.name, `Project${area ? ` · ${esc(area.name)}` : ''}`, body))
+  return printViaIframe(shell(project.name, `Project${area ? ` · ${esc(area.name)}` : ''}`, body))
 }
