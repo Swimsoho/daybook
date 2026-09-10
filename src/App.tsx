@@ -12,6 +12,7 @@ import { emptyState, seedState } from '@/lib/seed'
 import { AuthGate, Cloud, CloudProvider, PortalHandle, onRemoteState } from '@/lib/cloud'
 import { useSpeech } from '@/hooks/useSpeech'
 import { ProjectFilterBar } from '@/components/ProjectFilter'
+import { GlobalSearch } from '@/components/GlobalSearch'
 import Dashboard from '@/pages/Dashboard'
 import TasksPage from '@/pages/TasksPage'
 import PeoplePage from '@/pages/PeoplePage'
@@ -339,8 +340,9 @@ function Shell({ impersonation, onImpersonate, cloud }: { impersonation?: Impers
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-3 min-w-0 md:ml-auto">
-            <span className="hidden md:block text-[11.5px] text-muted-foreground tabular whitespace-nowrap">{fmtDateLong(today())}</span>
-            <div className="relative flex-1 md:flex-none md:w-56 lg:w-72">
+            <span className="hidden lg:block text-[11.5px] text-muted-foreground tabular whitespace-nowrap">{fmtDateLong(today())}</span>
+            <GlobalSearch onNavigate={p => setPage(p as Page)} />
+            <div className="relative flex-1 md:flex-none md:w-48 lg:w-60">
               <input
                 value={quick}
                 onChange={e => setQuick(e.target.value)}

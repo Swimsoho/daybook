@@ -8,6 +8,7 @@ import { PersonDetailSheet } from '@/mobile/components/sheets/PersonDetailSheet'
 import { QuickCaptureSheet } from '@/mobile/components/sheets/QuickCaptureSheet'
 import { TaskDetailSheet } from '@/mobile/components/sheets/TaskDetailSheet'
 import { formatHeaderDate } from '@/mobile/lib/dates'
+import { GlobalSearch } from '@/components/GlobalSearch'
 import type { SubPage, TabId, TaskFilter } from '@/mobile/lib/types'
 import { Inbox } from '@/mobile/pages/Inbox'
 import { More } from '@/mobile/pages/More'
@@ -153,6 +154,17 @@ export function MobileShell({
           </span>
         </div>
         <p className="m-0 mt-[3px] text-[12px] text-muted-foreground">{subtitle}</p>
+        <div className="mt-2.5">
+          <GlobalSearch
+            className="relative block w-full"
+            onOpenTask={id => setTaskDetailId(id)}
+            onNavigate={p => {
+              if (p === 'projects') { setSub('projects'); return }
+              if (p === 'people') { setTab('people'); setSub(null); return }
+              setTab('tasks'); setSub(null)
+            }}
+          />
+        </div>
       </header>
 
       <main className="min-h-0 flex-1 overflow-auto px-4 pb-[90px] pt-[14px]">
