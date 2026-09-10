@@ -57,6 +57,9 @@ export default function SharedProjectPage({ token }: { token: string }) {
   const [updateTaskId, setUpdateTaskId] = useState<string>('')
   const [posting, setPosting] = useState(false)
   const [posted, setPosted] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [newPhase, setNewPhase] = useState<string>('')
+  const [adding, setAdding] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -95,6 +98,19 @@ export default function SharedProjectPage({ token }: { token: string }) {
     setBusyTask(null)
     if (res.error) { alert('Could not update — please try again.'); return }
     setSnap(s => s ? { ...s, tasks: s.tasks.map(t => t.id === taskId ? { ...t, status: 'done' } : t) } : s)
+  }
+
+  async function addTask() {
+    if (!name) { setEditingName(true); return }
+    const title = newTitle.trim()
+    if (!title) return
+    setAdding(true)
+    const res = await post({ action: 'add_task', token, byName: name, title, phaseId: newPhase || undefined })
+    setAdding(false)
+    if (res.error) { alert('Could not add the task — please try again.'); return }
+    const t = (res.data as { task?: STask })?.task
+    if (t) setSnap(s => s ? { ...s, tasks: [...s.tasks, t] } : s)
+    setNewTitle(''); setNewPhase('')
   }
 
   async function postUpdate() {
@@ -199,6 +215,25 @@ export default function SharedProjectPage({ token }: { token: string }) {
                   <TaskList tasks={noPhase} onDone={markDone} busyTask={busyTask} />
                 </div>
               )}
+
+              {/* add a task */}
+              <div className="mt-3 flex items-center gap-2 flex-wrap border-t border-dashed border-border pt-3">
+                <input
+                  value={newTitle} onChange={e => setNewTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addTask() }}
+                  placeholder={name ? 'Add a task to this project…' : 'Enter your name above, then add a task…'}
+                  className="flex-1 min-w-[180px] h-8 rounded-md border border-border bg-card px-2.5 text-[13px] outline-none focus:border-primary"
+                />
+                {snap.phases.length > 0 && (
+                  <select value={newPhase} onChange={e => setNewPhase(e.target.value)} className="h-8 rounded-md border border-border bg-card px-2 text-[12px] text-muted-foreground outline-none">
+                    <option value="">No phase</option>
+                    {snap.phases.map(ph => <option key={ph.id} value={ph.id}>{ph.name}</option>)}
+                  </select>
+                )}
+                <button onClick={addTask} disabled={adding || !newTitle.trim()} className="h-8 rounded-md border border-primary/40 bg-primary/10 px-3 text-[12.5px] font-medium text-primary hover:bg-primary hover:text-primary-foreground transition-colors disabled:opacity-50 inline-flex items-center gap-1.5">
+                  {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}Add task
+                </button>
+              </div>
             </Section>
 
             {/* post an update */}

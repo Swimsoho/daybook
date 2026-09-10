@@ -164,6 +164,37 @@ Deno.serve(async (req) => {
       return json({ ok: true })
     }
 
+    if (action === 'add_task') {
+      const { token, byName, title, phaseId } = body as { token?: string; byName?: string; title?: string; phaseId?: string }
+      if (!token || !title || !title.trim()) return json({ error: 'token and title are required' }, 400)
+      const { data: share } = await admin.from('project_shares').select('*').eq('token', token).maybeSingle()
+      if (!share || share.revoked) return json({ error: 'not_found' }, 404)
+      const state = await loadState(share.workspace_id)
+      if (!state) return json({ error: 'not_found' }, 404)
+      const project = ((state.projects as Rec[]) ?? []).find(p => p.id === share.project_id)
+      if (!project) return json({ error: 'not_found' }, 404)
+      // Only honour a phase that actually belongs to this project.
+      let milestoneId: string | undefined
+      if (phaseId) {
+        const m = ((state.milestones as Rec[]) ?? []).find(x => x.id === phaseId && x.projectId === share.project_id)
+        if (m) milestoneId = phaseId
+      }
+      const nowIso = new Date().toISOString()
+      const id = `t_${crypto.randomUUID().slice(0, 8)}`
+      const task: Rec = {
+        id, title: title.trim().slice(0, 300), type: 'todo', areaId: project.areaId,
+        projectId: share.project_id, milestoneId, categoryIds: [], priority: 'P2', status: 'next',
+        source: 'manual', created: nowIso.slice(0, 10),
+      }
+      const tasks = (state.tasks as Rec[]) ?? []
+      tasks.push(task)
+      const audit = (state.audit as Rec[]) ?? []
+      const by = (byName ?? '').trim()
+      audit.unshift(auditEntry(by, 'created', 'task', id, `Added via the shared project link${by ? ` by ${by}` : ''}`, nowIso))
+      await admin.from('workspace_state').update({ data: { ...state, tasks, audit }, updated_at: nowIso }).eq('workspace_id', share.workspace_id)
+      return json({ ok: true, task: { id, title: task.title, status: 'next', priority: 'P2', due: null, milestoneId: milestoneId ?? null, assigneeName: null } })
+    }
+
     if (action === 'comment') {
       const { token, taskId, byName, text } = body as { token?: string; taskId?: string; byName?: string; text?: string }
       if (!token || !text || !text.trim()) return json({ error: 'token and text are required' }, 400)
