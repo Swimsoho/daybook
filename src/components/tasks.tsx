@@ -777,8 +777,13 @@ export function TaskDialog({ open, onClose, task, defaults }: {
   const set = (patch: Partial<Task>) => setForm(x => ({ ...x, ...patch }))
   const scheme = state.settings.priorityScheme
 
-  // Real projects are area-scoped; labels (lightweight grouping tags) are offered regardless of area.
+  // This area's real projects lead; projects filed under other areas are still offered (with their
+  // area shown as a hint) so a project you made elsewhere is never hidden — picking one re-homes the
+  // task to that project's area. Labels (lightweight grouping tags) are offered regardless of area.
   const projects = state.projects.filter(p => p.status === 'active' && p.kind !== 'label' && (!f.areaId || p.areaId === f.areaId))
+  const projectsElsewhere = f.areaId
+    ? state.projects.filter(p => p.status === 'active' && p.kind !== 'label' && p.areaId !== f.areaId).sort((a, b) => a.name.localeCompare(b.name))
+    : []
   const labels = state.projects.filter(p => p.status === 'active' && p.kind === 'label')
   const selectedIsLabel = !!f.projectId && state.projects.find(p => p.id === f.projectId)?.kind === 'label'
   const mainCats = categoriesForArea(state.categories, f.areaId, f.categoryIds?.[0])
@@ -886,10 +891,16 @@ export function TaskDialog({ open, onClose, task, defaults }: {
                 <Label className="text-[12px] font-semibold text-foreground/80">Project or label <span className="font-normal text-muted-foreground">— optional</span></Label>
                 <SearchableSelect
                   value={f.projectId ?? 'none'}
-                  onValueChange={v => set({ projectId: v === 'none' ? undefined : v })}
+                  onValueChange={v => {
+                    if (v === 'none') { set({ projectId: undefined }); return }
+                    const p = state.projects.find(x => x.id === v)
+                    // Pick a real project and the task follows it into that project's area.
+                    set({ projectId: v, areaId: p && p.kind !== 'label' ? p.areaId : f.areaId })
+                  }}
                   options={[
                     { value: 'none', label: 'None — loose one-off' },
                     ...projectOptionsBase.ordered.map(p => ({ value: p.id, label: p.name, color: areaColor(p.areaId) })),
+                    ...projectsElsewhere.map(p => ({ value: p.id, label: p.name, hint: state.areas.find(a => a.id === p.areaId)?.name, color: areaColor(p.areaId) })),
                     ...labels.map(l => ({ value: l.id, label: l.name, hint: 'label' })),
                   ]}
                   popularCount={projectOptionsBase.popularCount}
@@ -1420,9 +1431,17 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                 )
               })()}
               {task.areaId && (() => {
-                const projectsHere = state.projects.filter(p => p.areaId === task.areaId && p.kind !== 'label' && (p.status === 'active' || p.status === 'on-hold'))
+                // Every real project is offered — not just ones already in this task's area — so a
+                // project you filed under a different area still shows up here. The task's own area
+                // follows the project you pick (below), so choosing one from another area re-homes it.
+                // This area's projects lead (FREQUENT); the rest carry their area name as a hint.
+                const realProjects = state.projects.filter(p => p.kind !== 'label' && (p.status === 'active' || p.status === 'on-hold'))
+                const here = realProjects.filter(p => p.areaId === task.areaId)
+                const elsewhere = realProjects.filter(p => p.areaId !== task.areaId)
+                  .sort((a, b) => a.name.localeCompare(b.name))
                 const labelsHere = state.projects.filter(p => p.kind === 'label' && p.status === 'active')
-                const b = withPopularFirst(projectsHere, p => projectUsage(state, p.id), p => p.name)
+                const b = withPopularFirst(here, p => projectUsage(state, p.id), p => p.name)
+                const areaName = (id?: string) => state.areas.find(a => a.id === id)?.name
                 return (
                   <SearchableSelect
                     value={task.projectId ?? '__none__'}
@@ -1431,7 +1450,12 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                       updateTask(task.id, { projectId: v === '__none__' ? undefined : v, areaId: p && p.kind !== 'label' ? p.areaId : task.areaId }, p ? `moved to ${p.kind === 'label' ? 'label' : 'project'} ${p.name}` : 'project cleared')
                       toast(p ? `Moved to ${p.name}` : 'No longer tied to a project')
                     }}
-                    options={[{ value: '__none__', label: 'No project' }, ...b.ordered.map(p => ({ value: p.id, label: p.name })), ...labelsHere.map(l => ({ value: l.id, label: l.name, hint: 'label' }))]}
+                    options={[
+                      { value: '__none__', label: 'No project' },
+                      ...b.ordered.map(p => ({ value: p.id, label: p.name })),
+                      ...elsewhere.map(p => ({ value: p.id, label: p.name, hint: areaName(p.areaId) })),
+                      ...labelsHere.map(l => ({ value: l.id, label: l.name, hint: 'label' })),
+                    ]}
                     popularCount={b.popularCount > 0 ? b.popularCount + 1 : 0}
                     placeholder="Project / label" searchPlaceholder="Search, or type to add a label…"
                     onCreate={name => { const proj = addProject({ name, areaId: task.areaId!, kind: 'label' }); updateTask(task.id, { projectId: proj.id }, `labelled ${proj.name}`); toast.success(`Label “${proj.name}” created`) }}
