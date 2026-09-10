@@ -66,6 +66,8 @@ export interface Cloud {
   setSlackUserId: (id: string) => Promise<string | null>
   sendTestMessage: (channel: 'telegram' | 'slack', text?: string) => Promise<string | null>
   shareTask: (task: { id: string; title: string; notes?: string; due?: string }) => Promise<{ token?: string; error?: string }>
+  shareProject: (projectId: string) => Promise<{ token?: string; error?: string }>
+  revokeProjectShare: (token: string) => Promise<string | null>
   // Live "where to watch" lookup (movie/TV trackers) — calls the movie-lookup Edge Function,
   // which returns current US streaming/rent/buy providers from TMDB. Returns a result object,
   // or { error } if the function isn't deployed / the TMDB key isn't set.
@@ -710,6 +712,22 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
       if (error) return { error: error.message }
       if (data?.error) return { error: data.error as string }
       return { token: data.token as string }
+    },
+    // Mint (or reuse) a public, no-login link for a whole project — Phase 1 of inviting someone who
+    // doesn't have Daybook. See supabase/functions/shared-project.
+    shareProject: async projectId => {
+      const { data, error } = await supabase!.functions.invoke('shared-project', {
+        body: { action: 'create', workspaceId: activeWs.id, projectId },
+      })
+      if (error) return { error: error.message }
+      if (data?.error) return { error: data.error as string }
+      return { token: data.token as string }
+    },
+    revokeProjectShare: async token => {
+      const { error } = await supabase!.functions.invoke('shared-project', {
+        body: { action: 'revoke', workspaceId: activeWs.id, token },
+      })
+      return error ? error.message : null
     },
     lookupMovie: async (title, year) => {
       const { data, error } = await supabase!.functions.invoke('movie-lookup', { body: { title, year } })

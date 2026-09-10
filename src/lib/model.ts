@@ -58,6 +58,10 @@ export interface Project {
   // storage + shape as a task's attachments (see TaskAttachment), just filed under the project. Shown
   // on the project's Documents tab.
   documents?: TaskAttachment[]
+  // A public, no-login share link for this project (Overview/header → Share). `token` builds the URL
+  // /share/project/<token>; the shared-project Edge Function serves a read-only view of just this
+  // project. Absent = never shared; revoke clears it.
+  share?: { token: string; createdAt: string }
   notes?: string
   lastActivity: string // ISO date, for stall detection
 }

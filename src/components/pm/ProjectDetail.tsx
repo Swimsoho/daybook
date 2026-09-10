@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowLeft, CalendarRange, FolderOpen, GanttChartSquare, Kanban, LayoutList, Pencil, Plus, Printer, SlidersHorizontal } from 'lucide-react'
+import { ArrowLeft, CalendarRange, Check, Copy, FolderOpen, GanttChartSquare, Kanban, LayoutList, Link2, Loader2, Pencil, Plus, Printer, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,7 @@ import { Project, Task, TaskStatus, PRIORITY_LABELS, STATUS_LABELS, fmtDate } fr
 import { useStore } from '@/lib/store'
 import { projectStats, projectHealth, HEALTH_META } from '@/lib/projects'
 import { printProject } from '@/lib/print'
+import { useCloud } from '@/lib/cloud'
 import { ProjectBoard } from '@/components/ProjectBoard'
 import { TaskRow } from '@/components/tasks'
 import { StatusBoard } from '@/components/pm/StatusBoard'
@@ -44,6 +45,7 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
   const project = state.projects.find(p => p.id === projectId)
   const [tab, setTab] = useState<Tab>('overview')
   const [editing, setEditing] = useState(false)
+  const [sharing, setSharing] = useState(false)
 
   const stats = useMemo(() => project ? projectStats(state, project.id) : null, [state, project])
   if (!project || !stats) return null
@@ -84,6 +86,7 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: hm.dot }} />{hm.label}
               </span>
               <button onClick={() => setEditing(true)} title="Edit project details" className="ml-1 grid place-items-center h-6 w-6 rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+              <button onClick={() => setSharing(true)} title="Share a read-only link to this project (no Daybook account needed)" className="inline-flex items-center gap-1.5 h-7 rounded-md border border-border bg-card px-2.5 text-[12px] font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"><Link2 className="h-3.5 w-3.5" />Share</button>
               <button onClick={async () => { toast('Preparing the report…'); if (!(await printProject(state, project))) toast.error('Couldn’t open the print view.') }} title="Generate a printable PDF report of this project" className="inline-flex items-center gap-1.5 h-7 rounded-md border border-primary/30 bg-primary/10 px-2.5 text-[12px] font-medium text-primary hover:bg-primary hover:text-primary-foreground transition-colors"><Printer className="h-3.5 w-3.5" />PDF report</button>
             </div>
             {project.outcome && <p className="text-[13.5px] text-muted-foreground mt-1 italic">Goal: {project.outcome}</p>}
@@ -181,6 +184,7 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
       {tab === 'documents' && <ProjectDocuments project={project} />}
 
       <ProjectSettingsDialog project={project} open={editing} onClose={() => setEditing(false)} onConverted={onBack} />
+      <ShareProjectDialog project={project} open={sharing} onClose={() => setSharing(false)} />
     </div>
   )
 }
@@ -232,6 +236,75 @@ function ProjectTaskList({ projectId, onOpenTask }: { projectId: string; onOpenT
         {sorted.map(t => <TaskRow key={t.id} task={t} showArea={false} onOpen={onOpenTask} />)}
       </div>
     </div>
+  )
+}
+
+// Public, no-login share link for the whole project (Phase 1 of inviting someone without Daybook).
+// Creates/copies a /share/project/<token> URL that opens a read-only view of just this project.
+function ShareProjectDialog({ project, open, onClose }: { project: Project; open: boolean; onClose: () => void }) {
+  const cloud = useCloud()
+  const { updateProject } = useStore()
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const token = project.share?.token
+  const link = token ? `${window.location.origin}/share/project/${token}` : ''
+
+  async function create() {
+    if (!cloud) return
+    setBusy(true)
+    const { token: t, error } = await cloud.shareProject(project.id)
+    setBusy(false)
+    if (error || !t) { toast.error(error ?? 'Couldn’t create the link'); return }
+    updateProject(project.id, { share: { token: t, createdAt: new Date().toISOString() } })
+    toast.success('Share link ready')
+  }
+  async function revoke() {
+    if (!cloud || !token) return
+    setBusy(true)
+    await cloud.revokeProjectShare(token)
+    setBusy(false)
+    updateProject(project.id, { share: undefined })
+    toast('Link turned off')
+  }
+  function copy() {
+    navigator.clipboard?.writeText(link).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={o => !o && onClose()}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader><DialogTitle className="font-display text-lg">Share “{project.name}”</DialogTitle></DialogHeader>
+        {!cloud ? (
+          <p className="text-[13px] text-muted-foreground">Sign in to a real account to create a shareable link.</p>
+        ) : !token ? (
+          <div className="grid gap-3">
+            <p className="text-[13px] text-muted-foreground">
+              Create a link anyone can open — <b className="text-foreground">no Daybook account needed</b>. They see a clean,
+              <b className="text-foreground"> read-only</b> view of this project: progress, phases and tasks, the team, documents and notes.
+              It stays live, so it always shows the current state. You can turn it off any time.
+            </p>
+            <Button onClick={create} disabled={busy} className="justify-self-start">
+              {busy ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Link2 className="h-4 w-4 mr-1.5" />}Create share link
+            </Button>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            <p className="text-[13px] text-muted-foreground">Anyone with this link can view the project (read-only, no login):</p>
+            <div className="flex items-center gap-2">
+              <Input readOnly value={link} onFocus={e => e.currentTarget.select()} className="text-[12.5px]" />
+              <Button variant="outline" onClick={copy} className="shrink-0">
+                {copied ? <Check className="h-4 w-4 mr-1.5 text-[hsl(152_35%_38%)]" /> : <Copy className="h-4 w-4 mr-1.5" />}{copied ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <a href={link} target="_blank" rel="noopener noreferrer" className="text-[12.5px] text-primary hover:underline">Open preview →</a>
+              <button onClick={revoke} disabled={busy} className="ml-auto text-[12px] text-[hsl(8_60%_45%)] hover:underline">Turn off this link</button>
+            </div>
+          </div>
+        )}
+        <DialogFooter><Button variant="ghost" onClick={onClose}>Done</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
