@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarDays, Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, ListChecks, Loader2, MoreHorizontal, Paperclip, Phone, Send, Timer, Trash2, User } from 'lucide-react'
+import { CalendarDays, Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, ListChecks, Loader2, MoreHorizontal, Paperclip, Phone, Printer, Send, Timer, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -24,6 +24,7 @@ import {
 import { eligibleBlockers, projectMilestones } from '@/lib/milestones'
 import { useCloud } from '@/lib/cloud'
 import { attachmentsAvailable, deleteAttachmentFile, fmtBytes, getAttachmentUrl, uploadAttachment } from '@/lib/attachments'
+import { printTask } from '@/lib/print'
 import { AreaDot, DueChip, PriorityChip } from './bits'
 
 // ---------- Quick add — one line, Enter, done. Usable on any screen ----------
@@ -218,7 +219,7 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
           e.dataTransfer.effectAllowed = 'move'
         }}
         className={cn(
-          'group flex items-center gap-2.5 border-b border-border/70 px-2 py-2 hover:bg-accent/50 transition-colors',
+          'group relative flex items-center gap-2.5 border-b border-border/70 px-2 py-2 hover:bg-accent/50 transition-colors',
           depth > 0 && 'bg-background/40',
           !done && 'cursor-grab active:cursor-grabbing',
         )}
@@ -299,24 +300,31 @@ export function TaskRow({ task, showArea = true, depth = 0, onOpen, expandAll, s
           </div>
         </button>
 
-        {note && (
-          <span
-            className={cn(
-              'shrink-0 rounded-sm px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide whitespace-nowrap',
-              note.tone === 'overdue'
-                ? 'bg-[hsl(8_60%_41%_/_0.12)] text-[hsl(8_60%_38%)] border border-[hsl(8_50%_60%)]'
-                : 'bg-[hsl(35_70%_88%)] text-[hsl(28_60%_28%)] border border-[hsl(35_50%_70%)]',
-            )}
-          >
-            {note.text}
-          </span>
-        )}
-        <DueChip due={task.due} />
-        <PriorityChip p={task.priority} />
+        {/* Reason / due — a fixed-width, right-aligned column so it lines up down the whole list.
+            When a "why" badge (overdue/waiting) is present we don't also repeat the due chip. */}
+        <div className="flex w-auto sm:w-[124px] items-center justify-end gap-2 shrink-0">
+          {note ? (
+            <span
+              className={cn(
+                'rounded-sm px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide whitespace-nowrap',
+                note.tone === 'overdue'
+                  ? 'bg-[hsl(8_60%_41%_/_0.12)] text-[hsl(8_60%_38%)] border border-[hsl(8_50%_60%)]'
+                  : 'bg-[hsl(35_70%_88%)] text-[hsl(28_60%_28%)] border border-[hsl(35_50%_70%)]',
+              )}
+            >
+              {note.text}
+            </span>
+          ) : (
+            <DueChip due={task.due} />
+          )}
+        </div>
+        {/* Priority — fixed-width column, right-aligned, so every row's chip sits in the same place. */}
+        <div className="flex w-auto sm:w-[64px] justify-end shrink-0"><PriorityChip p={task.priority} /></div>
 
-        {/* one-tap quick actions — complete / reschedule / delete without opening the menu */}
+        {/* one-tap quick actions — overlaid on hover (absolute, so they reserve no row width and the
+            badges above stay tight to the right instead of floating with a big gap). */}
         {!done && (
-          <div className="hidden sm:inline-flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+          <div className="hidden sm:flex items-center gap-0.5 absolute right-[150px] top-1/2 -translate-y-1/2 z-10 rounded-md border border-border bg-card/95 px-1 py-0.5 shadow-sm opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto">
             <button title="Mark complete (undo available)" onClick={e => {
               e.stopPropagation()
               const prev = task.status
@@ -1652,6 +1660,9 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
         </div>
         <DialogFooter className="items-center">
           <span className="mr-auto text-[11px] text-muted-foreground hidden sm:inline">Changes here save automatically</span>
+          <Button variant="outline" onClick={() => { if (!printTask(state, task)) toast.error('Allow pop-ups to print — then try again.') }} title="Print or save this task as a PDF">
+            <Printer className="h-3.5 w-3.5 mr-1.5" />Print
+          </Button>
           <Button variant="outline" onClick={() => { onClose(); onEdit(task) }}>Edit</Button>
           <Button variant="ghost" onClick={onClose}>Close</Button>
           <Button onClick={() => { toast.success('Saved'); onClose() }}>Save &amp; Close</Button>

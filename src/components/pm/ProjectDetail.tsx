@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowLeft, CalendarRange, FolderOpen, GanttChartSquare, Kanban, LayoutList, Pencil, Plus, SlidersHorizontal } from 'lucide-react'
+import { ArrowLeft, CalendarRange, FolderOpen, GanttChartSquare, Kanban, LayoutList, Pencil, Plus, Printer, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { Project, Task, TaskStatus, PRIORITY_LABELS, STATUS_LABELS, fmtDate } from '@/lib/model'
 import { useStore } from '@/lib/store'
 import { projectStats, projectHealth, HEALTH_META } from '@/lib/projects'
+import { printProject } from '@/lib/print'
 import { ProjectBoard } from '@/components/ProjectBoard'
 import { TaskRow } from '@/components/tasks'
 import { StatusBoard } from '@/components/pm/StatusBoard'
@@ -83,6 +84,7 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: hm.dot }} />{hm.label}
               </span>
               <button onClick={() => setEditing(true)} title="Edit project details" className="ml-1 grid place-items-center h-6 w-6 rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+              <button onClick={() => { if (!printProject(state, project)) toast.error('Allow pop-ups to print — then try again.') }} title="Print or save this project as a PDF" className="inline-flex items-center gap-1 h-6 rounded-sm border border-border bg-card px-2 text-[11.5px] text-muted-foreground hover:bg-accent hover:text-foreground"><Printer className="h-3.5 w-3.5" />Print</button>
             </div>
             {project.outcome && <p className="text-[13.5px] text-muted-foreground mt-1 italic">Goal: {project.outcome}</p>}
             {/* progress + counts */}
