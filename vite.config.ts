@@ -7,7 +7,11 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
+      // "prompt", not "autoUpdate": when a new version deploys we surface a "Reload" prompt (see
+      // src/components/UpdatePrompt.tsx) instead of silently swapping code under the user mid-edit —
+      // and, crucially, instead of leaving an open tab stuck on the old cached build until a manual
+      // hard-refresh. One tap applies the update.
+      registerType: "prompt",
       includeAssets: ["favicon.ico", "favicon-32.png", "favicon-16.png", "apple-touch-icon.png"],
       manifest: {
         name: "Daybook — run your life from it",

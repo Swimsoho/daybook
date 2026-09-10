@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { daysSince, fmtDate, personOverdueBy, resolveTiers, today } from '@/lib/model'
+import { daysSince, daysBetween, fmtDate, personOverdueBy, resolveTiers, today } from '@/lib/model'
 import { isOverdue, openTasks, stalledProjects, useStore } from '@/lib/store'
 import { SectionTitle } from '@/components/bits'
 import { ExportMenu } from '@/components/ExportMenu'
@@ -27,6 +27,11 @@ export default function ReportsPage() {
       return { title: 'Exception report — what needs attention', headers: ['Report', 'Item', 'Detail'], rows, filenameBase: 'daybook-exceptions' }
     }
     const rows: (string | number)[][] = [
+      ['Completed · this week', doneThisWeek],
+      ['Completed · previous week', donePrevWeek],
+      ['Completed on time (90d)', `${onTimePct}% (${onTime.length}/${withDue.length})`],
+      ['Completed late (90d)', late.length],
+      ['Avg. days late (when late)', avgLate],
       ...byArea.map(x => [`Open tasks · ${x.a.name}`, x.n] as (string | number)[]),
       ...byPriority.map(x => [`Priority · ${x.p}`, x.n] as (string | number)[]),
       ...byTier.map(x => [`Contacts · ${x.name}`, x.n] as (string | number)[]),
@@ -50,6 +55,26 @@ export default function ReportsPage() {
     open: open.filter(t => t.vendorId === v.id).length,
     all: state.tasks.filter(t => t.vendorId === v.id).length,
   }))
+
+  // ---- throughput & delays (built on each task's completedAt — stamped the day it's checked off) ----
+  const completedTasks = state.tasks.filter(t => t.status === 'done' && !!t.completedAt)
+  // Tasks finished per day, last 14 days — a plain "what did I actually get done, and when" chart.
+  const completedDays = [...Array(14)].map((_, i) => {
+    const date = new Date(Date.now() - (13 - i) * 86400000).toISOString().slice(0, 10)
+    return { date, n: completedTasks.filter(t => t.completedAt === date).length }
+  })
+  const maxDone = Math.max(1, ...completedDays.map(d => d.n))
+  const doneThisWeek = completedDays.slice(7).reduce((s, d) => s + d.n, 0)
+  const donePrevWeek = completedDays.slice(0, 7).reduce((s, d) => s + d.n, 0)
+  // Delay analysis — of tasks completed in the last 90 days that HAD a due date, how many landed on
+  // time vs late, and by how much. Positive daysBetween(due → completed) means finished after due.
+  const recentDone = completedTasks.filter(t => daysSince(t.completedAt!) <= 90)
+  const withDue = recentDone.filter(t => !!t.due).map(t => ({ t, late: daysBetween(t.due!, t.completedAt!) }))
+  const onTime = withDue.filter(x => x.late <= 0)
+  const late = withDue.filter(x => x.late > 0)
+  const onTimePct = withDue.length ? Math.round((onTime.length / withDue.length) * 100) : 0
+  const avgLate = late.length ? Math.round((late.reduce((s, x) => s + x.late, 0) / late.length) * 10) / 10 : 0
+  const worstLate = [...late].sort((a, b) => b.late - a.late).slice(0, 5)
 
   // ---- exception data
   const overdueTasks = open.filter(isOverdue)
@@ -90,6 +115,65 @@ export default function ReportsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Tasks finished by date — built from each task's completedAt (stamped the day you tick it
+              off), so this is a real record of throughput, not an estimate. */}
+          <section className="border border-border bg-card shadow-sm rounded-lg p-4 sm:col-span-2">
+            <SectionTitle>Tasks completed — last 14 days</SectionTitle>
+            <div className="flex items-baseline gap-3 mb-2 text-[12px] text-muted-foreground">
+              <span><b className="text-foreground tabular">{doneThisWeek}</b> this week</span>
+              <span><b className="text-foreground tabular">{donePrevWeek}</b> the week before</span>
+              {donePrevWeek > 0 && (
+                <span className={cn(doneThisWeek >= donePrevWeek ? 'text-[hsl(152_35%_36%)]' : 'text-[hsl(8_60%_45%)]')}>
+                  {doneThisWeek >= donePrevWeek ? '▲' : '▼'} {Math.abs(doneThisWeek - donePrevWeek)}
+                </span>
+              )}
+            </div>
+            <div className="flex items-end gap-1.5 h-28">
+              {completedDays.map(({ date, n }) => (
+                <div key={date} className="flex-1 flex flex-col items-center gap-1" title={`${fmtDate(date)} · ${n} completed`}>
+                  <div className="w-full flex flex-col justify-end h-full">
+                    <div className="w-full rounded-sm bg-[hsl(152_25%_38%)]" style={{ height: `${(n / maxDone) * 100}%`, minHeight: n ? 6 : 2 }} />
+                  </div>
+                  <span className="text-[9.5px] text-muted-foreground tabular">{date.slice(8)}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Delay analysis — of tasks completed in the last 90 days that had a due date, how many
+              were finished on time vs late, and the average slip. */}
+          <section className="border border-border bg-card shadow-sm rounded-lg p-4 sm:col-span-2">
+            <SectionTitle>Completion timeliness — last 90 days</SectionTitle>
+            {withDue.length === 0 ? (
+              <p className="text-[12.5px] text-muted-foreground italic">No dated tasks completed in the last 90 days yet — finish a task that had a due date and its on-time/late split shows here.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <Stat label="On time" value={`${onTimePct}%`} tone="good" />
+                  <Stat label="On time" value={onTime.length} sub="tasks" />
+                  <Stat label="Late" value={late.length} sub="tasks" tone={late.length ? 'bad' : undefined} />
+                  <Stat label="Avg. slip" value={avgLate ? `${avgLate}d` : '—'} sub="when late" tone={avgLate ? 'bad' : undefined} />
+                </div>
+                <div className="mt-3 h-2.5 w-full rounded-full overflow-hidden bg-[hsl(8_50%_88%)] flex">
+                  <div className="h-full bg-[hsl(152_30%_40%)]" style={{ width: `${onTimePct}%` }} title={`${onTime.length} on time`} />
+                </div>
+                {worstLate.length > 0 && (
+                  <div className="mt-3">
+                    <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground mb-1">Biggest slips</div>
+                    <div className="grid grid-cols-1 gap-0.5">
+                      {worstLate.map(({ t, late: d }) => (
+                        <div key={t.id} className="flex items-center justify-between gap-3 text-[12.5px] py-0.5 border-b border-border/50 last:border-0">
+                          <span className="truncate">{t.title}</span>
+                          <span className="shrink-0 tabular text-[hsl(8_60%_41%)]">{d}d late</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+
           <section className="border border-border bg-card shadow-sm rounded-lg p-4">
             <SectionTitle>Open tasks by area</SectionTitle>
             <div className="grid grid-cols-1 gap-2">
@@ -217,6 +301,16 @@ export default function ReportsPage() {
         </div>
       )}
       <p className="text-[11.5px] text-muted-foreground">Every report supports free-text search, multi-field filters and saved presets; results click through to the underlying items.</p>
+    </div>
+  )
+}
+
+function Stat({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: string; tone?: 'good' | 'bad' }) {
+  const color = tone === 'good' ? 'text-[hsl(152_35%_34%)]' : tone === 'bad' ? 'text-[hsl(8_60%_41%)]' : 'text-foreground'
+  return (
+    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+      <div className={cn('font-display text-[22px] font-semibold tabular leading-none', color)}>{value}</div>
+      <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground mt-1">{label}{sub ? ` · ${sub}` : ''}</div>
     </div>
   )
 }

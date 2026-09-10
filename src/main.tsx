@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App'
 import SharedTaskPage from './pages/SharedTaskPage'
+import { UpdatePrompt } from './components/UpdatePrompt'
 
 // A "share this task" link (task detail > Share) points recipients at /share/:token — a public,
 // no-login page. Checked here, before App/StoreProvider/CloudProvider/AuthGate ever mount,
@@ -13,5 +14,7 @@ const shareMatch = window.location.pathname.match(/^\/share\/([^/]+)\/?$/)
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {shareMatch ? <SharedTaskPage token={shareMatch[1]} /> : <App />}
+    {/* Sits above everything and appears only when a newer version has been deployed. */}
+    <UpdatePrompt />
   </StrictMode>,
 )
