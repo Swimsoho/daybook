@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Cake, Mail, MessageCircle, Phone, Users } from 'lucide-react'
+import { Cake, Mail, MessageCircle, Pencil, Phone, Trash2, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -181,8 +181,23 @@ export function LogCallDialog({ person, open, onClose }: { person: Person | null
 // ---------- Person detail: timeline + edit ----------
 
 export function PersonDetail({ person, onClose, onLog }: { person: Person | null; onClose: () => void; onLog: (p: Person) => void }) {
-  const { state, updatePerson, logInteraction, setBirthday } = useStore()
+  const { state, updatePerson, deletePerson, logInteraction, setBirthday } = useStore()
+  const [editing, setEditing] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
+  // Draft for the identity fields while editing. Reseeded whenever a different person is opened.
+  const [draft, setDraft] = useState<{ name: string; how: string; topics: string; phone: string; email: string; notes: string; vip: boolean }>(
+    { name: '', how: '', topics: '', phone: '', email: '', notes: '', vip: false },
+  )
+  useEffect(() => {
+    setEditing(false); setConfirmDel(false)
+    if (person) setDraft({ name: person.name, how: person.how ?? '', topics: person.topics ?? '', phone: person.phone ?? '', email: person.email ?? '', notes: person.notes ?? '', vip: !!person.vip })
+  }, [person?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!person) return null
+  const saveEdit = () => {
+    if (!draft.name.trim()) { toast.error('Name is required'); return }
+    updatePerson(person.id, { name: draft.name.trim(), how: draft.how.trim(), topics: draft.topics.trim(), phone: draft.phone.trim() || undefined, email: draft.email.trim() || undefined, notes: draft.notes.trim() || undefined, vip: draft.vip }, 'details edited')
+    toast.success('Contact updated'); setEditing(false)
+  }
   const timeline = state.interactions.filter(i => i.personId === person.id)
   const openTasks = state.tasks.filter(t => t.personId === person.id && t.status !== 'done' && t.status !== 'dropped')
   const cad = personCadence(person, state.settings)
@@ -198,9 +213,34 @@ export function PersonDetail({ person, onClose, onLog }: { person: Person | null
             <TierBadge tier={person.tier} />
             {person.vip && <span className="text-[10.5px] uppercase tracking-wide text-[hsl(40_65%_38%)] font-bold">VIP</span>}
           </div>
-          <DialogTitle className="font-display text-xl">{person.name}</DialogTitle>
+          <div className="flex items-center gap-2">
+            <DialogTitle className="font-display text-xl">{person.name}</DialogTitle>
+            {!editing && (
+              <button onClick={() => setEditing(true)} title="Edit contact details" className="grid place-items-center h-6 w-6 rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground"><Pencil className="h-3.5 w-3.5" /></button>
+            )}
+          </div>
           <p className="text-[12.5px] text-muted-foreground">{person.how}{person.topics && <> · {person.topics}</>}</p>
         </DialogHeader>
+
+        {editing && (
+          <div className="grid grid-cols-1 gap-3 border border-border bg-accent/30 rounded-sm p-3">
+            <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Name *</Label><Input value={draft.name} onChange={e => setDraft(d => ({ ...d, name: e.target.value }))} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Phone / WhatsApp</Label><Input value={draft.phone} onChange={e => setDraft(d => ({ ...d, phone: e.target.value }))} /></div>
+              <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Email</Label><Input value={draft.email} onChange={e => setDraft(d => ({ ...d, email: e.target.value }))} /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">How you know them</Label><Input value={draft.how} onChange={e => setDraft(d => ({ ...d, how: e.target.value }))} /></div>
+              <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Topics</Label><Input value={draft.topics} onChange={e => setDraft(d => ({ ...d, topics: e.target.value }))} /></div>
+            </div>
+            <div className="grid grid-cols-1 gap-1.5"><Label className="text-xs">Notes</Label><Textarea value={draft.notes} onChange={e => setDraft(d => ({ ...d, notes: e.target.value }))} rows={2} /></div>
+            <label className="flex items-center gap-2 text-[12.5px] cursor-pointer"><input type="checkbox" checked={draft.vip} onChange={e => setDraft(d => ({ ...d, vip: e.target.checked }))} />Mark as VIP</label>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
+              <Button size="sm" onClick={saveEdit}>Save details</Button>
+            </div>
+          </div>
+        )}
 
         {/* One-tap actions */}
         <div className="flex flex-wrap items-center gap-1.5 border border-border bg-accent/40 rounded-sm p-2.5">
@@ -311,14 +351,19 @@ export function PersonDetail({ person, onClose, onLog }: { person: Person | null
           </div>
         </div>
 
-        <DialogFooter className="flex-row justify-between sm:justify-between">
-          <Button
-            variant="outline" size="sm"
-            onClick={() => { updatePerson(person.id, { flaggedForCall: !person.flaggedForCall }, person.flaggedForCall ? 'unflagged' : 'flagged “call this week”'); toast(person.flaggedForCall ? 'Unflagged' : 'Flagged — will appear on the call list') }}
-          >
-            {person.flaggedForCall ? 'Unflag' : 'Flag: call this week'}
-          </Button>
-          <Button size="sm" onClick={() => { onClose(); onLog(person) }}>Log a touch</Button>
+        <DialogFooter className="flex-row justify-between sm:justify-between items-center">
+          {confirmDel ? (
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] text-muted-foreground">Delete this contact?</span>
+              <Button variant="outline" size="sm" onClick={() => setConfirmDel(false)}>Cancel</Button>
+              <Button size="sm" className="bg-[hsl(8_60%_41%)] hover:bg-[hsl(8_60%_36%)] text-[hsl(45_50%_96%)]" onClick={() => { const n = person.name; deletePerson(person.id); toast.success(`Deleted ${n}`); onClose() }}>Delete</Button>
+            </div>
+          ) : (
+            <>
+              <button onClick={() => setConfirmDel(true)} title="Delete contact" className="inline-flex items-center gap-1 text-[12px] text-[hsl(8_60%_41%)] hover:text-[hsl(8_60%_36%)]"><Trash2 className="h-3.5 w-3.5" />Delete</button>
+              <Button size="sm" onClick={() => { onClose(); onLog(person) }}>Log a touch</Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

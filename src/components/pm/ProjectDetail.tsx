@@ -311,14 +311,16 @@ function ShareProjectDialog({ project, open, onClose }: { project: Project; open
 // Name / outcome / area / start date. The header handles status, priority, owner and target date
 // inline; this covers the rest without cluttering the top bar.
 function ProjectSettingsDialog({ project, open, onClose, onConverted }: { project: Project; open: boolean; onClose: () => void; onConverted?: () => void }) {
-  const { state, updateProject } = useStore()
+  const { state, updateProject, removeProject } = useStore()
   const [name, setName] = useState(project.name)
   const [outcome, setOutcome] = useState(project.outcome)
   const [areaId, setAreaId] = useState(project.areaId)
   const [start, setStart] = useState(project.start ?? '')
+  const [confirmDel, setConfirmDel] = useState(false)
+  const linkedTasks = state.tasks.filter(t => t.projectId === project.id).length
   // reseed when opening a different project
   const key = project.id + (open ? '1' : '0')
-  useMemo(() => { if (open) { setName(project.name); setOutcome(project.outcome); setAreaId(project.areaId); setStart(project.start ?? '') } }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  useMemo(() => { if (open) { setName(project.name); setOutcome(project.outcome); setAreaId(project.areaId); setStart(project.start ?? ''); setConfirmDel(false) } }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = () => {
     if (!name.trim()) { toast.error('Name is required'); return }
@@ -347,6 +349,20 @@ function ProjectSettingsDialog({ project, open, onClose, onConverted }: { projec
         <div className="mt-1 rounded-md border border-border bg-muted/30 px-3 py-2 flex items-center gap-2">
           <span className="text-[11.5px] text-muted-foreground flex-1">Not really a project? <b className="font-semibold text-foreground/80">Convert to a label</b> — it leaves the Projects page and just groups its tasks (which return to your to-do list).</span>
           <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={() => { updateProject(project.id, { kind: 'label' }); toast.success(`“${project.name}” is now a label`); onClose(); onConverted?.() }}>Convert to label</Button>
+        </div>
+        <div className="rounded-md border border-[hsl(8_60%_41%)]/30 bg-[hsl(8_60%_41%)]/5 px-3 py-2">
+          {!confirmDel ? (
+            <div className="flex items-center gap-2">
+              <span className="text-[11.5px] text-muted-foreground flex-1">Delete this {project.kind === 'label' ? 'label' : 'project'} entirely. {linkedTasks > 0 ? <>Its {linkedTasks} {linkedTasks === 1 ? 'task returns' : 'tasks return'} to your to-do list — they’re not deleted.</> : 'It has no tasks attached.'}</span>
+              <Button variant="ghost" size="sm" className="h-7 shrink-0 text-[hsl(8_60%_41%)] hover:text-[hsl(8_60%_36%)] hover:bg-[hsl(8_60%_41%)]/10" onClick={() => setConfirmDel(true)}>Delete</Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-[11.5px] text-foreground/80 flex-1">Delete “{project.name}” for good?</span>
+              <Button variant="outline" size="sm" className="h-7 shrink-0" onClick={() => setConfirmDel(false)}>Cancel</Button>
+              <Button size="sm" className="h-7 shrink-0 bg-[hsl(8_60%_41%)] hover:bg-[hsl(8_60%_36%)] text-[hsl(45_50%_96%)]" onClick={() => { removeProject(project.id); toast.success(`Deleted “${project.name}”`); onClose(); onConverted?.() }}>Delete</Button>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>

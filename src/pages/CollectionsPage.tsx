@@ -988,8 +988,9 @@ function MoveToControl({ currentTrackerId, label = 'Move to another list', class
 }
 
 function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open: boolean; entry: Entry | null; onClose: () => void }) {
-  const { addEntry, updateEntry, moveEntries } = useStore()
+  const { addEntry, updateEntry, moveEntries, deleteEntries } = useStore()
   const [form, setForm] = useState<Entry['values']>({})
+  const [confirmDel, setConfirmDel] = useState(false)
   const base: Entry['values'] = { ...(entry?.values ?? {}), ...form }
   // default status for new entries
   const statusCol = tracker.columns.find(c => c.type === 'status')
@@ -1012,7 +1013,7 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
   }
 
   return (
-    <Dialog open={open} onOpenChange={o => { if (!o) { setForm({}); onClose() } }}>
+    <Dialog open={open} onOpenChange={o => { if (!o) { setForm({}); setConfirmDel(false); onClose() } }}>
       <DialogContent className="sm:max-w-[440px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-display text-lg">{entry ? `Edit — ${tracker.name}` : `New ${tracker.name.replace(/s$/, '').toLowerCase()}`}</DialogTitle>
@@ -1056,9 +1057,38 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
             </div>
           )}
         </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={save}>{entry ? 'Save' : 'Add'}</Button>
+        <DialogFooter className="items-center">
+          {entry && !confirmDel && (
+            <Button
+              variant="ghost"
+              className="mr-auto text-[hsl(8_60%_41%)] hover:text-[hsl(8_60%_36%)] hover:bg-[hsl(8_60%_41%)]/10"
+              onClick={() => setConfirmDel(true)}
+            >
+              Delete
+            </Button>
+          )}
+          {entry && confirmDel ? (
+            <div className="mr-auto flex items-center gap-2">
+              <span className="text-[12.5px] text-muted-foreground">Delete for good?</span>
+              <Button variant="outline" size="sm" onClick={() => setConfirmDel(false)}>Cancel</Button>
+              <Button
+                size="sm"
+                className="bg-[hsl(8_60%_41%)] hover:bg-[hsl(8_60%_36%)] text-[hsl(45_50%_96%)]"
+                onClick={() => {
+                  deleteEntries([entry.id])
+                  toast.success(`Deleted “${titleOf(tracker, entry)}”`)
+                  setForm({}); setConfirmDel(false); onClose()
+                }}
+              >
+                Delete
+              </Button>
+            </div>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={onClose}>Cancel</Button>
+              <Button onClick={save}>{entry ? 'Save' : 'Add'}</Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

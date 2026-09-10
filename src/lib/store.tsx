@@ -98,6 +98,9 @@ export interface Store {
   calledFollowUp: (id: string) => void
   addPerson: (p: Partial<Person> & { name: string }) => Person
   updatePerson: (id: string, patch: Partial<Person>, auditLabel?: string) => void
+  // Permanently remove a contact: drops the person, their interaction history and any mirrored
+  // birthday date, and detaches them from tasks (which keep their place in the to-do list).
+  deletePerson: (id: string) => void
   setBirthday: (personId: string, date: string | undefined) => void
   // Editable relationship tiers (Settings > Contacts). addTier appends a new tier; updateTier edits
   // one; deleteTier removes it and moves any contacts on it to a fallback tier so none are orphaned.
@@ -605,6 +608,21 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
         withAudit(
           s => ({ ...s, people: s.people.map(p => p.id === id ? { ...p, ...patch } : p) }),
           auditEvent('updated', 'person', id, auditLabel ?? Object.keys(patch).join(', ') + ' changed'),
+        )
+      },
+      deletePerson(id) {
+        const person = state.people.find(p => p.id === id)
+        withAudit(
+          s => ({
+            ...s,
+            people: s.people.filter(p => p.id !== id),
+            interactions: s.interactions.filter(i => i.personId !== id),
+            // Detach the contact from any task, but leave the task itself in place.
+            tasks: s.tasks.map(t => t.personId === id ? { ...t, personId: undefined } : t),
+            // Drop the mirrored birthday row in "Dates to Remember", if any.
+            entries: s.entries.filter(e => e.values?.personId !== id),
+          }),
+          auditEvent('deleted', 'person', id, person?.name ?? ''),
         )
       },
       // Set (or clear, with date=undefined) a person's birthday AND keep a matching recurring
