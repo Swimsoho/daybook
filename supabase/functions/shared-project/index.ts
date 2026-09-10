@@ -130,6 +130,59 @@ Deno.serve(async (req) => {
       })
     }
 
+    // ---- Light, no-login collaboration on a shared project ----
+    // Anyone with the link can mark a task done or post an update, attributed to a name they type.
+    // Scoped strictly to tasks in THIS shared project; the owner can revoke the link any time.
+    const loadState = async (workspaceId: string) => {
+      const { data } = await admin.from('workspace_state').select('data').eq('workspace_id', workspaceId).maybeSingle()
+      return (data?.data ?? null) as Rec | null
+    }
+    const auditEntry = (by: string, action: string, entity: string, entityId: string, detail: string, nowIso: string) => ({
+      id: `au_${crypto.randomUUID().slice(0, 8)}`, ts: nowIso.slice(0, 16),
+      user: by && by.trim() ? by.trim().slice(0, 60) : 'Shared link', action, entity, entityId, detail,
+    })
+
+    if (action === 'complete') {
+      const { token, taskId, byName, note } = body as { token?: string; taskId?: string; byName?: string; note?: string }
+      if (!token || !taskId) return json({ error: 'token and taskId are required' }, 400)
+      const { data: share } = await admin.from('project_shares').select('*').eq('token', token).maybeSingle()
+      if (!share || share.revoked) return json({ error: 'not_found' }, 404)
+      const state = await loadState(share.workspace_id)
+      if (!state) return json({ error: 'not_found' }, 404)
+      const tasks = (state.tasks as Rec[]) ?? []
+      const idx = tasks.findIndex(t => t.id === taskId && t.projectId === share.project_id)
+      if (idx === -1) return json({ error: 'not_found' }, 404)
+      if (tasks[idx].status !== 'done') {
+        const nowIso = new Date().toISOString()
+        tasks[idx] = { ...tasks[idx], status: 'done', completedAt: nowIso.slice(0, 10) }
+        const audit = (state.audit as Rec[]) ?? []
+        const by = (byName ?? '').trim()
+        audit.unshift(auditEntry(by, 'completed', 'task', String(taskId),
+          `Marked done via the shared project link${by ? ` by ${by}` : ''}${note ? ` — "${note}"` : ''}`, nowIso))
+        await admin.from('workspace_state').update({ data: { ...state, tasks, audit }, updated_at: nowIso }).eq('workspace_id', share.workspace_id)
+      }
+      return json({ ok: true })
+    }
+
+    if (action === 'comment') {
+      const { token, taskId, byName, text } = body as { token?: string; taskId?: string; byName?: string; text?: string }
+      if (!token || !text || !text.trim()) return json({ error: 'token and text are required' }, 400)
+      const { data: share } = await admin.from('project_shares').select('*').eq('token', token).maybeSingle()
+      if (!share || share.revoked) return json({ error: 'not_found' }, 404)
+      const state = await loadState(share.workspace_id)
+      if (!state) return json({ error: 'not_found' }, 404)
+      if (taskId) {
+        const t = ((state.tasks as Rec[]) ?? []).find(x => x.id === taskId && x.projectId === share.project_id)
+        if (!t) return json({ error: 'not_found' }, 404)
+      }
+      const nowIso = new Date().toISOString()
+      const audit = (state.audit as Rec[]) ?? []
+      const by = (byName ?? '').trim()
+      audit.unshift(auditEntry(by, 'noted', taskId ? 'task' : 'project', String(taskId ?? share.project_id), text.trim().slice(0, 2000), nowIso))
+      await admin.from('workspace_state').update({ data: { ...state, audit }, updated_at: nowIso }).eq('workspace_id', share.workspace_id)
+      return json({ ok: true })
+    }
+
     return json({ error: 'Unknown action' }, 400)
   } catch (e) {
     return json({ error: String(e) }, 500)
