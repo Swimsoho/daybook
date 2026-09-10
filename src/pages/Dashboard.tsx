@@ -252,7 +252,7 @@ function useDebouncedCallback<A extends unknown[]>(fn: (...args: A) => void, del
 }
 
 function WidgetShell({
-  title, wide, customize, dragging, height, autoGrow, onDragStart, onDragOver, onDrop, onToggleWide, onResize, children,
+  title, wide, customize, dragging, height, autoGrow, onDragStart, onDragEnd, onDragOver, onDrop, onToggleWide, onResize, children,
 }: {
   title: string
   wide: boolean
@@ -261,6 +261,7 @@ function WidgetShell({
   height?: number
   autoGrow?: boolean
   onDragStart: () => void
+  onDragEnd: () => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
   onToggleWide: () => void
@@ -294,6 +295,9 @@ function WidgetShell({
           <span
             draggable
             onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart() }}
+            // Always clear the drag state when the drag ends — even if it was released outside a drop
+            // zone or cancelled — so a widget can never get stuck at the dimmed "being dragged" look.
+            onDragEnd={() => onDragEnd()}
             className="cursor-grab active:cursor-grabbing shrink-0"
             title="Drag to reorder"
           >
@@ -458,6 +462,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
       height={state.settings.widgetHeights?.[id]}
       autoGrow
       onDragStart={() => setDragId(id)}
+      onDragEnd={() => setDragId(null)}
       onDragOver={e => { if (customize && dragId && dragId !== id) e.preventDefault() }}
       onDrop={e => { e.preventDefault(); if (dragId && dragId !== id) moveWidget(dragId, zone, id); setDragId(null) }}
       onToggleWide={() => toggleWide(id)}
@@ -657,7 +662,7 @@ function TodayDash({ goTo, projectFilter, viewerName }: { goTo: (p: string) => v
           </button>
         )}
         <button
-          onClick={() => setCustomize(v => !v)}
+          onClick={() => { setCustomize(v => !v); setDragId(null) }}
           className={cn(
             'text-[12px] font-medium flex items-center gap-1.5 border rounded-md px-2.5 py-1.5 shadow-sm transition-colors',
             customize ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'border-border bg-card hover:bg-accent',
@@ -865,6 +870,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
       dragging={dragId === id}
       height={state.settings.widgetHeights?.[id]}
       onDragStart={() => setDragId(id)}
+      onDragEnd={() => setDragId(null)}
       onDragOver={e => { if (customize && dragId && dragId !== id) e.preventDefault() }}
       onDrop={e => { e.preventDefault(); if (dragId && dragId !== id) moveOverallWidget(dragId, zone, id); setDragId(null) }}
       onToggleWide={() => toggleOverallWide(id)}
@@ -1058,7 +1064,7 @@ function OverallDash({ goTo, projectFilter }: { goTo: (p: string) => void; proje
           </button>
         )}
         <button
-          onClick={() => setCustomize(v => !v)}
+          onClick={() => { setCustomize(v => !v); setDragId(null) }}
           className={cn(
             'text-[12px] font-medium flex items-center gap-1.5 border rounded-md px-2.5 py-1.5 shadow-sm transition-colors',
             customize ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'border-border bg-card hover:bg-accent',
