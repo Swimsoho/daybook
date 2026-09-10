@@ -54,6 +54,10 @@ export interface Project {
   // reads or writes these. See migrateProjectMembers().
   ownerPersonId?: string
   memberPersonIds?: string[]
+  // Files attached to the project itself — contracts, briefs, plans, images, PDFs, anything. Same
+  // storage + shape as a task's attachments (see TaskAttachment), just filed under the project. Shown
+  // on the project's Documents tab.
+  documents?: TaskAttachment[]
   notes?: string
   lastActivity: string // ISO date, for stall detection
 }

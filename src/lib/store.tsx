@@ -184,6 +184,8 @@ export interface Store {
   importProjects: (rows: ImportProjectRow[]) => { areasCreated: number; projectsAdded: number; projectsMerged: number; newAreaNames: string[] }
   addAttachment: (taskId: string, attachment: TaskAttachment) => void
   removeAttachment: (taskId: string, attachmentId: string) => void
+  addProjectDocument: (projectId: string, doc: TaskAttachment) => void
+  removeProjectDocument: (projectId: string, docId: string) => void
   addCollection: (c: Partial<Collection> & { name: string }) => Collection
   updateCollection: (id: string, patch: Partial<Collection>) => void
   addTracker: (t: Partial<Tracker> & { name: string; collectionId: string }) => Tracker
@@ -1230,6 +1232,21 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
         withAudit(
           s => ({ ...s, tasks: s.tasks.map(x => x.id === taskId ? { ...x, attachments: (x.attachments ?? []).filter(a => a.id !== attachmentId) } : x) }),
           auditEvent('removed attachment', 'task', taskId, `${att?.name ?? 'file'} removed${t ? ` from “${t.title}”` : ''}`),
+        )
+      },
+      addProjectDocument(projectId, doc) {
+        const p = state.projects.find(x => x.id === projectId)
+        withAudit(
+          s => ({ ...s, projects: s.projects.map(x => x.id === projectId ? { ...x, documents: [...(x.documents ?? []), doc], lastActivity: today() } : x) }),
+          auditEvent('attached', 'project', projectId, `${doc.name} added to “${p?.name ?? 'project'}”`),
+        )
+      },
+      removeProjectDocument(projectId, docId) {
+        const p = state.projects.find(x => x.id === projectId)
+        const doc = p?.documents?.find(d => d.id === docId)
+        withAudit(
+          s => ({ ...s, projects: s.projects.map(x => x.id === projectId ? { ...x, documents: (x.documents ?? []).filter(d => d.id !== docId) } : x) }),
+          auditEvent('removed attachment', 'project', projectId, `${doc?.name ?? 'file'} removed from “${p?.name ?? 'project'}”`),
         )
       },
       addCollection(c) {

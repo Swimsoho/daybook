@@ -14,17 +14,17 @@ export function attachmentsAvailable(): boolean {
   return !!supabase
 }
 
-export async function uploadAttachment(
-  ownerId: string,
-  workspaceId: string,
-  taskId: string,
-  file: File,
+// Shared uploader. `scope` is the path segment under the owner/workspace folder — a task id for a
+// task attachment, or `proj_<projectId>` for a project document. The bucket's RLS only checks the
+// leading ownerId segment, so every scope under it is covered by the same policy.
+async function uploadToScope(
+  ownerId: string, workspaceId: string, scope: string, file: File,
 ): Promise<{ attachment?: TaskAttachment; error?: string }> {
   if (!supabase) return { error: 'Sign in to a real account to attach files.' }
   if (file.size > MAX_ATTACHMENT_BYTES) return { error: `${file.name} is over the 25MB limit.` }
   const fileId = uid('f')
   const safeName = file.name.replace(/[^\w.\-() ]/g, '_')
-  const path = `${ownerId}/${workspaceId}/${taskId}/${fileId}-${safeName}`
+  const path = `${ownerId}/${workspaceId}/${scope}/${fileId}-${safeName}`
   const { error } = await supabase.storage.from(ATTACHMENTS_BUCKET).upload(path, file, {
     contentType: file.type || 'application/octet-stream',
     upsert: false,
@@ -36,6 +36,15 @@ export async function uploadAttachment(
       type: file.type || 'application/octet-stream', uploadedAt: new Date().toISOString(),
     },
   }
+}
+
+export function uploadAttachment(ownerId: string, workspaceId: string, taskId: string, file: File) {
+  return uploadToScope(ownerId, workspaceId, taskId, file)
+}
+
+/** Upload a document filed under a project (its Documents tab). */
+export function uploadProjectDocument(ownerId: string, workspaceId: string, projectId: string, file: File) {
+  return uploadToScope(ownerId, workspaceId, `proj_${projectId}`, file)
 }
 
 export async function getAttachmentUrl(path: string): Promise<string | null> {

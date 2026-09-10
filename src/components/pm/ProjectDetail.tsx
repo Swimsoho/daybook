@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowLeft, CalendarRange, GanttChartSquare, Kanban, LayoutList, Pencil, Plus, SlidersHorizontal } from 'lucide-react'
+import { ArrowLeft, CalendarRange, FolderOpen, GanttChartSquare, Kanban, LayoutList, Pencil, Plus, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -15,14 +15,16 @@ import { TaskRow } from '@/components/tasks'
 import { StatusBoard } from '@/components/pm/StatusBoard'
 import { ProjectTimeline } from '@/components/pm/ProjectTimeline'
 import { ProjectOverview } from '@/components/pm/ProjectOverview'
+import { ProjectDocuments } from '@/components/pm/ProjectDocuments'
 
-type Tab = 'overview' | 'board' | 'phases' | 'timeline' | 'list'
+type Tab = 'overview' | 'board' | 'phases' | 'timeline' | 'list' | 'documents'
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <SlidersHorizontal className="h-3.5 w-3.5" /> },
   { id: 'board', label: 'Board', icon: <Kanban className="h-3.5 w-3.5" /> },
   { id: 'phases', label: 'Phases', icon: <LayoutList className="h-3.5 w-3.5" /> },
   { id: 'timeline', label: 'Timeline', icon: <GanttChartSquare className="h-3.5 w-3.5" /> },
   { id: 'list', label: 'List', icon: <CalendarRange className="h-3.5 w-3.5" /> },
+  { id: 'documents', label: 'Documents', icon: <FolderOpen className="h-3.5 w-3.5" /> },
 ]
 
 /**
@@ -150,7 +152,7 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
             </button>
           ))}
         </div>
-        <Button size="sm" className="h-8 ml-auto shrink-0 mb-1" onClick={() => onAddTask({})}><Plus className="h-3.5 w-3.5 mr-1" />Task</Button>
+        {tab !== 'documents' && <Button size="sm" className="h-8 ml-auto shrink-0 mb-1" onClick={() => onAddTask({})}><Plus className="h-3.5 w-3.5 mr-1" />Task</Button>}
       </div>
 
       {/* ---- Body ---- */}
@@ -174,6 +176,7 @@ export function ProjectDetail({ projectId, onBack, onOpenTask, onAddTask, onArch
         </div>
       )}
       {tab === 'list' && <ProjectTaskList projectId={project.id} onOpenTask={onOpenTask} />}
+      {tab === 'documents' && <ProjectDocuments project={project} />}
 
       <ProjectSettingsDialog project={project} open={editing} onClose={() => setEditing(false)} onConverted={onBack} />
     </div>
