@@ -164,10 +164,26 @@ let warnedLegacy = false
  * other client saved, hand the result back to the UI, and save that. Up to a
  * few attempts, because a third client could write in between.
  */
+// A state with no tasks, projects, people or entries. Used only as a wipe-guard signal below.
+function contentCount(s: AppState | null | undefined): number {
+  if (!s) return 0
+  return (s.tasks?.length ?? 0) + (s.projects?.length ?? 0) + (s.people?.length ?? 0) + (s.entries?.length ?? 0)
+}
+
 async function pushState(workspaceId: string, s: AppState, attempt = 0): Promise<void> {
   if (!supabase) return
   const sb = supabase
   const info = syncInfo(workspaceId)
+
+  // WIPE GUARD: never let a structurally-empty state overwrite a row that we last knew held data.
+  // This is the last line of defence behind the loader fix — if anything upstream produces an empty
+  // state (a bad merge, a load glitch), we refuse to persist it rather than blank the workspace.
+  if (contentCount(s) === 0 && contentCount(info.base) > 0) {
+    console.error('[Daybook] Blocked a save that would have emptied a workspace with existing data', workspaceId)
+    toast.error('Blocked an empty save that would have wiped your data — please reload before making changes.')
+    return
+  }
+
   info.latest = s
 
   // Pre-migration fallback: the old blind upsert. Still lossy — which is the
@@ -423,6 +439,10 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
   // the app then saves the old (unguarded) way until the migration lands.
   type StateRow = { data?: Record<string, unknown>; version?: number }
   let data: StateRow | null = null
+  // `rowExists` is the safety gate: it is true only when a SELECT *succeeded* and returned a row.
+  // We must never confuse "the read failed" with "there is no data" — doing so is exactly how real
+  // workspaces were getting wiped (a transient read error fell through to the seed/overwrite below).
+  let rowExists = false
   const versioned = await supabase!
     .from('workspace_state')
     .select('data, version')
@@ -430,13 +450,23 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
     .maybeSingle()
   if (versioned.error) {
     const plain = await supabase!.from('workspace_state').select('data').eq('workspace_id', ws.id).maybeSingle()
+    if (plain.error) {
+      // Both reads errored. NEVER seed/overwrite on a failed read — that destroys existing data.
+      // Surface the error so the app retries/shows a problem instead of silently wiping the row.
+      throw new Error(`Could not read workspace ${ws.id}: ${plain.error.message}`)
+    }
     data = (plain.data ?? null) as StateRow | null
+    rowExists = plain.data != null
   } else {
     data = (versioned.data ?? null) as StateRow | null
+    rowExists = versioned.data != null
   }
 
-  if (data?.data && Object.keys(data.data).length > 0) {
-    const loaded = data.data as unknown as AppState
+  // An existing row is NEVER overwritten — even if its `data` is empty or partial. We load whatever
+  // is there (coerced to a safe shape) so a momentarily-empty or malformed blob can't trigger a
+  // destructive reseed. Only a genuinely-absent row (rowExists === false) is seeded, further below.
+  if (rowExists) {
+    const loaded = (data?.data ?? {}) as unknown as AppState
     // Run the v111 project-task surfacing once (see surfaceActiveProjectTasks) — before the upgrade
     // this flag is absent, so active project tasks are surfaced so nothing drops off the lists.
     const runProjectTodoMigration = !loaded.settings?.projectTodoMigratedV111
@@ -499,11 +529,17 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
     // The baseline is the *loaded* blob, not the normalised one — the backfills
     // above are local repairs we haven't saved yet, and treating them as the
     // server's own would make every one of them look like a remote change.
-    noteLoadedState(ws.id, loaded, data.version === undefined ? null : Number(data.version))
+    noteLoadedState(ws.id, loaded, data?.version === undefined ? null : Number(data.version))
     return coerceArrays(normalised)
   }
+  // Reached only when the row genuinely does not exist (a brand-new workspace). Seed it, but use an
+  // insert that DOES NOTHING if a row is already present (ignoreDuplicates) — so even under a race
+  // or a stale read this can never overwrite existing data. The seed is only a safe first write.
   const fresh = ws.kind === 'sample' ? seedState() : emptyState(ownerName || 'there')
-  await supabase!.from('workspace_state').upsert({ workspace_id: ws.id, data: fresh as unknown as Record<string, unknown> })
+  await supabase!.from('workspace_state').upsert(
+    { workspace_id: ws.id, data: fresh as unknown as Record<string, unknown> },
+    { onConflict: 'workspace_id', ignoreDuplicates: true },
+  )
   noteLoadedState(ws.id, fresh, null)
   return fresh
 }
