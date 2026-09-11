@@ -456,6 +456,12 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
       tasks: migratedTasks,
       projects: migratedProjects,
       settings: {
+        // Base on the FULL seeded defaults, not a hand-maintained subset. A required scalar
+        // missing from an older saved blob (e.g. followUpDays, dailyCapacity, callGoal, stallDays)
+        // would otherwise be undefined — and `addDays(today(), settings.followUpDays)` with an
+        // undefined day count builds an invalid Date and throws in toISOString(), blank-screening
+        // the app. seedState() supplies every default; the user's own saved values override them.
+        ...seedState().settings,
         ...SETTINGS_BACKFILL,
         ...loaded.settings,
         projectTodoMigratedV111: true,
@@ -465,8 +471,9 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
         // existing account's saved `features` blob (from before `lunchReminder` existed)
         // silently drop the new key, since object spread doesn't merge nested objects. The
         // field is typed as required, but an old saved blob won't actually have it at runtime —
-        // hence the explicit ?? fallback rather than relying on spread order.
-        features: { ...loaded.settings?.features, lunchReminder: loaded.settings?.features?.lunchReminder ?? true },
+        // hence the explicit ?? fallback rather than relying on spread order. Seed defaults form
+        // the base so no feature flag is ever left undefined either.
+        features: { ...seedState().settings.features, ...loaded.settings?.features, lunchReminder: loaded.settings?.features?.lunchReminder ?? true },
       },
       // Actions (Settings > Actions) shipped after some accounts were already saved — a blob
       // saved before then has no `actions` key at all, and every `state.actions.filter(...)`

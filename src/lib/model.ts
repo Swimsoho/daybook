@@ -462,14 +462,23 @@ export interface AppState {
 export const DAY = 86400000
 
 export function iso(d: Date): string {
-  return d.toISOString().slice(0, 10)
+  // Never throw: `Date.toISOString()` raises "RangeError: Invalid time value" on an invalid Date,
+  // which — called during render — would crash the whole app. An invalid date falls back to now.
+  const t = d.getTime()
+  return new Date(Number.isNaN(t) ? Date.now() : t).toISOString().slice(0, 10)
 }
 export function today(): string {
   return iso(new Date())
 }
 export function addDays(base: string | Date, n: number): string {
+  // Guard both inputs: a malformed `base` (bad stored date string) or a non-finite `n` (e.g. a
+  // settings number like followUpDays missing from an older saved blob → undefined) would otherwise
+  // produce an invalid Date and make iso() throw, white-screening the app.
   const d = typeof base === 'string' ? new Date(base + 'T12:00:00') : new Date(base)
-  return iso(new Date(d.getTime() + n * DAY))
+  const t = d.getTime()
+  const from = Number.isNaN(t) ? Date.now() : t
+  const days = Number.isFinite(n) ? n : 0
+  return iso(new Date(from + days * DAY))
 }
 export function daysAgo(n: number): string {
   return addDays(new Date(), -n)
