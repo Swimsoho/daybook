@@ -68,7 +68,7 @@ function showWhenMet(trk: Tracker, values: Entry['values'], showWhen: NonNullabl
 }
 
 function visibleColumns(trk: Tracker, values: Entry['values']): TrackerColumn[] {
-  return trk.columns.filter(c => !c.showWhen || showWhenMet(trk, values, c.showWhen))
+  return (trk.columns ?? []).filter(c => !c.showWhen || showWhenMet(trk, values, c.showWhen))
 }
 
 function titleOf(trk: Tracker, e: Entry): string {

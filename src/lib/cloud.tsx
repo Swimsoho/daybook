@@ -251,8 +251,10 @@ export function subscribeWorkspace(workspaceId: string): () => void {
         const version = Number(row.version ?? 0)
         if (info.version !== null && version <= info.version) return // our own write echoing back
 
-        const theirs = row.data as unknown as AppState
-        const merged = mergeStates(info.base, info.latest ?? theirs, theirs)
+        // Coerce here too: a shared-link Edge Function write (or any partial server blob) arriving
+        // over realtime must not reach the reducers / render with an undefined array.
+        const theirs = coerceArrays(row.data as unknown as AppState)
+        const merged = coerceArrays(mergeStates(info.base, info.latest ?? theirs, theirs))
         info.version = version
         info.base = theirs
         info.latest = merged
@@ -279,6 +281,21 @@ function backfillByName<T extends { name: string }>(existing: T[] | undefined, s
   const have = new Set(list.map(x => x.name.toLowerCase()))
   const missing = seeded.filter(s => namesLower.includes(s.name.toLowerCase()) && !have.has(s.name.toLowerCase()))
   return missing.length ? [...list, ...missing] : list
+}
+
+// Every top-level array on AppState. A saved (or server-mutated, e.g. shared-link) blob that is
+// missing any one of these — or has it as a non-array — would make the first `state.<field>.filter(…)`
+// on load throw "Cannot read properties of undefined (reading 'filter')" and white-screen the whole
+// app. coerceArrays guarantees each is at least an empty array, so a malformed blob degrades to
+// "that list is empty" instead of a blank page. Strictly safe: a present array is left untouched.
+const STATE_ARRAY_KEYS = [
+  'areas', 'projects', 'milestones', 'tasks', 'people', 'interactions', 'categories', 'actions',
+  'vendors', 'collections', 'trackers', 'entries', 'captures', 'audit', 'adminUsers',
+] as const
+function coerceArrays(s: AppState): AppState {
+  const out = { ...s } as Record<string, unknown>
+  for (const k of STATE_ARRAY_KEYS) if (!Array.isArray(out[k])) out[k] = []
+  return out as unknown as AppState
 }
 
 // Non-destructively bring the standard Notes/Ideas trackers up to date with options and columns
@@ -476,7 +493,7 @@ async function loadOrSeedState(ws: WorkspaceRow, ownerName: string): Promise<App
     // above are local repairs we haven't saved yet, and treating them as the
     // server's own would make every one of them look like a remote change.
     noteLoadedState(ws.id, loaded, data.version === undefined ? null : Number(data.version))
-    return normalised
+    return coerceArrays(normalised)
   }
   const fresh = ws.kind === 'sample' ? seedState() : emptyState(ownerName || 'there')
   await supabase!.from('workspace_state').upsert({ workspace_id: ws.id, data: fresh as unknown as Record<string, unknown> })
