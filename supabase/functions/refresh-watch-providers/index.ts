@@ -126,7 +126,15 @@ Deno.serve(async (req) => {
 
       if (dirty) {
         const next = { ...state, entries }
-        await admin.from('workspace_state').update({ data: next, updated_at: new Date().toISOString() }).eq('workspace_id', ws.id)
+        // Wipe guard: this job only enriches existing entries, so the write must never carry fewer
+        // items than we read. If it would (a bad/empty read), skip the write rather than risk the
+        // workspace — the same class of guard that would have prevented the digest incident.
+        const rawData = (row?.data ?? {}) as Record<string, unknown>
+        const arrLen = (o: Record<string, unknown>, k: string) => (Array.isArray(o[k]) ? (o[k] as unknown[]).length : 0)
+        const itemsIn = (o: Record<string, unknown>) => arrLen(o, 'tasks') + arrLen(o, 'projects') + arrLen(o, 'people') + arrLen(o, 'entries')
+        if (itemsIn(rawData) > 0 && itemsIn(next as unknown as Record<string, unknown>) >= itemsIn(rawData)) {
+          await admin.from('workspace_state').update({ data: next, updated_at: new Date().toISOString() }).eq('workspace_id', ws.id)
+        }
       }
     } catch { continue }
   }

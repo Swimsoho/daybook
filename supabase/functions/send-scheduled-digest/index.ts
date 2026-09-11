@@ -193,6 +193,21 @@ Deno.serve(async (req) => {
       // settings/state is written back exactly as read, so nothing the user has entered is
       // ever touched by this scheduled job.
       const nextState = { ...state, settings: { ...settings, ...patch } }
+
+      // HARD WIPE GUARD. This job must only ever ADD a tiny dedup marker. If the blob we read is
+      // empty, or the write would somehow carry fewer items than we read, we REFUSE to write —
+      // stamping a "last sent" date is never worth risking a user's whole workspace. (This is the
+      // guard that would have prevented the incident where the entire workspace was replaced by
+      // `{settings:{lastLunchPushSent}}`.) The marker simply gets stamped on the next eligible run.
+      const rawData = (row?.data ?? {}) as Record<string, unknown>
+      const arrLen = (o: Record<string, unknown>, k: string) => (Array.isArray(o[k]) ? (o[k] as unknown[]).length : 0)
+      const itemsIn = (o: Record<string, unknown>) => arrLen(o, 'tasks') + arrLen(o, 'projects') + arrLen(o, 'people') + arrLen(o, 'entries')
+      const before = itemsIn(rawData)
+      const after = itemsIn(nextState as unknown as Record<string, unknown>)
+      if (before === 0 || after < before) {
+        continue
+      }
+
       await admin.from('workspace_state').update({ data: nextState, updated_at: new Date().toISOString() }).eq('workspace_id', ws.id)
       sent++
     } catch {
