@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowDownAZ, Check, ChevronDown, ChevronRight, ChevronUp, GripVertical, Plus, Trash2 } from 'lucide-react'
+import { ArrowDownAZ, Check, ChevronDown, ChevronRight, ChevronUp, Download, GripVertical, Plus, Trash2, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,6 +14,8 @@ import { ColumnType, PriorityScheme, Tracker, TrackerColumn, resolveTiers } from
 import { actionUsage, categoryUsage, composeLunchCheckinText, composeMorningBriefText, useStore } from '@/lib/store'
 import { Cloud } from '@/lib/cloud'
 import { THEMES } from '@/lib/themes'
+import { backupSummary, exportData, parseBackup } from '@/lib/backup'
+import type { AppState } from '@/lib/model'
 
 const COLUMN_TYPE_LABELS: Record<ColumnType, string> = {
   text: 'Text', longtext: 'Long text', number: 'Number', currency: 'Currency (£)', date: 'Date',
@@ -276,9 +278,21 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
     addAction, updateAction, deleteAction,
     addCollection, updateCollection, addTracker, updateTracker,
     reorderArea, reorderCategory, reorderAction, sortAreasByName, sortCategoriesByName, sortActionsByName,
-    addTier, updateTier, deleteTier, reorderTracker,
+    addTier, updateTier, deleteTier, reorderTracker, replaceState,
   } = useStore()
   const s = state.settings
+  // Backup & restore (Settings → Features & account). Import stages the parsed backup and shows a
+  // confirm before it replaces the live workspace, so a mis-picked file can't wipe anything.
+  const importFileRef = React.useRef<HTMLInputElement>(null)
+  const [pendingImport, setPendingImport] = useState<AppState | null>(null)
+  const onPickBackup = async (file: File | undefined) => {
+    if (!file) return
+    try {
+      setPendingImport(parseBackup(await file.text()))
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Couldn’t read that backup file.')
+    }
+  }
   const [activeCat, setActiveCat] = useState<string>('appearance')
   const [dragTracker, setDragTracker] = useState<string | null>(null)
   const [newArea, setNewArea] = useState('')
@@ -1024,6 +1038,50 @@ export default function SettingsPage({ cloud }: { cloud?: Cloud }) {
               <span className="text-[13px]">{l}</span>
             </label>
           ))}
+        </Section>
+
+        <Section cat="features" title="Backup & restore your data" sub="Your safety net — download a copy anytime, or restore from one.">
+          <p className="text-[12.5px] text-muted-foreground leading-relaxed">
+            Export downloads your whole workspace — every task, project, contact and collection — as a
+            single file, straight to your device. Keep it somewhere safe; you can restore from it here
+            any time. It’s made right in your browser, so nothing is sent anywhere.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => { exportData(state); toast.success('Backup downloaded') }}>
+              <Download className="h-3.5 w-3.5 mr-1.5" />Export a backup
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => importFileRef.current?.click()}>
+              <Upload className="h-3.5 w-3.5 mr-1.5" />Restore from a backup…
+            </Button>
+            <input
+              ref={importFileRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={e => { onPickBackup(e.target.files?.[0]); e.target.value = '' }}
+            />
+          </div>
+          {pendingImport && (() => {
+            const sum = backupSummary(pendingImport)
+            return (
+              <div className="rounded-md border border-[hsl(8_60%_41%)]/30 bg-[hsl(8_60%_41%)]/5 px-3 py-2.5 grid gap-2">
+                <p className="text-[12.5px] text-foreground/85 leading-relaxed">
+                  This backup holds <b>{sum.tasks}</b> tasks, <b>{sum.projects}</b> projects, <b>{sum.people}</b> contacts
+                  and <b>{sum.entries}</b> collection entries. Restoring <b>replaces everything currently in your workspace</b> with it.
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setPendingImport(null)}>Cancel</Button>
+                  <Button
+                    size="sm"
+                    className="bg-[hsl(8_60%_41%)] hover:bg-[hsl(8_60%_36%)] text-[hsl(45_50%_96%)]"
+                    onClick={() => { replaceState(pendingImport); setPendingImport(null); toast.success('Workspace restored from your backup') }}
+                  >
+                    Replace &amp; restore
+                  </Button>
+                </div>
+              </div>
+            )
+          })()}
         </Section>
 
         <Section cat="features" title="Multi-user & accounts" sub="Later phase — the data model won’t block it.">

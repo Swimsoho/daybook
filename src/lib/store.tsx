@@ -182,6 +182,8 @@ export interface Store {
   reorderMilestone: (id: string, dir: 'up' | 'down') => void
   /** Move a task into a phase (or out of one, with null). */
   setTaskMilestone: (taskId: string, milestoneId: string | null) => void
+  /** Replace the entire workspace from an imported backup file. Used by Settings → Backup & restore. */
+  replaceState: (next: AppState) => void
   /** Create a whole plan — phases, tasks, owners and dependencies — under one project. */
   importProjectPlan: (projectId: string, plan: Plan) => { phasesAdded: number; tasksAdded: number; peopleAdded: number }
   // Bulk import of projects (and the areas they live under) in one atomic update. Areas are
@@ -486,6 +488,12 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
 
     return {
       state,
+      // Replace the whole workspace from an imported backup. The imported state is already validated
+      // and array-coerced by parseBackup(); we stamp an audit entry and let the normal onChange save
+      // it to the cloud like any other change.
+      replaceState(next) {
+        withAudit(() => next, auditEvent('imported', 'account', 'backup', 'Restored the whole workspace from a backup file'))
+      },
       addTask(t) {
         const task: Task = {
           id: uid('t'), title: t.title, type: t.type ?? 'todo', areaId: t.areaId, projectId: t.projectId,
