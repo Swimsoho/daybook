@@ -129,15 +129,18 @@ export default function InboxPage() {
                     {isContact ? (
                       <span className="h-7 inline-flex items-center px-2 text-[11px] text-muted-foreground border border-dashed border-border rounded-sm bg-background">Creates a contact in People</span>
                     ) : (
-                      <SearchableSelect
-                        value={effectiveTrackerId}
-                        onValueChange={v => setFileAs(f => ({ ...f, [c.id]: v }))}
-                        options={trackerOptions}
-                        popularCount={trackerPopularCount}
-                        placeholder="File as"
-                        searchPlaceholder="Search task / trackers…"
-                        className="h-7 w-[112px] sm:w-[126px] text-[11px] bg-background"
-                      />
+                      <span className="inline-flex items-center gap-1">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">File into</span>
+                        <SearchableSelect
+                          value={effectiveTrackerId}
+                          onValueChange={v => setFileAs(f => ({ ...f, [c.id]: v }))}
+                          options={trackerOptions}
+                          popularCount={trackerPopularCount}
+                          placeholder="Task or Collection…"
+                          searchPlaceholder="Task, or a Collection (Movies, Notes…)"
+                          className="h-7 w-[136px] sm:w-[150px] text-[11px] bg-background"
+                        />
+                      </span>
                     )}
                     {!isEntry && !isContact && (
                       <>
