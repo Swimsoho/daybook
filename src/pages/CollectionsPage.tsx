@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import { Entry, Tracker, TrackerColumn, today } from '@/lib/model'
+import { Entry, Tracker, TrackerColumn, addMonths, today } from '@/lib/model'
 import { useStore } from '@/lib/store'
 import { useIsMobile } from '@/mobile/lib/useIsMobile'
 import { useCloud, type EntrySuggestion } from '@/lib/cloud'
@@ -995,18 +995,34 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
   // default status for new entries
   const statusCol = tracker.columns.find(c => c.type === 'status')
   if (!entry && statusCol && base[statusCol.key] === undefined) base[statusCol.key] = statusCol.options?.[0] ?? ''
-  // "Date watched" (and any date column named like it) defaults to today — i.e. the day you add the
-  // entry — for a new entry. Fully editable below; blank it out if you're only adding to a watchlist.
+  // "Date watched" rule: when it's blank on a new entry, estimate it as ~3 months after the film's
+  // release date (a watchlist item you haven't seen yet). With no release date to base it on it just
+  // stays blank. Fully editable below, and it also auto-fills the moment the release date is looked up.
   const watchedCol = tracker.columns.find(c => c.type === 'date' && (c.key === 'watched_on' || /watch(ed)?\s*(on|date)|date\s*watch|seen\s*(on|date)/i.test(c.name)))
-  if (!entry && watchedCol && base[watchedCol.key] === undefined) base[watchedCol.key] = today()
+  const relCol = yearColumn(tracker)
+  const watchedEstimate = (vals: Entry['values']): string | undefined => {
+    if (!relCol || relCol.type !== 'date') return undefined
+    const rel = String(vals[relCol.key] ?? '')
+    return /^\d{4}-\d{2}-\d{2}$/.test(rel) ? addMonths(rel, 3) : undefined
+  }
+  if (!entry && watchedCol && base[watchedCol.key] === undefined) {
+    const est = watchedEstimate(base)
+    if (est) base[watchedCol.key] = est
+  }
   const vis = visibleColumns(tracker, base)
   const set = (k: string, v: Entry['values'][string]) => setForm(f => ({ ...f, [k]: v }))
   const titleCol = tracker.columns.find(c => c.isTitle) ?? tracker.columns[0]
-  const yrCol = yearColumn(tracker)
+  const yrCol = relCol
 
   function save() {
     const titleCol = tracker.columns.find(c => c.isTitle) ?? tracker.columns[0]
     if (!base[titleCol.key]) { toast.error(`${titleCol.name} is required`); return }
+    // Date-watched rule (new entries): a blank watch date + a known release date → estimate it
+    // ~3 months out, so a movie added straight from a lookup gets a sensible planned-watch date.
+    if (!entry && watchedCol && !String(base[watchedCol.key] ?? '')) {
+      const est = watchedEstimate(base)
+      if (est) base[watchedCol.key] = est
+    }
     if (entry) { updateEntry(entry.id, base); toast.success('Saved') }
     else { addEntry(tracker.id, base); toast.success(`Added to ${tracker.name}`) }
     setForm({}); onClose()
@@ -1036,7 +1052,17 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
               tracker={tracker}
               title={String(base[titleCol.key] ?? '')}
               year={yrCol ? String(base[yrCol.key] ?? '') : ''}
-              onFill={(col, value) => set(col.key, value)}
+              onFill={(col, value) => {
+                set(col.key, value)
+                // Filling the release date auto-estimates the watch date (~3 months later) when the
+                // user hasn't set one yet — the same "date watched" rule, applied live on lookup.
+                if (watchedCol && relCol && relCol.type === 'date' && col.key === relCol.key) {
+                  const rel = typeof value === 'string' ? value : ''
+                  if (/^\d{4}-\d{2}-\d{2}$/.test(rel) && !String(base[watchedCol.key] ?? '')) {
+                    set(watchedCol.key, addMonths(rel, 3))
+                  }
+                }
+              }}
             />
           )}
           {/* Filed in the wrong list? Move this entry to another tracker/collection — e.g. a film

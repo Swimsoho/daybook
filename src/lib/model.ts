@@ -480,6 +480,17 @@ export function addDays(base: string | Date, n: number): string {
   const days = Number.isFinite(n) ? n : 0
   return iso(new Date(from + days * DAY))
 }
+// Add whole months to a YYYY-MM-DD date, returning YYYY-MM-DD. Used for the "date watched defaults
+// to ~3 months after release" rule. Defensive: a malformed date returns the input unchanged rather
+// than throwing. setMonth handles month overflow (e.g. adding to a 31st lands early in the target
+// month), which is fine for an "around N months" estimate.
+export function addMonths(base: string, n: number): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(base)) return base
+  const d = new Date(base + 'T12:00:00')
+  if (Number.isNaN(d.getTime())) return base
+  d.setMonth(d.getMonth() + (Number.isFinite(n) ? n : 0))
+  return iso(d)
+}
 export function daysAgo(n: number): string {
   return addDays(new Date(), -n)
 }
