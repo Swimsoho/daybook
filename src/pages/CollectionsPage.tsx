@@ -995,9 +995,9 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
   // default status for new entries
   const statusCol = tracker.columns.find(c => c.type === 'status')
   if (!entry && statusCol && base[statusCol.key] === undefined) base[statusCol.key] = statusCol.options?.[0] ?? ''
-  // "Date watched" rule: when it's blank on a new entry, estimate it as ~3 months after the film's
-  // release date (a watchlist item you haven't seen yet). With no release date to base it on it just
-  // stays blank. Fully editable below, and it also auto-fills the moment the release date is looked up.
+  // "Date watched" default: a new entry defaults to today (the day you add it). Once a release date
+  // is known (typically via the lookup), it estimates ~3 months after release instead — as long as
+  // you haven't hand-set the date. Fully editable below.
   const watchedCol = tracker.columns.find(c => c.type === 'date' && (c.key === 'watched_on' || /watch(ed)?\s*(on|date)|date\s*watch|seen\s*(on|date)/i.test(c.name)))
   const relCol = yearColumn(tracker)
   const watchedEstimate = (vals: Entry['values']): string | undefined => {
@@ -1006,8 +1006,7 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
     return /^\d{4}-\d{2}-\d{2}$/.test(rel) ? addMonths(rel, 3) : undefined
   }
   if (!entry && watchedCol && base[watchedCol.key] === undefined) {
-    const est = watchedEstimate(base)
-    if (est) base[watchedCol.key] = est
+    base[watchedCol.key] = watchedEstimate(base) ?? today()
   }
   const vis = visibleColumns(tracker, base)
   const set = (k: string, v: Entry['values'][string]) => setForm(f => ({ ...f, [k]: v }))
@@ -1058,7 +1057,9 @@ function EntryDialog({ tracker, open, entry, onClose }: { tracker: Tracker; open
                 // user hasn't set one yet — the same "date watched" rule, applied live on lookup.
                 if (watchedCol && relCol && relCol.type === 'date' && col.key === relCol.key) {
                   const rel = typeof value === 'string' ? value : ''
-                  if (/^\d{4}-\d{2}-\d{2}$/.test(rel) && !String(base[watchedCol.key] ?? '')) {
+                  // Override the today default with release+3mo, but never a date the user hand-set.
+                  const cur = String(base[watchedCol.key] ?? '')
+                  if (/^\d{4}-\d{2}-\d{2}$/.test(rel) && (!cur || cur === today())) {
                     set(watchedCol.key, addMonths(rel, 3))
                   }
                 }
