@@ -94,7 +94,7 @@ function collectionGroup(state: { collections: { id: string; name: string }[] },
 }
 
 export default function CollectionsPage() {
-  const { state, updateEntry } = useStore()
+  const { state, updateEntry, patchEntriesEach } = useStore()
   const cloud = useCloud()
   const isMobile = useIsMobile().isMobile
   const [bulkLookup, setBulkLookup] = useState(false)
@@ -262,6 +262,25 @@ export default function CollectionsPage() {
     } finally { setBulkLookup(false) }
   }
 
+  // Backfill blank "Date watched" across the whole list: release + 3 months where a release date is
+  // known, otherwise the entry's own added date. One update, never overwrites a date you've set.
+  function fillWatchDates() {
+    if (!tracker) return
+    const watchedCol = tracker.columns.find(c => c.type === 'date' && (c.key === 'watched_on' || /watch(ed)?\s*(on|date)|date\s*watch|seen\s*(on|date)/i.test(c.name)))
+    if (!watchedCol) { toast.error('This list has no “Date watched” column.'); return }
+    const relCol = yearColumn(tracker)
+    const updates = entries
+      .filter(e => !String(e.values[watchedCol.key] ?? '').trim())
+      .map(e => {
+        const rel = relCol && relCol.type === 'date' ? String(e.values[relCol.key] ?? '') : ''
+        const val = /^\d{4}-\d{2}-\d{2}$/.test(rel) ? addMonths(rel, 3) : (e.created || today())
+        return { id: e.id, patch: { [watchedCol.key]: val } }
+      })
+    if (!updates.length) { toast('Every entry already has a watch date.'); return }
+    patchEntriesEach(updates)
+    toast.success(`Filled ${updates.length} watch date${updates.length === 1 ? '' : 's'}.`)
+  }
+
   if (!tracker) return <EmptyNote>Collections are switched off in Settings.</EmptyNote>
 
   return (
@@ -358,6 +377,11 @@ export default function CollectionsPage() {
           {isWatchTracker(tracker) && (
             <Button size="sm" variant="outline" className="h-7" onClick={bulkStreamingLookup} disabled={bulkLookup} title="Fill 'where to watch' (US) for entries that don't have it yet">
               {bulkLookup ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Tv className="h-3.5 w-3.5 mr-1" />}Where to watch (US)
+            </Button>
+          )}
+          {isWatchTracker(tracker) && (
+            <Button size="sm" variant="outline" className="h-7" onClick={fillWatchDates} title="Fill blank 'Date watched' — release + 3 months, or the entry's added date">
+              <CalendarPlus className="h-3.5 w-3.5 mr-1" />Fill watch dates
             </Button>
           )}
           {/* Suggestions work for any collection: watch-lists use TMDB, everything else (books,

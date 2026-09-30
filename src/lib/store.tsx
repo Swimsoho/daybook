@@ -128,6 +128,9 @@ export interface Store {
   // Multi-select actions in Collections. `patchEntries` merges a partial value map into every
   // listed entry (bulk "mark Watched", bulk rating, bulk set any single-choice field).
   patchEntries: (ids: string[], patch: Entry['values']) => void
+  // Like patchEntries but with a different patch per entry, applied in one state update / one audit
+  // line (used to backfill blank Date-watched across a whole watch list).
+  patchEntriesEach: (updates: { id: string; patch: Entry['values'] }[]) => void
   deleteEntries: (ids: string[]) => void
   // Move entries to a different tracker/collection (e.g. a film added to Movies by mistake → TV
   // Series, or a book filed under the wrong list). Non-destructive: all values are kept, and the
@@ -843,6 +846,14 @@ export function StoreProvider({ children, initial, onChange, fetchLatest, userNa
             ids[0],
             `${ids.length} ${ids.length === 1 ? 'entry' : 'entries'} in ${tracker?.name ?? 'a tracker'} — ${Object.entries(patch).map(([k, v]) => `${k}: ${String(v)}`).join(', ')}`,
           ),
+        )
+      },
+      patchEntriesEach(updates) {
+        if (!updates.length) return
+        const map = new Map(updates.map(u => [u.id, u.patch]))
+        withAudit(
+          s => ({ ...s, entries: s.entries.map(e => (map.has(e.id) ? { ...e, values: { ...e.values, ...map.get(e.id)! } } : e)) }),
+          auditEvent('updated', 'entry', updates[0].id, `Filled ${updates.length} watch date${updates.length === 1 ? '' : 's'}`),
         )
       },
       deleteEntries(ids) {
