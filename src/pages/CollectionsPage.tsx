@@ -215,6 +215,19 @@ export default function CollectionsPage() {
         })
       }
     }
+    // Never show a blank "Date watched": fill it with release + 3 months (or the entry's own added
+    // date when there's no release date). Display-only — the stored value stays blank until you open
+    // and save the entry, at which point this shown estimate is what persists.
+    const watchedCol = tracker.columns.find(c => c.type === 'date' && (c.key === 'watched_on' || /watch(ed)?\s*(on|date)|date\s*watch|seen\s*(on|date)/i.test(c.name)))
+    if (watchedCol) {
+      const relCol = yearColumn(tracker)
+      list = list.map(e => {
+        if (String(e.values[watchedCol.key] ?? '').trim()) return e
+        const rel = relCol && relCol.type === 'date' ? String(e.values[relCol.key] ?? '') : ''
+        const est = /^\d{4}-\d{2}-\d{2}$/.test(rel) ? addMonths(rel, 3) : (e.created || today())
+        return { ...e, values: { ...e.values, [watchedCol.key]: est } }
+      })
+    }
     return list
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tracker, entries, search, sort, colFilters, colText])
