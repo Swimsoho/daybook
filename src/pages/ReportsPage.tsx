@@ -1,17 +1,23 @@
 import React, { useState } from 'react'
-import { toast } from 'sonner'
-import { Download } from 'lucide-react'
+import { ChevronRight, Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
-import { daysSince, daysBetween, fmtDate, personOverdueBy, resolveTiers, today } from '@/lib/model'
+import { Task, daysSince, daysBetween, fmtDate, personOverdueBy, resolveTiers, today } from '@/lib/model'
 import { isOverdue, openTasks, stalledProjects, useStore } from '@/lib/store'
 import { SectionTitle } from '@/components/bits'
 import { ExportMenu } from '@/components/ExportMenu'
+import { TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { ViewExport } from '@/lib/exportView'
 
 export default function ReportsPage() {
   const { state } = useStore()
   const [tab, setTab] = useState<'standard' | 'exception'>('exception')
+  // Drill-through: a KPI card or a breakdown row opens this dialog listing the underlying tasks;
+  // each row then opens the real TaskDetail panel, so a number is never a dead end.
+  const [drill, setDrill] = useState<{ title: string; tasks: Task[] } | null>(null)
+  const [openTask, setOpenTask] = useState<Task | null>(null)
+  const [editTask, setEditTask] = useState<Task | null>(null)
   const open = openTasks(state)
 
   function reportExport(): ViewExport {
@@ -66,6 +72,7 @@ export default function ReportsPage() {
   const maxDone = Math.max(1, ...completedDays.map(d => d.n))
   const doneThisWeek = completedDays.slice(7).reduce((s, d) => s + d.n, 0)
   const donePrevWeek = completedDays.slice(0, 7).reduce((s, d) => s + d.n, 0)
+  const doneThisWeekTasks = completedTasks.filter(t => daysSince(t.completedAt!) <= 6)
   // Delay analysis — of tasks completed in the last 90 days that HAD a due date, how many landed on
   // time vs late, and by how much. Positive daysBetween(due → completed) means finished after due.
   const recentDone = completedTasks.filter(t => daysSince(t.completedAt!) <= 90)
@@ -91,8 +98,39 @@ export default function ReportsPage() {
   })
   const noRenewal = state.entries.filter(e => e.trackerId === 'trk_subs' && e.values['status'] !== 'Cancelled' && !e.values['renewal'])
 
+  // ---- KPI summary (the "key numbers", each one a drill-through into its tasks) ----
+  const dueThisWeek = open.filter(t => t.due && daysBetween(today(), t.due) >= 0 && daysBetween(today(), t.due) <= 7)
+  const lateTasks = late.map(x => x.t)
+  // "Needs attention" = the union of the exception task lists, de-duplicated (a task can be both
+  // overdue and stuck, so count it once).
+  const needsAttention = Array.from(new Map([...overdueTasks, ...stuck, ...waitingQuiet, ...noDue].map(t => [t.id, t])).values())
+  const weekTrend = doneThisWeek - donePrevWeek
+
+  const kpis: { label: string; value: React.ReactNode; sub?: string; tone?: 'good' | 'bad' | 'warn'; trend?: number; tasks: Task[]; drillTitle: string }[] = [
+    { label: 'Open tasks', value: open.length, tasks: open, drillTitle: 'All open tasks' },
+    { label: 'Overdue', value: overdueTasks.length, tone: overdueTasks.length ? 'bad' : 'good', tasks: overdueTasks, drillTitle: 'Overdue tasks' },
+    { label: 'Due this week', value: dueThisWeek.length, tone: dueThisWeek.length ? 'warn' : undefined, tasks: dueThisWeek, drillTitle: 'Due in the next 7 days' },
+    { label: 'Done this week', value: doneThisWeek, trend: weekTrend, tone: 'good', sub: 'vs last week', tasks: doneThisWeekTasks, drillTitle: 'Completed in the last 7 days' },
+    { label: 'On time (90d)', value: withDue.length ? `${onTimePct}%` : '—', tone: withDue.length ? (onTimePct >= 70 ? 'good' : 'bad') : undefined, sub: late.length ? `${late.length} late` : 'all on time', tasks: lateTasks, drillTitle: 'Completed late (last 90 days)' },
+    { label: 'Needs attention', value: needsAttention.length, tone: needsAttention.length ? 'warn' : 'good', sub: 'overdue · stuck · waiting · undated', tasks: needsAttention, drillTitle: 'Tasks needing attention' },
+  ]
+
   return (
     <div className="grid grid-cols-1 gap-4">
+      {/* ── Key summary: the headline numbers, always visible. Click any card to drill into its tasks. */}
+      <section>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <SectionTitle>Key summary</SectionTitle>
+          <span className="text-[11px] text-muted-foreground">as of {fmtDate(today())}</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {kpis.map(k => (
+            <Kpi key={k.label} label={k.label} value={k.value} sub={k.sub} tone={k.tone} trend={k.trend}
+              onClick={() => setDrill({ title: k.drillTitle, tasks: k.tasks })} />
+          ))}
+        </div>
+      </section>
+
       <div className="flex items-center gap-1">
         {(['exception', 'standard'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} className={cn('px-3 py-1.5 text-[12.5px] border rounded-sm capitalize', tab === t ? 'bg-primary text-primary-foreground border-primary' : 'border-transparent hover:border-border hover:bg-accent')}>
@@ -104,12 +142,12 @@ export default function ReportsPage() {
 
       {tab === 'exception' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <ExceptionCard title={`Tasks overdue (${overdueTasks.length})`} tone="bad" rows={overdueTasks.map(t => [t.title, `${daysSince(t.due!)}d late`])} empty="Nothing overdue." />
+          <ExceptionCard title={`Tasks overdue (${overdueTasks.length})`} tone="bad" rows={overdueTasks.map(t => [t.title, `${daysSince(t.due!)}d late`])} empty="Nothing overdue." onOpen={overdueTasks.length ? () => setDrill({ title: 'Overdue tasks', tasks: overdueTasks }) : undefined} />
           <ExceptionCard title={`Contacts past cadence (${overdueContacts.length})`} tone="bad" rows={overdueContacts.map(p => [p.name, `${personOverdueBy(p, state.settings)}d past target`])} empty="Everyone within cadence." />
-          <ExceptionCard title={`Waiting-on gone quiet (${waitingQuiet.length})`} rows={waitingQuiet.map(t => [t.title, `${t.waitingOn ?? 'someone'} · ${daysSince(t.waitingSince ?? t.created)}d silent`])} empty="No chases needed." />
+          <ExceptionCard title={`Waiting-on gone quiet (${waitingQuiet.length})`} rows={waitingQuiet.map(t => [t.title, `${t.waitingOn ?? 'someone'} · ${daysSince(t.waitingSince ?? t.created)}d silent`])} empty="No chases needed." onOpen={waitingQuiet.length ? () => setDrill({ title: 'Waiting-on gone quiet', tasks: waitingQuiet }) : undefined} />
           <ExceptionCard title={`Stalled projects (${stalled.length})`} rows={stalled.map(p => [p.name, `no activity ${daysSince(p.lastActivity)}d`])} empty="All projects moving." />
-          <ExceptionCard title={`Tasks with no due date (${noDue.length})`} rows={noDue.map(t => [t.title, t.priority])} empty="Everything is dated." />
-          <ExceptionCard title={`Stuck in progress > 7d (${stuck.length})`} rows={stuck.map(t => [t.title, `${daysSince(t.created)}d old`])} empty="Nothing languishing." />
+          <ExceptionCard title={`Tasks with no due date (${noDue.length})`} rows={noDue.map(t => [t.title, t.priority])} empty="Everything is dated." onOpen={noDue.length ? () => setDrill({ title: 'Tasks with no due date', tasks: noDue }) : undefined} />
+          <ExceptionCard title={`Stuck in progress > 7d (${stuck.length})`} rows={stuck.map(t => [t.title, `${daysSince(t.created)}d old`])} empty="Nothing languishing." onOpen={stuck.length ? () => setDrill({ title: 'Stuck in progress > 7 days', tasks: stuck }) : undefined} />
           {subsTracker && <ExceptionCard title={`Subscriptions renewing ≤ 14d (${renewingSoon.length})`} rows={renewingSoon.map(e => [String(e.values['service']), `renews ${fmtDate(String(e.values['renewal']))} · £${e.values['cost']}`])} empty="No renewals imminent." />}
           {subsTracker && <ExceptionCard title={`Policies with no renewal date (${noRenewal.length})`} rows={noRenewal.map(e => [String(e.values['service']), 'no date on file'])} empty="All dated." />}
         </div>
@@ -151,7 +189,7 @@ export default function ReportsPage() {
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <Stat label="On time" value={`${onTimePct}%`} tone="good" />
                   <Stat label="On time" value={onTime.length} sub="tasks" />
-                  <Stat label="Late" value={late.length} sub="tasks" tone={late.length ? 'bad' : undefined} />
+                  <Stat label="Late" value={late.length} sub="tasks" tone={late.length ? 'bad' : undefined} onClick={late.length ? () => setDrill({ title: 'Completed late (last 90 days)', tasks: lateTasks }) : undefined} />
                   <Stat label="Avg. slip" value={avgLate ? `${avgLate}d` : '—'} sub="when late" tone={avgLate ? 'bad' : undefined} />
                 </div>
                 <div className="mt-3 h-2.5 w-full rounded-full overflow-hidden bg-[hsl(8_50%_88%)] flex">
@@ -162,10 +200,10 @@ export default function ReportsPage() {
                     <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground mb-1">Biggest slips</div>
                     <div className="grid grid-cols-1 gap-0.5">
                       {worstLate.map(({ t, late: d }) => (
-                        <div key={t.id} className="flex items-center justify-between gap-3 text-[12.5px] py-0.5 border-b border-border/50 last:border-0">
+                        <button key={t.id} onClick={() => setOpenTask(t)} className="flex items-center justify-between gap-3 text-[12.5px] py-0.5 border-b border-border/50 last:border-0 text-left hover:text-[hsl(17_63%_47%)]">
                           <span className="truncate">{t.title}</span>
                           <span className="shrink-0 tabular text-[hsl(8_60%_41%)]">{d}d late</span>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -178,13 +216,13 @@ export default function ReportsPage() {
             <SectionTitle>Open tasks by area</SectionTitle>
             <div className="grid grid-cols-1 gap-2">
               {byArea.map(({ a, n }) => (
-                <div key={a.id} className="flex items-center gap-2.5 text-[12.5px]">
+                <button key={a.id} disabled={!n} onClick={() => setDrill({ title: `Open · ${a.name}`, tasks: open.filter(t => t.areaId === a.id) })} className="flex items-center gap-2.5 text-[12.5px] text-left enabled:hover:opacity-80 disabled:cursor-default">
                   <span className="w-28 truncate">{a.name}</span>
                   <div className="flex-1 h-4 bg-muted overflow-hidden rounded-sm">
-                    <div className="h-full transition-all" style={{ width: `${(n / maxArea) * 100}%`, background: a.color }} />
+                    <div className="h-full" style={{ width: `${(n / maxArea) * 100}%`, background: a.color }} />
                   </div>
                   <span className="tabular w-5 text-right">{n}</span>
-                </div>
+                </button>
               ))}
             </div>
           </section>
@@ -208,13 +246,13 @@ export default function ReportsPage() {
             <SectionTitle>Tasks by priority</SectionTitle>
             <div className="grid grid-cols-1 gap-2">
               {byPriority.map(({ p, n }) => (
-                <div key={p} className="flex items-center gap-2.5 text-[12.5px]">
+                <button key={p} disabled={!n} onClick={() => setDrill({ title: `Open · priority ${p}`, tasks: open.filter(t => t.priority === p) })} className="flex items-center gap-2.5 text-[12.5px] text-left enabled:hover:opacity-80 disabled:cursor-default">
                   <span className="w-10">{p}</span>
                   <div className="flex-1 h-4 bg-muted overflow-hidden rounded-sm">
                     <div className="h-full bg-[hsl(152_22%_30%)]" style={{ width: `${(n / Math.max(1, ...byPriority.map(x => x.n))) * 100}%` }} />
                   </div>
                   <span className="tabular w-5 text-right">{n}</span>
-                </div>
+                </button>
               ))}
             </div>
           </section>
@@ -300,25 +338,70 @@ export default function ReportsPage() {
           </section>
         </div>
       )}
-      <p className="text-[11.5px] text-muted-foreground">Every report supports free-text search, multi-field filters and saved presets; results click through to the underlying items.</p>
+      <p className="text-[11.5px] text-muted-foreground">Tap any KPI card or breakdown bar to drill through to the tasks behind it; each one opens the full task.</p>
+
+      {/* ── Drill-through: the list behind a clicked number, then straight into the task itself. */}
+      <Dialog open={!!drill} onOpenChange={o => { if (!o) setDrill(null) }}>
+        <DialogContent className="sm:max-w-[640px] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{drill?.title} {drill ? `(${drill.tasks.length})` : ''}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-0.5">
+            {drill && drill.tasks.length === 0 && <p className="text-[12.5px] text-muted-foreground italic py-2">Nothing here right now.</p>}
+            {drill?.tasks.map(t => (
+              <TaskRow key={t.id} task={t} onOpen={tt => { setDrill(null); setOpenTask(tt) }} />
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <TaskDetail task={openTask} onClose={() => setOpenTask(null)} onEdit={t => { setOpenTask(null); setEditTask(t) }} />
+      <TaskDialog open={!!editTask} onClose={() => setEditTask(null)} task={editTask} />
     </div>
   )
 }
 
-function Stat({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: string; tone?: 'good' | 'bad' }) {
+// One headline number. Clickable when it has a drill-through; shows a trend arrow when given.
+function Kpi({ label, value, sub, tone, trend, onClick }: {
+  label: string; value: React.ReactNode; sub?: string; tone?: 'good' | 'bad' | 'warn'; trend?: number; onClick?: () => void
+}) {
+  const color = tone === 'good' ? 'text-[hsl(152_35%_34%)]' : tone === 'bad' ? 'text-[hsl(8_60%_41%)]' : tone === 'warn' ? 'text-[hsl(32_70%_42%)]' : 'text-foreground'
+  return (
+    <button type="button" onClick={onClick} disabled={!onClick}
+      className="group text-left rounded-lg border border-border bg-card shadow-sm px-3.5 py-3 enabled:hover:shadow-md enabled:hover:border-border/80 disabled:cursor-default transition-shadow">
+      <div className="flex items-baseline gap-1.5">
+        <span className={cn('font-display text-[26px] font-semibold tabular leading-none', color)}>{value}</span>
+        {typeof trend === 'number' && trend !== 0 && (
+          <span className={cn('text-[11px] font-medium tabular', trend > 0 ? 'text-[hsl(152_35%_36%)]' : 'text-[hsl(8_60%_45%)]')}>
+            {trend > 0 ? '▲' : '▼'}{Math.abs(trend)}
+          </span>
+        )}
+      </div>
+      <div className="mt-1.5 flex items-center gap-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+        <span className="truncate">{label}</span>
+        {onClick && <ChevronRight className="h-3 w-3 shrink-0 opacity-0 group-enabled:group-hover:opacity-60 transition-opacity" />}
+      </div>
+      {sub && <div className="text-[10.5px] text-muted-foreground/80 mt-0.5 truncate">{sub}</div>}
+    </button>
+  )
+}
+
+function Stat({ label, value, sub, tone, onClick }: { label: string; value: React.ReactNode; sub?: string; tone?: 'good' | 'bad'; onClick?: () => void }) {
   const color = tone === 'good' ? 'text-[hsl(152_35%_34%)]' : tone === 'bad' ? 'text-[hsl(8_60%_41%)]' : 'text-foreground'
   return (
-    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+    <button type="button" onClick={onClick} disabled={!onClick} className="rounded-md border border-border bg-muted/30 px-3 py-2 text-left w-full enabled:hover:bg-muted/60 disabled:cursor-default transition-colors">
       <div className={cn('font-display text-[22px] font-semibold tabular leading-none', color)}>{value}</div>
       <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground mt-1">{label}{sub ? ` · ${sub}` : ''}</div>
-    </div>
+    </button>
   )
 }
 
-function ExceptionCard({ title, rows, empty, tone }: { title: string; rows: [string, string][]; empty: string; tone?: 'bad' }) {
+function ExceptionCard({ title, rows, empty, tone, onOpen }: { title: string; rows: [string, string][]; empty: string; tone?: 'bad'; onOpen?: () => void }) {
   return (
     <section className="border border-border bg-card shadow-sm rounded-lg">
-      <div className={cn('px-4 py-2.5 border-b border-border text-[12.5px] font-semibold', tone === 'bad' && rows.length > 0 && 'text-[hsl(8_60%_41%)]')}>{title}</div>
+      <div className={cn('px-4 py-2.5 border-b border-border text-[12.5px] font-semibold flex items-center justify-between gap-2', tone === 'bad' && rows.length > 0 && 'text-[hsl(8_60%_41%)]')}>
+        <span>{title}</span>
+        {onOpen && <button type="button" onClick={onOpen} className="text-[11px] font-normal text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5">Open all<ChevronRight className="h-3 w-3" /></button>}
+      </div>
       <div className="px-4 py-2">
         {rows.length === 0 && <p className="text-[12.5px] text-muted-foreground italic py-1">{empty}</p>}
         {rows.slice(0, 6).map(([a, b], i) => (
@@ -327,7 +410,11 @@ function ExceptionCard({ title, rows, empty, tone }: { title: string; rows: [str
             <span className="text-muted-foreground tabular shrink-0">{b}</span>
           </div>
         ))}
-        {rows.length > 6 && <p className="text-[11px] text-muted-foreground pt-1">+ {rows.length - 6} more</p>}
+        {rows.length > 6 && (
+          onOpen
+            ? <button type="button" onClick={onOpen} className="text-[11px] text-[hsl(17_63%_47%)] hover:underline pt-1">+ {rows.length - 6} more — open all</button>
+            : <p className="text-[11px] text-muted-foreground pt-1">+ {rows.length - 6} more</p>
+        )}
       </div>
     </section>
   )
