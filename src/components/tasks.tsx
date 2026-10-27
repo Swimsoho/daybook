@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarDays, Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, ListChecks, Loader2, MoreHorizontal, Paperclip, Phone, Printer, Send, Timer, Trash2, User } from 'lucide-react'
+import { CalendarDays, Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, ListChecks, Loader2, MoreHorizontal, Paperclip, Phone, Printer, Send, Sparkles, Timer, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -1046,6 +1046,16 @@ export function TaskDialog({ open, onClose, task, defaults }: {
             <Label className="text-[12px] font-semibold text-foreground/80">Notes</Label>
             <Textarea rows={2} value={f.notes ?? ''} onChange={e => set({ notes: e.target.value })} placeholder="Anything worth remembering…" />
           </section>
+
+          {/* ---- Section: Research with Claude (live web) ---- */}
+          <section className="grid grid-cols-1 gap-1.5">
+            <Label className="text-[12px] font-semibold text-foreground/80">Research with Claude</Label>
+            <TaskResearch
+              defaultQuery={f.title ?? ''}
+              notes={f.notes}
+              onAppend={text => set({ notes: (f.notes?.trim() ? f.notes.trimEnd() + '\n\n' : '') + text })}
+            />
+          </section>
         </div>
 
         <DialogFooter className="px-6 py-4 border-t border-border bg-muted/30">
@@ -1054,6 +1064,78 @@ export function TaskDialog({ open, onClose, task, defaults }: {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// ---------- "Research this for me" — input + button that asks Claude to search the live web ----------
+// The general-purpose cousin of the movie "Where to watch" lookup: type what you want to find out
+// (prefilled with the task title), hit the button, and Claude researches it on the web and hands
+// back a practical answer you can drop straight into the task's notes.
+
+function TaskResearch({ defaultQuery, notes, onAppend }: {
+  defaultQuery: string
+  notes?: string
+  onAppend: (text: string) => void
+}) {
+  const cloud = useCloud()
+  const [query, setQuery] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [res, setRes] = useState<import('@/lib/cloud').TaskResearchResult | null>(null)
+  const q = (query || defaultQuery).trim()
+
+  async function run() {
+    if (!q) { toast.error('Type what you want to research first'); return }
+    if (!cloud) { toast('Research needs a signed-in account (it calls Claude on the backend).'); return }
+    setLoading(true); setRes(null)
+    try {
+      const r = await cloud.researchTask({ query: q, title: defaultQuery, notes })
+      setRes(r)
+      if (r.error) toast.error(r.error)
+      else if (!r.ok) toast(r.error ?? 'Nothing came back — try again.')
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <div className="rounded-md border border-dashed border-border p-2.5 grid gap-2">
+      <div className="flex items-start gap-2">
+        <Textarea
+          rows={2}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); run() } }}
+          placeholder={defaultQuery ? `e.g. ${defaultQuery} — where to buy, best price, options…` : 'What should Claude look up for this task?'}
+          className="flex-1"
+        />
+        <Button type="button" size="sm" variant="outline" className="h-9 shrink-0" onClick={run} disabled={loading}>
+          {loading ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1" />}
+          Research
+        </Button>
+      </div>
+      <span className="text-[11px] text-muted-foreground">Claude searches the live web{defaultQuery ? ` using “${defaultQuery}”` : ''}. ⌘/Ctrl+Enter to run.</span>
+      {res?.ok && res.text && (
+        <div className="grid gap-2 border-t border-border/60 pt-2">
+          <p className="text-[12.5px] leading-relaxed whitespace-pre-wrap text-foreground/90">{res.text}</p>
+          {!!res.sources?.length && (
+            <div className="flex flex-wrap gap-1.5 text-[11px]">
+              <span className="text-muted-foreground">Sources:</span>
+              {res.sources.map(s => (
+                <a key={s.url} href={s.url} target="_blank" rel="noreferrer" className="text-[hsl(17_63%_47%)] hover:underline max-w-[220px] truncate">{s.title}</a>
+              ))}
+            </div>
+          )}
+          <Button
+            type="button" size="sm" variant="secondary" className="h-7 w-fit"
+            onClick={() => {
+              const src = res.sources?.length ? '\n\nSources: ' + res.sources.map(s => s.url).join('  ') : ''
+              onAppend(res.text + src)
+              toast.success('Added to notes')
+            }}
+          >
+            Add to notes
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }
 

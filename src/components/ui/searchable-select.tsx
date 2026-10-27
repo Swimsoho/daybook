@@ -142,7 +142,7 @@ export function SearchableSelect({
               className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-muted-foreground/60"
             />
           </div>
-          <div className="overflow-y-auto p-1.5" style={{ maxHeight: layout.maxH }}>
+          <div className="overflow-y-auto overscroll-contain p-1.5" style={{ maxHeight: layout.maxH }}>
             {filtered.length === 0 && !canCreate && (
               <div className="px-2 py-3 text-[12.5px] text-muted-foreground italic text-center">No matches</div>
             )}

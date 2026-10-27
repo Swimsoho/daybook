@@ -78,7 +78,7 @@ export function GlobalSearch({ onNavigate, onOpenTask, className }: {
       )}
 
       {open && results && (
-        <div className="absolute left-0 right-0 md:right-auto md:min-w-[340px] top-[calc(100%+6px)] z-40 max-h-[70vh] overflow-y-auto rounded-md border border-border bg-popover shadow-lg py-1.5 text-left">
+        <div className="absolute left-0 right-0 md:right-auto md:min-w-[340px] top-[calc(100%+6px)] z-40 max-h-[70vh] overflow-y-auto overscroll-contain rounded-md border border-border bg-popover shadow-lg py-1.5 text-left">
           {results.total === 0 && (
             <p className="px-3 py-4 text-[12.5px] text-muted-foreground text-center">No matches for “{q.trim()}”.</p>
           )}

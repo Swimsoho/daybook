@@ -1,6 +1,10 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: ["class"],
+  // On touch devices, Tailwind 3's `hover:` otherwise latches after a tap and reads as a stuck
+  // selected state. This compiles every `hover:` under @media (hover: hover) — essential for the
+  // Android app. No effect on desktop (hover-capable) pointers.
+  future: { hoverOnlyWhenSupported: true },
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",

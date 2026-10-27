@@ -48,6 +48,13 @@ export interface SuggestEntriesResult {
   suggestions?: EntrySuggestion[]
 }
 
+export interface TaskResearchResult {
+  ok?: boolean
+  error?: string
+  text?: string
+  sources?: { title: string; url: string }[]
+}
+
 export interface Cloud {
   profile: CloudProfile
   mode: 'real' | 'sample'
@@ -82,6 +89,10 @@ export interface Cloud {
     kind?: 'watch' | 'generic'
     context?: { name?: string; description?: string }
   }) => Promise<SuggestEntriesResult>
+  // "Research this for me" on a task — calls the task-research Edge Function, which asks Claude to
+  // search the live web and return a practical, actionable answer. Same ANTHROPIC_API_KEY secret as
+  // generic suggestEntries. Returns { error } if the function isn't deployed / the key isn't set.
+  researchTask: (payload: { query: string; title?: string; notes?: string }) => Promise<TaskResearchResult>
   admin: {
     listUsers: () => Promise<AdminUser[]>
     invite: (u: { name: string; email: string; role: Role }) => Promise<string | null>
@@ -798,6 +809,11 @@ function CloudLoader({ userId, children }: { userId: string; children: (cloud: C
       const { data, error } = await supabase!.functions.invoke('suggest-entries', { body: payload })
       if (error) return { error: error.message }
       return (data ?? { error: 'No response' }) as SuggestEntriesResult
+    },
+    researchTask: async (payload) => {
+      const { data, error } = await supabase!.functions.invoke('task-research', { body: payload })
+      if (error) return { error: await readFnError(error) }
+      return (data ?? { error: 'No response' }) as TaskResearchResult
     },
     admin: {
       async listUsers() {

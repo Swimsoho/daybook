@@ -48,7 +48,7 @@ export function BottomSheet({
       >
         <DragHandle onDismiss={onClose} />
         {title ? <div className="mb-3 shrink-0">{title}</div> : null}
-        <div className="min-h-0 flex-1 overflow-auto no-scrollbar">{children}</div>
+        <div className="min-h-0 flex-1 overflow-auto overscroll-contain no-scrollbar">{children}</div>
       </div>
     </>
   );

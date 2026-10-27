@@ -7,7 +7,7 @@ export function Fab({ onClick }: { onClick: () => void }) {
       type="button"
       onClick={onClick}
       aria-label="Quick capture"
-      className="absolute bottom-[88px] right-4 z-20 flex h-[52px] w-[52px] items-center justify-center rounded-full border-none bg-primary text-primary-foreground shadow-[0_6px_16px_rgba(0,0,0,0.25)] active:scale-95 transition-transform"
+      className="absolute bottom-[88px] right-4 z-20 flex h-[52px] w-[52px] items-center justify-center rounded-full border-none bg-primary text-primary-foreground shadow-[0_6px_16px_rgba(0,0,0,0.25)] enabled:active:scale-[0.96] transition-transform"
     >
       <Plus size={24} strokeWidth={2.2} />
     </button>
