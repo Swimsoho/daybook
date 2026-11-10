@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { ArrowUpDown, CalendarClock, Check, Download, FileUp, FolderKanban, Plus, Trash2 } from 'lucide-react'
+import { ArrowUpDown, CalendarClock, Check, Download, FileUp, FolderKanban, Mail, Plus, Trash2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,7 +17,7 @@ import { realProjectIdSet } from '@/lib/projects'
 import { ClearFiltersButton, DueChip, EmptyNote, PriorityChip } from '@/components/bits'
 import { ExportMenu } from '@/components/ExportMenu'
 import { ViewExport } from '@/lib/exportView'
-import { QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
+import { NewFromEmailDialog, QuickAdd, TaskDetail, TaskDialog, TaskRow } from '@/components/tasks'
 import { ColumnDropdown, SPREADSHEET_ACCEPT, downloadXlsxTemplateWithDropdowns, parseSpreadsheetFile } from '@/lib/xlsxTemplate'
 import { useIsMobile } from '@/mobile/lib/useIsMobile'
 
@@ -81,6 +81,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
   const [adding, setAdding] = useState(false)
   const [addDefaults, setAddDefaults] = useState<Partial<Task> | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [emailOpen, setEmailOpen] = useState(false)
   const [expandAll, setExpandAll] = useState(false)
   const [dragCat, setDragCat] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -318,6 +319,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
           {viewMode === 'card' && <Button variant="outline" size="sm" className="h-8" onClick={() => setExpandAll(v => !v)}>{expandAll ? 'Collapse all' : 'Expand all'}</Button>}
           <ExportMenu getData={taskExportData} />
           <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}><FileUp className="h-3.5 w-3.5 mr-1.5" />Import</Button>
+          <Button variant="outline" size="sm" className="h-8" onClick={() => setEmailOpen(true)} title="Create a task from an email — paste, upload an .eml, or drag one in"><Mail className="h-3.5 w-3.5 mr-1.5" />From email</Button>
           <Button size="sm" className="h-8" onClick={() => setAdding(true)}><Plus className="h-3.5 w-3.5 mr-1.5" />Add task</Button>
         </div>
       </div>
@@ -680,6 +682,7 @@ export default function TasksPage({ projectFilter, onClearProject }: { projectFi
       <TaskDetail task={openTask} onClose={() => setOpenTask(null)} onEdit={t => setEditTask(t)} />
       <TaskDialog open={!!editTask || adding} onClose={() => { setEditTask(null); setAdding(false); setAddDefaults(null) }} task={editTask} defaults={addDefaults ?? undefined} />
       <ImportTasksDialog open={importOpen} onClose={() => setImportOpen(false)} />
+      <NewFromEmailDialog open={emailOpen} onClose={() => setEmailOpen(false)} />
     </div>
   )
 }

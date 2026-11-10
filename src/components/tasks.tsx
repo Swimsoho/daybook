@@ -202,7 +202,7 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
 }
 
 // Create a task from an email — paste it, drop/upload an .eml file, review, and file it.
-function NewFromEmailDialog({ open, onClose, areaId, projectId }: { open: boolean; onClose: () => void; areaId?: string; projectId?: string }) {
+export function NewFromEmailDialog({ open, onClose, areaId, projectId }: { open: boolean; onClose: () => void; areaId?: string; projectId?: string }) {
   const { addTask } = useStore()
   const [raw, setRaw] = useState('')
   const [title, setTitle] = useState('')
@@ -854,7 +854,7 @@ function ContactPicker({ value, onChange }: { value?: string; onChange: (id: str
               {p.name}{p.phone && <span className="text-muted-foreground text-[11px]"> · {p.phone}</span>}
             </button>
           ))}
-          {matches.length === 0 && !canCreate && <div className="px-3 py-1.5 text-muted-foreground italic">Type a name to add a new contact</div>}
+          {!canCreate && <div className="px-3 py-1.5 text-[12px] text-muted-foreground italic border-t border-border">Type a name above to add a new contact</div>}
           {canCreate && (
             <button type="button" className="w-full text-left px-3 py-1.5 hover:bg-accent text-[hsl(17_63%_47%)] border-t border-border" onMouseDown={e => { e.preventDefault(); createContact() }}>
               + Add “{q.trim()}” as a new contact
