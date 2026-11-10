@@ -16,7 +16,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
-  Priority, PRIORITY_DESC, PRIORITY_LABELS, STATUS_LABELS, statusTint, Task, TaskStatus, TaskType, TYPE_LABELS, fmtDate, today, addDays, daysSince,
+  Priority, PRIORITY_DESC, PRIORITY_LABELS, STATUS_COLOR, STATUS_LABELS, statusTint, Task, TaskStatus, TaskType, TYPE_LABELS, fmtDate, today, addDays, daysSince,
 } from '@/lib/model'
 import {
   actionUsage, areaUsage, categoriesForArea, categoryUsage, projectUsage, rollup, subtasksOf, useStore, vendorUsage, withPopularFirst,
@@ -1518,8 +1518,14 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
     <Dialog open={!!task} onOpenChange={o => !o && onClose()}>
       <DialogContent className="sm:max-w-[720px] max-h-[90vh] overflow-y-auto gap-2">
         <DialogHeader>
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground uppercase tracking-wide">
-            {TYPE_LABELS[task.type]} · {STATUS_LABELS[task.status]}
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide">
+            <span className="text-muted-foreground font-medium">{TYPE_LABELS[task.type]}</span>
+            <span
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none text-white"
+              style={{ background: STATUS_COLOR[task.status] }}
+            >
+              {STATUS_LABELS[task.status]}
+            </span>
           </div>
           <DialogTitle asChild>
             <input
@@ -1584,9 +1590,10 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                 <button
                   key={st}
                   onClick={() => updateTask(task.id, { status: st, waitingSince: st === 'waiting' ? today() : task.waitingSince }, `status → ${STATUS_LABELS[st]}`)}
+                  style={task.status === st ? { background: STATUS_COLOR[st], borderColor: STATUS_COLOR[st] } : undefined}
                   className={cn(
                     'px-2 py-0.5 text-[11px] border rounded-sm transition-colors',
-                    task.status === st ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-card hover:bg-accent',
+                    task.status === st ? 'text-white font-semibold' : 'border-border bg-card hover:bg-accent',
                   )}
                 >
                   {STATUS_LABELS[st]}
@@ -1651,8 +1658,9 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                 <ContactPicker value={task.personId} onChange={id => updateTask(task.id, { personId: id }, id ? 'contact linked' : 'contact cleared')} />
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-0.5">Move to</span>
+            <div className="grid grid-cols-1 gap-1.5">
+              <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Move to</span>
+              <div className="grid grid-cols-2 gap-2">
               {(() => {
                 const b = withPopularFirst(state.areas.filter(a => a.active), a => areaUsage(state, a.id), a => a.name)
                 return (
@@ -1666,7 +1674,7 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                     options={[{ value: '__none__', label: 'No area' }, ...b.ordered.map(a => ({ value: a.id, label: a.name }))]}
                     popularCount={b.popularCount > 0 ? b.popularCount + 1 : 0}
                     placeholder="Area" searchPlaceholder="Search areas…"
-                    className="h-7 w-[130px] text-[11.5px] bg-card"
+                    className="h-7 w-full text-[11.5px] bg-card"
                   />
                 )
               })()}
@@ -1700,7 +1708,7 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                     placeholder="Project / label" searchPlaceholder="Search, or type to add a label…"
                     onCreate={name => { const proj = addProject({ name, areaId: task.areaId!, kind: 'label' }); updateTask(task.id, { projectId: proj.id }, `labelled ${proj.name}`); toast.success(`Label “${proj.name}” created`) }}
                     createLabel={q => `Add label “${q}”`}
-                    className="h-7 w-[150px] text-[11.5px] bg-card"
+                    className="h-7 w-full text-[11.5px] bg-card"
                   />
                 )
               })()}
@@ -1720,7 +1728,7 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                       toast(m ? `Stage: ${m.name}` : 'Stage cleared')
                     }}
                   >
-                    <SelectTrigger className="h-7 w-[150px] text-[11.5px] bg-card"><SelectValue placeholder="Stage / phase" /></SelectTrigger>
+                    <SelectTrigger className="h-7 w-full text-[11.5px] bg-card"><SelectValue placeholder="Stage / phase" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none__">No stage</SelectItem>
                       {phases.map(m => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}
@@ -1742,7 +1750,7 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                     options={[{ value: '__none__', label: 'No category' }, ...b.ordered.map(c => ({ value: c.id, label: `${c.level > 0 ? '› ' : ''}${c.name}` }))]}
                     popularCount={b.popularCount > 0 ? b.popularCount + 1 : 0}
                     placeholder="Category" searchPlaceholder="Search categories…"
-                    className="h-7 w-[130px] text-[11.5px] bg-card"
+                    className="h-7 w-full text-[11.5px] bg-card"
                   />
                 )
               })()}
@@ -1760,7 +1768,7 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                     options={[{ value: '__none__', label: 'No action' }, ...b.ordered.map(a => ({ value: a.id, label: a.name }))]}
                     popularCount={b.popularCount > 0 ? b.popularCount + 1 : 0}
                     placeholder="Action" searchPlaceholder="Search actions…"
-                    className="h-7 w-[120px] text-[11.5px] bg-card"
+                    className="h-7 w-full text-[11.5px] bg-card"
                   />
                 )
               })()}
@@ -1789,10 +1797,11 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
                       ...trackers.map(t => ({ value: t.id, label: `${state.collections.find(c => c.id === t.collectionId)?.name ? state.collections.find(c => c.id === t.collectionId)!.name + ' · ' : ''}${t.name}` })),
                     ]}
                     placeholder="Move to a collection…" searchPlaceholder="Search collections…"
-                    className="h-7 w-[170px] text-[11.5px] bg-card"
+                    className="h-7 w-full text-[11.5px] bg-card"
                   />
                 )
               })()}
+              </div>
             </div>
           </div>
         )}
@@ -1857,7 +1866,18 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
           )}
           {vendor && <div className="text-[13px] text-muted-foreground">Vendor: <b className="text-foreground">{vendor.name}</b></div>}
           {task.waitingOn && <div className="text-[13px] text-[hsl(28_60%_32%)]">Waiting on {task.waitingOn} since {fmtDate(task.waitingSince)} — auto-nudge active</div>}
-          {task.notes && <p className="text-[13px] text-foreground/80 border-l-2 border-border pl-3">{task.notes}</p>}
+          {task.notes && (
+            <div
+              className="rounded-md border px-3 py-2"
+              style={{
+                background: 'color-mix(in srgb, hsl(45 90% 55%) 15%, hsl(var(--card)))',
+                borderColor: 'color-mix(in srgb, hsl(45 80% 50%) 42%, transparent)',
+              }}
+            >
+              <div className="text-[9.5px] uppercase tracking-wide font-semibold mb-0.5" style={{ color: 'color-mix(in srgb, hsl(38 75% 38%) 88%, hsl(var(--foreground)))' }}>Note</div>
+              <p className="m-0 text-[13px] leading-relaxed whitespace-pre-wrap text-foreground/90">{task.notes}</p>
+            </div>
+          )}
           {task.droppedReason && <p className="text-[13px] text-muted-foreground italic">Dropped: {task.droppedReason}</p>}
           <TaskAttachments task={task} />
           <TaskShare task={task} />
