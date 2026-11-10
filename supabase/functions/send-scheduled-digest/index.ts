@@ -81,19 +81,26 @@ function callsDueToday(tasks: Task[], people: Person[], date: string) {
   return out
 }
 
+// The morning brief lists the FULL set of tasks due today AND every overdue task (both in priority
+// order), each capped so a very long list can't blow past Telegram's message limit.
+const DIGEST_CAP = 20
 function composeMorningHtml(name: string, tasks: Task[], people: Person[], date: string, capacity: number) {
-  const today = todayTasks(tasks, date)
-  const overdue = overdueTasks(tasks, date)
-  const top3 = topByPriority(today, 3)
-  const calls = callsDueToday(tasks, people, date).slice(0, 3)
+  const today = topByPriority(todayTasks(tasks, date), 500)
+  const overdue = topByPriority(overdueTasks(tasks, date), 500)
+  const calls = callsDueToday(tasks, people, date)
   const lines = [`<b>Good morning, ${escapeHtml(name)}.</b> Here's today (${today.length} of ${capacity} capacity${today.length > capacity ? ' — over' : ''}):`]
-  if (top3.length) {
-    lines.push('', '<b>Top of the list:</b>')
-    top3.forEach((t, i) => lines.push(`${i + 1}. ${escapeHtml(t.title)}`))
+  if (today.length) {
+    lines.push('', '<b>Due today:</b>')
+    today.slice(0, DIGEST_CAP).forEach((t, i) => lines.push(`${i + 1}. ${escapeHtml(t.title)}`))
+    if (today.length > DIGEST_CAP) lines.push(`…and ${today.length - DIGEST_CAP} more due today`)
   } else {
     lines.push('', 'Nothing due today — a rare quiet morning.')
   }
-  if (overdue.length) lines.push('', `⚠️ <b>${overdue.length}</b> overdue task${overdue.length === 1 ? '' : 's'} waiting.`)
+  if (overdue.length) {
+    lines.push('', `⚠️ <b>Overdue (${overdue.length}):</b>`)
+    overdue.slice(0, DIGEST_CAP).forEach(t => lines.push(`• ${escapeHtml(t.title)}${t.due ? ` — due ${t.due}` : ''}`))
+    if (overdue.length > DIGEST_CAP) lines.push(`…and ${overdue.length - DIGEST_CAP} more overdue`)
+  }
   if (calls.length) lines.push('', `📞 Calls: ${calls.map(escapeHtml).join(', ')}`)
   return lines.join('\n')
 }
