@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { EmptyState, PriorityChip, SectionTitle } from '@/mobile/components/bits';
 import { activeAreas, isClosed, isDone, isStalled, staleDays } from '@/mobile/lib/select';
 import { useStore } from '@/lib/store';
+import { useCloud } from '@/lib/cloud';
 import { groupByPhase, openBlockers, progress, projectTasks } from '@/lib/milestones';
 import type { Project } from '@/lib/model';
 
@@ -244,8 +245,108 @@ function ProjectCard({
                 </button>
             ))}
           </div>
+
+          <ProjectShare project={project} />
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// Public, no-login share link for a whole project — the phone counterpart of the desktop
+// ShareProjectDialog. Reuses the same cloud.shareProject / revokeProjectShare and the persisted
+// project.share token, so a link made on the phone matches one made on the computer.
+function ProjectShare({ project }: { project: Project }) {
+  const cloud = useCloud();
+  const { updateProject } = useStore();
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const token = project.share?.token;
+  const link = token ? `${window.location.origin}/share/project/${token}` : '';
+
+  if (!cloud) {
+    return (
+      <p className="mt-3 m-0 text-[11.5px] italic text-muted-foreground">
+        Sign in to a real account to share this project by link.
+      </p>
+    );
+  }
+
+  const create = async () => {
+    setBusy(true);
+    const { token: t, error } = await cloud.shareProject(project.id);
+    setBusy(false);
+    if (error || !t) {
+      toast.error(error ?? 'Couldn’t create the link');
+      return;
+    }
+    updateProject(project.id, { share: { token: t, createdAt: new Date().toISOString() } });
+    toast.success('Share link ready');
+  };
+  const revoke = async () => {
+    if (!token) return;
+    setBusy(true);
+    await cloud.revokeProjectShare(token);
+    setBusy(false);
+    updateProject(project.id, { share: undefined });
+    toast('Link turned off');
+  };
+  const copy = () => {
+    if (!link) return;
+    navigator.clipboard?.writeText(link).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+
+  return (
+    <div className="mt-3 rounded-[10px] border border-border p-3">
+      <div className="mb-2 text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground">
+        Share this project
+      </div>
+      {!token ? (
+        <>
+          <p className="m-0 mb-2 text-[11.5px] leading-[1.5] text-muted-foreground">
+            A read-only link anyone can open — no account needed on their end. They see this
+            project's progress, phases, tasks and notes, and can tick tasks done or post an update
+            that comes back to you.
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={create}
+            className="w-full rounded-lg bg-primary py-[10px] text-[12.5px] font-semibold text-primary-foreground disabled:opacity-60"
+          >
+            {busy ? 'Creating…' : 'Create share link'}
+          </button>
+        </>
+      ) : (
+        <>
+          <input
+            readOnly
+            value={link}
+            onFocus={(e) => e.currentTarget.select()}
+            className="w-full rounded-lg border border-border bg-background px-3 py-[8px] text-[12px]"
+          />
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={copy}
+              className="rounded-lg border border-border px-3 py-[8px] text-[12px] font-semibold active:opacity-60"
+            >
+              {copied ? 'Copied' : 'Copy link'}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={revoke}
+              className="ml-auto text-[12px] font-semibold text-[hsl(8_60%_45%)] disabled:opacity-60"
+            >
+              Turn off
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
