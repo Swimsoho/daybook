@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarDays, Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, ListChecks, Loader2, MoreHorizontal, Paperclip, Phone, Printer, Send, Sparkles, Timer, Trash2, User } from 'lucide-react'
+import { CalendarDays, Check, ChevronDown, ChevronRight, Clock, Copy, ExternalLink, ListChecks, Loader2, Mail, MoreHorizontal, Paperclip, Phone, Printer, Send, Sparkles, Timer, Trash2, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -27,11 +27,64 @@ import { attachmentsAvailable, deleteAttachmentFile, fmtBytes, getAttachmentUrl,
 import { printTask } from '@/lib/print'
 import { AreaDot, DueChip, PriorityChip } from './bits'
 
+// 15-minute time options (6am–10pm) for a friendly dropdown. Value is "HH:MM" (24h); label 12-hour.
+const TIME_OPTS: { v: string; l: string }[] = (() => {
+  const out: { v: string; l: string }[] = []
+  for (let m = 6 * 60; m <= 21 * 60 + 45; m += 15) {
+    const h = Math.floor(m / 60), mm = m % 60
+    const ap = h < 12 ? 'AM' : 'PM', h12 = ((h + 11) % 12) + 1
+    out.push({ v: `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`, l: `${h12}:${String(mm).padStart(2, '0')} ${ap}` })
+  }
+  return out
+})()
+
+// Friendlier than a raw time input: a dropdown stepping in 15-minute blocks.
+function TimeSelect({ value, onChange, className }: { value?: string; onChange: (v: string | undefined) => void; className?: string }) {
+  // keep an already-set time outside 6am–10pm so switching to the picker never silently drops it
+  const opts = value && !TIME_OPTS.some(o => o.v === value) ? [{ v: value, l: value }, ...TIME_OPTS] : TIME_OPTS
+  return (
+    <select
+      value={value ?? ''}
+      onChange={e => onChange(e.target.value || undefined)}
+      className={cn('h-7 px-1.5 text-[11.5px] border border-border rounded-sm bg-card text-foreground outline-none cursor-pointer', className)}
+    >
+      <option value="">— none —</option>
+      {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+    </select>
+  )
+}
+
+// Turn a pasted email — or the text of an .eml file — into a task title + notes.
+function parseEmail(raw: string): { title: string; notes: string } {
+  const text = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const subject = text.match(/^subject:\s*(.+)$/im)?.[1]?.trim()
+  const from = text.match(/^from:\s*(.+)$/im)?.[1]?.trim()
+  const date = text.match(/^date:\s*(.+)$/im)?.[1]?.trim()
+  // A raw email / .eml has headers, a blank line, then the body.
+  let body = text
+  const blank = text.indexOf('\n\n')
+  if (subject && blank > -1) body = text.slice(blank + 2)
+  // Strip HTML when the body is an HTML part, and decode the few common entities.
+  if (/<[a-z!/][^>]*>/i.test(body)) {
+    body = body.replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<').replace(/&gt;/gi, '>').replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"')
+  }
+  body = body.replace(/\n{3,}/g, '\n\n').trim().slice(0, 4000)
+  const firstLine = text.split('\n').map(l => l.trim()).find(Boolean) ?? ''
+  const title = (subject || firstLine || 'Task from email').slice(0, 140)
+  const meta: string[] = []
+  if (from) meta.push(`From: ${from}`)
+  if (date) meta.push(`Date: ${date}`)
+  const notes = [meta.join('\n'), body].filter(Boolean).join('\n\n').trim().slice(0, 4000)
+  return { title, notes }
+}
+
 // ---------- Quick add — one line, Enter, done. Usable on any screen ----------
 
 export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, placeholder, collapsible }: { areaId?: string; due?: string; projectId?: string; placeholder?: string; collapsible?: boolean }) {
   const { state, addTask } = useStore()
   const [text, setText] = useState('')
+  const [emailOpen, setEmailOpen] = useState(false)
   // When collapsible, the composer stays out of the way as a single "+ Add a task" line until you
   // click it — so a By-Area list isn't padded with a full add form under every area. Escape or a
   // successful add tucks it back away.
@@ -136,7 +189,91 @@ export function QuickAdd({ areaId: fixedAreaId, due, projectId: fixedProjectId, 
         className="h-7 w-[104px] text-[11.5px] bg-card shrink-0"
       />
       <button onClick={add} className="h-7 px-2.5 text-[11.5px] border border-input rounded-sm bg-card hover:bg-accent shrink-0">Add</button>
+      {!collapsible && (
+        <>
+          <button type="button" onClick={() => setEmailOpen(true)} title="Create a task from an email" className="h-7 px-2.5 text-[11.5px] border border-input rounded-sm bg-card hover:bg-accent shrink-0 inline-flex items-center gap-1">
+            <Mail className="h-3.5 w-3.5" />From email
+          </button>
+          <NewFromEmailDialog open={emailOpen} onClose={() => setEmailOpen(false)} areaId={areaId} projectId={projectId} />
+        </>
+      )}
     </div>
+  )
+}
+
+// Create a task from an email — paste it, drop/upload an .eml file, review, and file it.
+function NewFromEmailDialog({ open, onClose, areaId, projectId }: { open: boolean; onClose: () => void; areaId?: string; projectId?: string }) {
+  const { addTask } = useStore()
+  const [raw, setRaw] = useState('')
+  const [title, setTitle] = useState('')
+  const [notes, setNotes] = useState('')
+  const [parsed, setParsed] = useState(false)
+  const [drag, setDrag] = useState(false)
+
+  function reset() { setRaw(''); setTitle(''); setNotes(''); setParsed(false) }
+  function ingest(text: string) {
+    if (!text.trim()) { toast('Paste the email text first, or drop an .eml file'); return }
+    const r = parseEmail(text)
+    setTitle(r.title); setNotes(r.notes); setParsed(true)
+  }
+  async function onFiles(files?: FileList | null) {
+    const f = files?.[0]
+    if (!f) return
+    if (/\.msg$/i.test(f.name)) { toast.error('Outlook .msg can’t be read here — in Outlook use File → Save As → .eml, or paste the email body.'); return }
+    try { ingest(await f.text()) } catch { toast.error('Could not read that file') }
+  }
+  function create() {
+    const t = title.trim()
+    if (!t) { toast.error('Give the task a title'); return }
+    addTask({ title: t, notes: notes.trim() || undefined, areaId, projectId, priority: 'P2', status: 'next', type: 'todo', source: 'manual' })
+    toast.success('Task created from email')
+    reset(); onClose()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={o => { if (!o) { reset(); onClose() } }}>
+      <DialogContent className="sm:max-w-[560px] gap-3">
+        <DialogHeader><DialogTitle className="font-display text-lg">New task from an email</DialogTitle></DialogHeader>
+        {!parsed ? (
+          <div
+            onDragOver={e => { e.preventDefault(); setDrag(true) }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={async e => {
+              e.preventDefault(); setDrag(false)
+              if (e.dataTransfer.files?.length) { await onFiles(e.dataTransfer.files) }
+              else { const t = e.dataTransfer.getData('text'); if (t) { setRaw(t); ingest(t) } }
+            }}
+            className={cn('grid gap-2 rounded-md border border-dashed p-3', drag ? 'border-primary bg-accent/40' : 'border-border')}
+          >
+            <p className="text-[12.5px] text-muted-foreground">Paste the email below, or drag an email / drop an <b>.eml</b> file here. I’ll turn the subject into the task and keep the sender and body as notes.</p>
+            <Textarea rows={6} value={raw} onChange={e => setRaw(e.target.value)} placeholder="Paste the email here (subject, from, body)…" className="text-[12.5px] bg-card" />
+            <div className="flex items-center gap-2">
+              <Button size="sm" className="h-8" onClick={() => ingest(raw)}>Build task</Button>
+              <label className="h-8 inline-flex items-center gap-1.5 px-2.5 text-[12px] border border-border rounded-sm bg-card hover:bg-accent cursor-pointer">
+                <Paperclip className="h-3.5 w-3.5" />Upload .eml
+                <input type="file" accept=".eml,.txt,message/rfc822" className="hidden" onChange={e => onFiles(e.target.files)} />
+              </label>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label className="text-[12px] font-semibold text-foreground/80">Task title</Label>
+              <Input value={title} onChange={e => setTitle(e.target.value)} className="h-9" />
+            </div>
+            <div className="grid gap-1.5">
+              <Label className="text-[12px] font-semibold text-foreground/80">Notes</Label>
+              <Textarea rows={6} value={notes} onChange={e => setNotes(e.target.value)} className="text-[12.5px] bg-card" />
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          {parsed && <Button variant="ghost" onClick={reset} className="mr-auto">Start over</Button>}
+          <Button variant="ghost" onClick={() => { reset(); onClose() }}>Cancel</Button>
+          {parsed && <Button onClick={create}>Create task</Button>}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -986,7 +1123,7 @@ export function TaskDialog({ open, onClose, task, defaults }: {
               </div>
               <div className="grid grid-cols-1 gap-1.5">
                 <Label className="text-[12px] font-semibold text-foreground/80">Time <span className="font-normal text-muted-foreground">(day)</span></Label>
-                <Input type="time" value={f.startTime ?? ''} onChange={e => set({ startTime: e.target.value || undefined })} className="h-9" />
+                <TimeSelect value={f.startTime} onChange={v => set({ startTime: v })} className="h-9 w-full" />
               </div>
               <div className="grid grid-cols-1 gap-1.5">
                 <Label className="text-[12px] font-semibold text-foreground/80">Est. <span className="font-normal text-muted-foreground">(min)</span></Label>
@@ -1338,6 +1475,7 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
   const [logNote, setLogNote] = useState('')
   const [logWait, setLogWait] = useState('')
   const [logDate, setLogDate] = useState('')
+  const [showTime, setShowTime] = useState(false)
   if (!task) return null
   const addNote = () => {
     const t = note.trim()
@@ -1378,12 +1516,21 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
 
   return (
     <Dialog open={!!task} onOpenChange={o => !o && onClose()}>
-      <DialogContent className="sm:max-w-[720px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[720px] max-h-[90vh] overflow-y-auto gap-2">
         <DialogHeader>
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground uppercase tracking-wide">
             {TYPE_LABELS[task.type]} · {STATUS_LABELS[task.status]}
           </div>
-          <DialogTitle className="font-display text-xl leading-snug">{task.title}</DialogTitle>
+          <DialogTitle asChild>
+            <input
+              key={task.id}
+              defaultValue={task.title}
+              title="Click to rename"
+              onBlur={e => { const v = e.target.value.trim(); if (v && v !== task.title) updateTask(task.id, { title: v }, 'renamed'); else if (!v) e.target.value = task.title }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur() } }}
+              className="font-display text-xl leading-snug w-full bg-transparent outline-none rounded-sm px-1 -mx-1 border border-transparent hover:border-border focus:border-primary focus:bg-card"
+            />
+          </DialogTitle>
         </DialogHeader>
 
         {/* One-tap action bar — no digging through menus */}
@@ -1477,14 +1624,16 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
               {task.due
                 ? <button onClick={() => updateTask(task.id, { due: undefined }, 'due date cleared')} className="text-[11px] text-muted-foreground hover:text-foreground">clear</button>
                 : <span className="text-[11px] text-muted-foreground italic">no date set</span>}
-              {/* Start time — with a due date, this places the task on the Calendar Day timeline */}
-              <span className="text-[10px] uppercase tracking-wide text-muted-foreground ml-3 mr-0.5">At</span>
-              <input
-                type="time"
-                value={task.startTime ?? ''}
-                onChange={e => updateTask(task.id, { startTime: e.target.value || undefined }, e.target.value ? `time → ${e.target.value}` : 'time cleared')}
-                className="h-7 px-1.5 text-[11.5px] border border-border rounded-sm bg-card text-foreground outline-none cursor-pointer"
-              />
+              {/* Start time — a friendly 15-minute picker. Calls show it by default; other tasks can
+                  add a time only if they need one (a to-do doesn't always need a time). */}
+              {(task.type === 'call' || task.startTime || showTime) ? (
+                <>
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground ml-3 mr-0.5">At</span>
+                  <TimeSelect value={task.startTime} onChange={v => updateTask(task.id, { startTime: v }, v ? `time → ${v}` : 'time cleared')} />
+                </>
+              ) : (
+                <button onClick={() => setShowTime(true)} className="text-[11px] text-muted-foreground hover:text-foreground ml-3">+ add time</button>
+              )}
               {/* Est. time (minutes) — editable right here on the view, not just the Edit form */}
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground ml-3 mr-0.5">Est <span className="normal-case">(min)</span></span>
               <input
@@ -1700,13 +1849,6 @@ export function TaskDetail({ task: taskProp, onClose, onEdit }: { task: Task | n
         )}
 
         <div className="grid grid-cols-1 gap-2 text-sm">
-          <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-[13px]">
-            <span><PriorityChip p={task.priority} /></span>
-            {area && <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: area.color }} />{area.name}</span>}
-            {project && <span className="text-muted-foreground">› {project.name}</span>}
-            {task.due && <span>Due <b>{fmtDate(task.due)}</b>{task.startTime && <> at <b>{task.startTime}</b></>}</span>}
-            {task.estMinutes ? <span>Est <b>{task.estMinutes} min</b></span> : null}
-          </div>
           {person && (
             <div className="border border-border bg-accent/40 px-3 py-2 text-[13px]">
               <b>{person.name}</b>{person.phone && <span className="text-muted-foreground"> · {person.phone}</span>}
