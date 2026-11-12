@@ -84,25 +84,45 @@ function callsDueToday(tasks: Task[], people: Person[], date: string) {
 // The morning brief lists the FULL set of tasks due today AND every overdue task (both in priority
 // order), each capped so a very long list can't blow past Telegram's message limit.
 const DIGEST_CAP = 20
+// Each numbered task in the brief also gets a tap-button row (✓ Done / → Tomorrow / → Next week)
+// so Craig can action it straight from Telegram — the taps come back to the telegram-inbound
+// function as callback_query updates (callback_data "d:"/"s1:"/"s7:" + task id). We number BOTH
+// the due-today and overdue lists in one continuous sequence so each number maps to exactly one
+// button row, and cap the actionable set at DIGEST_CAP (Telegram rejects very large keyboards).
 function composeMorningHtml(name: string, tasks: Task[], people: Person[], date: string, capacity: number) {
   const today = topByPriority(todayTasks(tasks, date), 500)
   const overdue = topByPriority(overdueTasks(tasks, date), 500)
   const calls = callsDueToday(tasks, people, date)
+  const todayShown = today.slice(0, DIGEST_CAP)
+  const overdueShown = overdue.slice(0, Math.max(0, DIGEST_CAP - todayShown.length))
+  const actionable = [...todayShown, ...overdueShown]
+  const num = new Map(actionable.map((t, i) => [t.id, i + 1]))
   const lines = [`<b>Good morning, ${escapeHtml(name)}.</b> Here's today (${today.length} of ${capacity} capacity${today.length > capacity ? ' — over' : ''}):`]
   if (today.length) {
     lines.push('', '<b>Due today:</b>')
-    today.slice(0, DIGEST_CAP).forEach((t, i) => lines.push(`${i + 1}. ${escapeHtml(t.title)}`))
-    if (today.length > DIGEST_CAP) lines.push(`…and ${today.length - DIGEST_CAP} more due today`)
+    todayShown.forEach(t => lines.push(`${num.get(t.id)}. ${escapeHtml(t.title)}`))
+    if (today.length > todayShown.length) lines.push(`…and ${today.length - todayShown.length} more due today`)
   } else {
     lines.push('', 'Nothing due today — a rare quiet morning.')
   }
   if (overdue.length) {
     lines.push('', `⚠️ <b>Overdue (${overdue.length}):</b>`)
-    overdue.slice(0, DIGEST_CAP).forEach(t => lines.push(`• ${escapeHtml(t.title)}${t.due ? ` — due ${t.due}` : ''}`))
-    if (overdue.length > DIGEST_CAP) lines.push(`…and ${overdue.length - DIGEST_CAP} more overdue`)
+    overdueShown.forEach(t => lines.push(`${num.get(t.id)}. ${escapeHtml(t.title)}${t.due ? ` — due ${t.due}` : ''}`))
+    if (overdue.length > overdueShown.length) lines.push(`…and ${overdue.length - overdueShown.length} more overdue`)
   }
   if (calls.length) lines.push('', `📞 Calls: ${calls.map(escapeHtml).join(', ')}`)
-  return lines.join('\n')
+  if (actionable.length) lines.push('', '<i>Tap a number’s buttons below to tick it off or push it out.</i>')
+  const keyboard = actionable.length
+    ? { inline_keyboard: actionable.map(t => {
+        const n = num.get(t.id)
+        return [
+          { text: `✓ ${n}`, callback_data: `d:${t.id}` },
+          { text: `${n} → Tomorrow`, callback_data: `s1:${t.id}` },
+          { text: `${n} → Next week`, callback_data: `s7:${t.id}` },
+        ]
+      }) }
+    : undefined
+  return { html: lines.join('\n'), keyboard }
 }
 
 function composeLunchHtml(name: string, tasks: Task[], people: Person[], date: string) {
@@ -116,12 +136,12 @@ function composeLunchHtml(name: string, tasks: Task[], people: Person[], date: s
   return lines.join('\n')
 }
 
-async function sendTelegram(token: string, chatId: string, html: string) {
+async function sendTelegram(token: string, chatId: string, html: string, replyMarkup?: unknown) {
   try {
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: html, parse_mode: 'HTML' }),
+      body: JSON.stringify({ chat_id: chatId, text: html, parse_mode: 'HTML', ...(replyMarkup ? { reply_markup: replyMarkup } : {}) }),
     })
   } catch { /* best-effort */ }
 }
@@ -182,9 +202,12 @@ Deno.serve(async (req) => {
 
       let patch: Partial<Settings> | null = null
       let html: string | null = null
+      let keyboard: unknown = undefined // morning brief carries tap-to-action buttons; lunch note doesn't
 
       if (settings.features?.morningBrief && settings.briefTime && withinWindow(hhmm, settings.briefTime) && settings.lastMorningPushSent !== date) {
-        html = composeMorningHtml(name, tasks, people, date, settings.dailyCapacity ?? 6)
+        const brief = composeMorningHtml(name, tasks, people, date, settings.dailyCapacity ?? 6)
+        html = brief.html
+        keyboard = brief.keyboard
         patch = { lastMorningPushSent: date }
       } else if (lunchEnabled && withinWindow(hhmm, lunchTime) && settings.lastLunchPushSent !== date) {
         html = composeLunchHtml(name, tasks, people, date)
@@ -193,7 +216,7 @@ Deno.serve(async (req) => {
 
       if (!html || !patch) continue
 
-      if (prof.telegram_chat_id && telegramToken) await sendTelegram(telegramToken, prof.telegram_chat_id, html)
+      if (prof.telegram_chat_id && telegramToken) await sendTelegram(telegramToken, prof.telegram_chat_id, html, keyboard)
       if (prof.slack_user_id && slackToken) await sendSlack(slackToken, prof.slack_user_id, html)
 
       // Targeted merge — only the dedup-date field changes; everything else in this account's

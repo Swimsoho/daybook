@@ -266,6 +266,55 @@ function routeCaptureServer(text: string, state: RouterState) {
   }
 }
 
+// Handles taps on the morning brief's ✓ Done / → Tomorrow / → Next week buttons. Telegram sends
+// these as callback_query updates (not messages). callback_data is "<action>:<taskId>" where
+// action is d (done), s1 (snooze 1 day) or s7 (snooze 7 days) — set in send-scheduled-digest's
+// composeMorningHtml. We update that one task in the account's workspace_state and answer the tap
+// with a short confirmation toast. We only ever write when we found the task in a non-empty tasks
+// array and we spread the whole existing state, so nothing else in the blob is touched.
+async function handleCallback(cb: Record<string, any>, botToken: string) {
+  const cbId = cb?.id
+  const chatId = cb?.message?.chat?.id
+  const data: string = cb?.data ?? ''
+  const sep = data.indexOf(':')
+  const action = sep >= 0 ? data.slice(0, sep) : ''
+  const taskId = sep >= 0 ? data.slice(sep + 1) : ''
+  const answer = (text: string) =>
+    fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: cbId, text }),
+    }).catch(() => {})
+
+  if (!chatId || !taskId) { await answer('Sorry — couldn’t read that button.'); return new Response('ok') }
+
+  const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
+  const { data: prof } = await admin.from('profiles').select('id').eq('telegram_chat_id', String(chatId)).maybeSingle()
+  if (!prof) { await answer('This chat isn’t linked to a Daybook account.'); return new Response('ok') }
+  const { data: ws } = await admin.from('workspaces').select('id').eq('owner_id', prof.id).eq('kind', 'real').maybeSingle()
+  if (!ws) { await answer('No account found.'); return new Response('ok') }
+  const { data: row } = await admin.from('workspace_state').select('data').eq('workspace_id', ws.id).maybeSingle()
+  const state = (row?.data ?? {}) as Record<string, unknown>
+  const tasks = Array.isArray(state.tasks) ? state.tasks as Record<string, unknown>[] : []
+  const task = tasks.find(t => t.id === taskId)
+  if (!task) { await answer('That task’s gone or already changed — open Daybook to check.'); return new Response('ok') }
+
+  const title = String(task.title ?? 'task')
+  let patch: Record<string, unknown>
+  let note: string
+  if (action === 'd') { patch = { status: 'done', completedAt: todayStr() }; note = `✓ Done: ${title}` }
+  else if (action === 's1') { patch = { due: addDaysStr(1) }; note = `→ Tomorrow: ${title}` }
+  else if (action === 's7') { patch = { due: addDaysStr(7) }; note = `→ Next week: ${title}` }
+  else { await answer('Unknown action.'); return new Response('ok') }
+
+  const nextTasks = tasks.map(t => (t.id === taskId ? { ...t, ...patch } : t))
+  const { error } = await admin
+    .from('workspace_state')
+    .update({ data: { ...state, tasks: nextTasks }, updated_at: new Date().toISOString() })
+    .eq('workspace_id', ws.id)
+  await answer(error ? 'Update failed — try again shortly.' : note)
+  return new Response('ok')
+}
+
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 })
 
@@ -279,6 +328,8 @@ Deno.serve(async (req) => {
     }
 
     const update = await req.json()
+    const cb = update?.callback_query
+    if (cb) return await handleCallback(cb, botToken) // a tap on a digest action button
     const msg = update?.message
     const chatId: number | undefined = msg?.chat?.id
     const text: string = (msg?.text ?? '').trim()
